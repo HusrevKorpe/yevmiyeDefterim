@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "605554417931",
+    "project_id": "yevmiyedefterim-f8a83",
+    "storage_bucket": "yevmiyedefterim-f8a83.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:605554417931:android:567e8fe74341e34ac2020e",
+        "android_client_info": {
+          "package_name": "com.husrevkorpe.yevmiyedefterim"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5L8MLfj2Vi8-NnLPNl-P9FGVMTWZarhg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
