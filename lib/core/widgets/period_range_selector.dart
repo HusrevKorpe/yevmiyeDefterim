@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../date/app_date.dart';
+import 'app_date_picker.dart';
 
 class PeriodRangeSelector extends StatelessWidget {
   const PeriodRangeSelector({
@@ -29,15 +30,12 @@ class PeriodRangeSelector extends StatelessWidget {
   final VoidCallback? onThisMonth;
 
   Future<void> _pick(BuildContext context, {required bool isStart}) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: parseIsoDate(isStart ? startIso : endIso),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+    final iso = await pickAppDate(
+      context,
+      initialIso: isStart ? startIso : endIso,
       helpText: isStart ? 'Başlangıç tarihi' : 'Bitiş tarihi',
     );
-    if (picked == null) return;
-    final iso = toIsoDate(picked);
+    if (iso == null) return;
     if (isStart) {
       onSetStart(iso);
     } else {

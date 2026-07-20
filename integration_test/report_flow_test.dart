@@ -116,19 +116,17 @@ void main() {
         netPaidKurus: 150000,
       ));
 
-    // Kasa — gelir + gider.
+    // Kasa — gider kayıtları.
     final ledger = FakeLedgerRepository([
       const LedgerEntry(
           id: 'l1',
-          type: LedgerType.income,
           category: LedgerCategory.genel,
-          amountKurus: 1200000,
+          amountKurus: 60000,
           date: '2026-07-12',
           source: LedgerSource.manual,
-          note: 'Buğday satışı'),
+          note: 'Malzeme'),
       const LedgerEntry(
           id: 'l2',
-          type: LedgerType.expense,
           category: LedgerCategory.mazot,
           amountKurus: 150000,
           date: '2026-07-10',

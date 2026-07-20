@@ -9,7 +9,6 @@ void main() {
   PeriodReport report({List<WorkerEarning> earnings = const []}) => PeriodReport(
         startIso: '2026-07-01',
         endIso: '2026-07-31',
-        incomeKurus: 500000,
         expenseKurus: 200000,
         expenseByCategory: const {'mazot': 120000},
         grossLaborKurus: 900000,
@@ -26,7 +25,7 @@ void main() {
     final csv = buildReportCsv(report());
     expect(csv, contains('KASA'));
     expect(csv, contains('İŞÇİLİK'));
-    expect(csv, contains('Bakiye;3.000,00')); // 500000-200000 kuruş = 3000 TL
+    expect(csv, contains('Toplam gider;2.000,00')); // 200000 kuruş = 2000 TL
     expect(csv, contains('Mazot;1.200,00'));
     expect(csv, contains('Tahakkuk eden brüt;9.000,00'));
   });

@@ -8,10 +8,8 @@ import 'package:yevmiye_defterim/features/ledger/data/ledger_entry.dart';
 import '../../support/fake_ledger_repository.dart';
 
 void main() {
-  LedgerEntry manual({String id = 'l1', LedgerType type = LedgerType.expense}) =>
-      LedgerEntry(
+  LedgerEntry manual({String id = 'l1'}) => LedgerEntry(
         id: id,
-        type: type,
         category: LedgerCategory.mazot,
         amountKurus: 120000,
         date: '2026-07-10',
@@ -20,7 +18,6 @@ void main() {
 
   LedgerEntry auto({String id = 'p1'}) => LedgerEntry(
         id: id,
-        type: LedgerType.expense,
         category: LedgerCategory.maas,
         amountKurus: 400000,
         date: '2026-07-10',

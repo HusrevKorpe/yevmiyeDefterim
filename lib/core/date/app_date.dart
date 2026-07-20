@@ -7,10 +7,12 @@ library;
 import 'package:intl/intl.dart';
 
 final DateFormat _isoDate = DateFormat('yyyy-MM-dd');
+final DateFormat _monthKey = DateFormat('yyyy-MM');
 final DateFormat _humanDate = DateFormat('d MMMM y, EEEE', 'tr_TR');
 final DateFormat _humanDateNoWeekday = DateFormat('d MMMM y', 'tr_TR');
 final DateFormat _weekday = DateFormat('EEEE', 'tr_TR');
 final DateFormat _shortDate = DateFormat('d MMMM', 'tr_TR');
+final DateFormat _monthTitle = DateFormat('MMMM y', 'tr_TR');
 
 /// Yerel tarihten `'yyyy-MM-dd'` üretir (UTC gece yarısı değil).
 String toIsoDate(DateTime date) =>
@@ -52,3 +54,38 @@ String startOfWeekIso([DateTime? now]) {
   final today = DateTime(n.year, n.month, n.day);
   return toIsoDate(today.subtract(Duration(days: today.weekday - 1)));
 }
+
+/// İçinde bulunulan ayın anahtarı (`'yyyy-MM'`) — aylık yoklama tablosu varsayılanı.
+String currentMonthIso([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  return _monthKey.format(DateTime(n.year, n.month));
+}
+
+/// `'yyyy-MM'` ayına [months] ay ekler/çıkarır, yeni `'yyyy-MM'` döner.
+/// Yıl taşması `DateTime` tarafından doğru çözülür (ör. Aralık +1 → gelecek Ocak).
+String shiftMonthIso(String monthIso, int months) {
+  final d = _monthKey.parseStrict(monthIso);
+  return _monthKey.format(DateTime(d.year, d.month + months));
+}
+
+/// Ayın ilk günü (`'yyyy-MM-dd'`) — verili `'yyyy-MM'` için.
+String firstDayOfMonthIsoFor(String monthIso) => '$monthIso-01';
+
+/// Ayın son günü (`'yyyy-MM-dd'`) — verili `'yyyy-MM'` için (28–31).
+String lastDayOfMonthIsoFor(String monthIso) {
+  final d = _monthKey.parseStrict(monthIso);
+  return toIsoDate(DateTime(d.year, d.month + 1, 0));
+}
+
+/// Ayın tüm günleri (`'yyyy-MM-dd'`), 1'den ay sonuna, artan sırada.
+List<String> daysOfMonthIso(String monthIso) {
+  final d = _monthKey.parseStrict(monthIso);
+  final count = DateTime(d.year, d.month + 1, 0).day; // ayın son gün numarası
+  return [
+    for (var i = 1; i <= count; i++) toIsoDate(DateTime(d.year, d.month, i)),
+  ];
+}
+
+/// Gösterim için TR ay başlığı: "Temmuz 2026".
+String formatMonthTitle(String monthIso) =>
+    _monthTitle.format(_monthKey.parseStrict(monthIso));

@@ -24,7 +24,6 @@ class MazotScreen extends ConsumerWidget {
       MaterialPageRoute<void>(
         builder: (_) => LedgerEditScreen(
           entry: entry,
-          initialType: LedgerType.expense,
           initialCategory: LedgerCategory.mazot,
         ),
       ),
@@ -56,12 +55,20 @@ class MazotScreen extends ConsumerWidget {
             children: [
               _TotalCard(total: total, count: mazot.length),
               const SizedBox(height: 4),
-              for (final e in mazot)
+              for (final (i, e) in mazot.indexed) ...[
+                if (i > 0)
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                 LedgerEntryTile(
                   entry: e,
                   onTap:
                       e.isManual ? () => _openEdit(context, entry: e) : null,
                 ),
+              ],
             ],
           );
         },

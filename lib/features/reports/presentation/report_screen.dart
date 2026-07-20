@@ -112,7 +112,6 @@ class _ReportBody extends StatelessWidget {
 
     final theme = Theme.of(context);
     final kasa = LedgerSummary(
-      incomeKurus: report.incomeKurus,
       expenseKurus: report.expenseKurus,
       expenseByCategory: report.expenseByCategory,
     );

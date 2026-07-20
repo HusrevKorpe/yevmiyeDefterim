@@ -61,7 +61,6 @@ void main() {
 
   final ledgerEntry = LedgerEntry(
     id: 'l1',
-    type: LedgerType.expense,
     category: LedgerCategory.genel,
     amountKurus: 175000,
     date: longDate,

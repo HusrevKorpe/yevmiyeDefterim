@@ -16,25 +16,34 @@ class IndividualAttendanceTile extends StatelessWidget {
     required this.status,
     required this.resolvedWageKurus,
     required this.onChanged,
+    required this.onCleared,
     this.locked = false,
   });
 
   final Worker worker;
-  final AttendanceStatus status;
+
+  /// Bu günün durumu; `null` → yoklama alınmamış, hiçbir segment seçili değil.
+  final AttendanceStatus? status;
   final int resolvedWageKurus;
   final ValueChanged<AttendanceStatus> onChanged;
+
+  /// Seçili durum boşaltılınca (gün geri alınınca) çağrılır → kayıt silinir.
+  final VoidCallback onCleared;
 
   /// Bu gün ödendi (hakedişe girdi) → düzenleme kapalı (kural §3, §6).
   final bool locked;
 
-  Color get _statusColor => switch (status) {
+  /// Durum rengi; seçili değilse (null) null döner → nötr içi boş nokta.
+  Color? get _statusColor => switch (status) {
         AttendanceStatus.full => StatusColors.full,
         AttendanceStatus.half => StatusColors.half,
         AttendanceStatus.absent => StatusColors.absent,
+        null => null,
       };
 
   @override
   Widget build(BuildContext context) {
+    final dotColor = _statusColor;
     final wageText = resolvedWageKurus == 0
         ? 'Ücret girilmemiş'
         : 'Yevmiye ${formatKurus(resolvedWageKurus)}';
@@ -49,38 +58,47 @@ class IndividualAttendanceTile extends StatelessWidget {
                 width: 14,
                 height: 14,
                 decoration: BoxDecoration(
-                  color: _statusColor,
+                  // Seçili değilse (null) içi boş, ince çerçeveli nötr nokta.
+                  color: dotColor,
                   shape: BoxShape.circle,
+                  border: dotColor == null
+                      ? Border.all(
+                          color: Theme.of(context).colorScheme.outline,
+                          width: 1.5,
+                        )
+                      : null,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      worker.name,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      wageText,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: resolvedWageKurus == 0
-                            ? Theme.of(context).colorScheme.error
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  worker.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              if (locked) const PaidLockBadge(),
+              const SizedBox(width: 8),
+              Text(
+                wageText,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: resolvedWageKurus == 0
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (locked) ...[
+                const SizedBox(width: 6),
+                const PaidLockBadge(),
+              ],
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           SizedBox(
             width: double.infinity,
             child: SegmentedButton<AttendanceStatus>(
@@ -102,20 +120,33 @@ class IndividualAttendanceTile extends StatelessWidget {
                   icon: Icon(Icons.cancel_outlined),
                 ),
               ],
-              selected: {status},
+              // status null → hiçbiri seçili değil (yoklama alınmamış gün).
+              // Boş seçime izin ver: seçili segmente tekrar dokununca gün geri
+              // alınır (onCleared → kayıt silinir).
+              emptySelectionAllowed: true,
+              selected: status == null ? const {} : {status!},
               // Ödenmiş gün → düzenleme kapalı (null callback = disabled).
-              onSelectionChanged: locked ? null : (s) => onChanged(s.first),
+              onSelectionChanged: locked
+                  ? null
+                  : (s) => s.isEmpty ? onCleared() : onChanged(s.first),
               style: ButtonStyle(
+                // Hap/StadiumBorder yerine düz köşeli dikdörtgen (kral tercihi).
+                shape: WidgetStateProperty.all(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
                 backgroundColor: WidgetStateProperty.resolveWith((states) {
                   if (states.contains(WidgetState.selected)) {
-                    return _statusColor.withValues(alpha: 0.18);
+                    return (dotColor ?? StatusColors.full)
+                        .withValues(alpha: 0.18);
                   }
                   return null;
                 }),
               ),
             ),
           ),
-          const Divider(height: 20),
+          const Divider(height: 14),
         ],
       ),
     );

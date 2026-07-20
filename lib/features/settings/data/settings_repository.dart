@@ -7,6 +7,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/firestore/refs.dart';
+import '../../../core/firestore/write_stamp.dart';
 import 'app_settings.dart';
 
 abstract class SettingsRepository {
@@ -29,6 +30,8 @@ class FirestoreSettingsRepository implements SettingsRepository {
       );
 
   @override
-  Future<void> save(AppSettings settings) =>
-      settingsDocRef(_db).set(settings.toMap(), SetOptions(merge: true));
+  Future<void> save(AppSettings settings) => settingsDocRef(_db).set({
+        ...settings.toMap(),
+        ...writeStamp(),
+      }, SetOptions(merge: true));
 }

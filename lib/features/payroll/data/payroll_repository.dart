@@ -10,6 +10,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/date/app_date.dart';
 import '../../../core/firestore/refs.dart';
+import '../../../core/firestore/write_stamp.dart';
 import '../../ledger/data/ledger_entry.dart';
 import 'payroll.dart';
 
@@ -50,7 +51,7 @@ class FirestorePayrollRepository implements PayrollRepository {
     batch.set(payrollsCol(_db).doc(payroll.id), {
       ...payroll.toMap(),
       'ts': Timestamp.fromDate(parseIsoDate(payroll.paidDate)),
-      ..._stamp(),
+      ...writeStamp(),
     });
 
     // (2) Net > 0 ise kasa gider kaydı (net tutar, kural §6).
@@ -58,7 +59,7 @@ class FirestorePayrollRepository implements PayrollRepository {
       batch.set(ledgerCol(_db).doc(ledgerEntry.id), {
         ...ledgerEntry.toMap(),
         'ts': Timestamp.fromDate(parseIsoDate(ledgerEntry.date)),
-        ..._stamp(),
+        ...writeStamp(),
       });
     }
 
@@ -66,7 +67,7 @@ class FirestorePayrollRepository implements PayrollRepository {
     for (final id in settledAdvanceIds) {
       batch.set(advancesCol(_db).doc(id), {
         'settledPayrollId': payroll.id,
-        ..._stamp(),
+        ...writeStamp(),
       }, SetOptions(merge: true));
     }
 
@@ -75,7 +76,7 @@ class FirestorePayrollRepository implements PayrollRepository {
     if (partial != null) {
       batch.set(advancesCol(_db).doc(partial.id), {
         'amountKurus': partial.remainingKurus,
-        ..._stamp(),
+        ...writeStamp(),
       }, SetOptions(merge: true));
     }
 
@@ -84,15 +85,10 @@ class FirestorePayrollRepository implements PayrollRepository {
     for (final id in paidAttendanceIds) {
       batch.set(attendanceCol(_db).doc(id), {
         'paidPayrollId': payroll.id,
-        ..._stamp(),
+        ...writeStamp(),
       }, SetOptions(merge: true));
     }
 
     return batch.commit();
   }
-
-  Map<String, dynamic> _stamp() => {
-        'updatedAt': FieldValue.serverTimestamp(),
-        'clientUpdatedAt': DateTime.now().millisecondsSinceEpoch,
-      };
 }

@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// 5 büyük alt menü: Ana Sayfa, Yoklama, İşçiler, Avans, Kasa.
+/// 5 büyük alt menü: Ana Sayfa, İşçiler, Yoklama, Avans, Kasa.
 /// (Hakediş sekmesi şimdilik rafta — aşağıdaki işaretli bloğu ve router'daki
 /// eşi olan branch'i geri açınca dönecek.)
 class MainShell extends StatelessWidget {
@@ -37,14 +37,14 @@ class MainShell extends StatelessWidget {
             label: 'Ana Sayfa',
           ),
           NavigationDestination(
-            icon: Icon(Icons.fact_check_outlined),
-            selectedIcon: Icon(Icons.fact_check),
-            label: 'Yoklama',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.groups_outlined),
             selectedIcon: Icon(Icons.groups),
             label: 'İşçiler',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.fact_check_outlined),
+            selectedIcon: Icon(Icons.fact_check),
+            label: 'Yoklama',
           ),
           NavigationDestination(
             icon: Icon(Icons.payments_outlined),

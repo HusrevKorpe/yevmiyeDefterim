@@ -43,11 +43,10 @@ void main() {
         crewRateSnapshotKurus: rate,
       );
 
-  LedgerEntry ledger(LedgerType type, String category, int amount, String date,
+  LedgerEntry ledger(String category, int amount, String date,
           {String source = LedgerSource.manual}) =>
       LedgerEntry(
         id: '$date-$category-$amount',
-        type: type,
         category: category,
         amountKurus: amount,
         date: date,
@@ -93,19 +92,16 @@ void main() {
   test('boş girdi → isEmpty', () {
     final r = build();
     expect(r.isEmpty, isTrue);
-    expect(r.balanceKurus, 0);
+    expect(r.expenseKurus, 0);
     expect(r.workerEarnings, isEmpty);
   });
 
-  test('kasa: gelir/gider/bakiye + kategori kırılımı + mazot', () {
+  test('kasa: toplam gider + kategori kırılımı + mazot', () {
     final r = build(ledgerEntries: [
-      ledger(LedgerType.income, LedgerCategory.genel, 500000, '2026-07-05'),
-      ledger(LedgerType.expense, LedgerCategory.mazot, 120000, '2026-07-06'),
-      ledger(LedgerType.expense, LedgerCategory.genel, 80000, '2026-07-07'),
+      ledger(LedgerCategory.mazot, 120000, '2026-07-06'),
+      ledger(LedgerCategory.genel, 80000, '2026-07-07'),
     ]);
-    expect(r.incomeKurus, 500000);
     expect(r.expenseKurus, 200000);
-    expect(r.balanceKurus, 300000);
     expect(r.mazotKurus, 120000);
     expect(r.expenseByCategory[LedgerCategory.genel], 80000);
   });

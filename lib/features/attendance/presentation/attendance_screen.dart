@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../settings/application/settings_providers.dart';
@@ -37,7 +38,7 @@ class AttendanceScreen extends ConsumerWidget {
     return Scaffold(
       appBar: const GradientAppBar(
         title: 'Yoklama',
-        actions: [_SaveButton()],
+        actions: [_MonthlyButton(), _SaveButton()],
       ),
       body: const Column(
         children: [
@@ -45,6 +46,20 @@ class AttendanceScreen extends ConsumerWidget {
           Expanded(child: _AttendanceBody()),
         ],
       ),
+    );
+  }
+}
+
+/// Üst çubuktaki "Aylık tablo" düğmesi → aylık yoklama cetveli ekranı.
+class _MonthlyButton extends StatelessWidget {
+  const _MonthlyButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.calendar_view_month),
+      tooltip: 'Aylık tablo',
+      onPressed: () => context.push(AppRoutes.monthlyAttendance),
     );
   }
 }
@@ -145,16 +160,9 @@ class _DateBar extends ConsumerWidget {
   const _DateBar();
 
   Future<void> _pick(BuildContext context, WidgetRef ref, String date) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: parseIsoDate(date),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year, now.month, now.day),
-      helpText: 'Yoklama tarihi',
-    );
-    if (picked != null) {
-      ref.read(selectedDateProvider.notifier).set(toIsoDate(picked));
+    final iso = await pickAppDate(context, initialIso: date, helpText: 'Yoklama tarihi');
+    if (iso != null) {
+      ref.read(selectedDateProvider.notifier).set(iso);
     }
   }
 
@@ -286,9 +294,11 @@ class _List extends ConsumerWidget {
 
     Widget individualTile(Worker w) => IndividualAttendanceTile(
           worker: w,
+          // Kaydı olmayan işçi → null (hiçbir segment seçili değil). Yoklama
+          // alınmayan gün otomatik "Yok" işaretlenmez, hiç sayılmaz.
           status: switch (byWorker[w.id]) {
             IndividualAttendance(:final status) => status,
-            _ => AttendanceStatus.absent,
+            _ => null,
           },
           resolvedWageKurus: resolveWageKurus(
             gender: w.gender,
@@ -300,6 +310,7 @@ class _List extends ConsumerWidget {
           // Hakedişi geri açınca: `locked: byWorker[w.id]?.isPaid ?? false`.
           locked: false,
           onChanged: (s) => vm.setStatus(w, s),
+          onCleared: () => vm.clearStatus(w),
         );
 
     Widget crewTile(Worker w) {

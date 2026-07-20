@@ -1,11 +1,11 @@
 /// Kasa (ledger) kategori ve kayıt-kaynağı sabitleri (kural.md §6).
 library;
 
-/// Gelir/gider kategorileri.
+/// Gider kategorileri (uygulama yalnız gider takip eder).
 ///
 /// `maas`/`elebasi` yalnız otomatik hakediş kayıtlarına aittir — Kasa'da elle
-/// seçilemez (çifte sayım izlenebilirliği, kural §6). Elle eklenebilen setler
-/// [manualExpense]/[manualIncome] ile sınırlıdır.
+/// seçilemez (çifte sayım izlenebilirliği, kural §6). Elle eklenebilen set
+/// [manualExpense] ile sınırlıdır.
 class LedgerCategory {
   LedgerCategory._();
 
@@ -16,9 +16,6 @@ class LedgerCategory {
 
   /// Elle eklenebilen GİDER kategorileri (maas/elebasi otomatik → hariç).
   static const List<String> manualExpense = [mazot, genel];
-
-  /// Elle eklenebilen GELİR kategorileri.
-  static const List<String> manualIncome = [genel];
 
   /// Türkçe gösterim etiketleri.
   static const Map<String, String> _labels = {

@@ -1,7 +1,7 @@
 /// Dönem raporu — saf fonksiyon (Firestore'suz → unit test, kural §11).
 ///
 /// Üç bağımsız metrik grubu tek dönemde birleşir:
-///  1. Kasa: gelir/gider/bakiye + kategori kırılımı ([summarizeLedger]).
+///  1. Kasa: toplam gider + kategori kırılımı ([summarizeLedger]).
 ///  2. İşçilik: dönemde tahakkuk eden brüt (yoklama kazancı), ödenen net
 ///     (hakediş), verilen avans.
 ///  3. İşçi bazında kazanç dökümü.
@@ -55,7 +55,6 @@ class PeriodReport {
   const PeriodReport({
     required this.startIso,
     required this.endIso,
-    this.incomeKurus = 0,
     this.expenseKurus = 0,
     this.expenseByCategory = const {},
     this.grossLaborKurus = 0,
@@ -67,8 +66,7 @@ class PeriodReport {
   final String startIso;
   final String endIso;
 
-  /// Kasa gelir/gider (kuruş) ve gider kategori kırılımı.
-  final int incomeKurus;
+  /// Kasa toplam gideri (kuruş) ve gider kategori kırılımı.
   final int expenseKurus;
   final Map<String, int> expenseByCategory;
 
@@ -84,15 +82,11 @@ class PeriodReport {
   /// İşçi bazında kazanç, brüte göre azalan sıralı.
   final List<WorkerEarning> workerEarnings;
 
-  /// Kasa bakiyesi = gelir − gider (negatif olabilir).
-  int get balanceKurus => incomeKurus - expenseKurus;
-
   /// Dönem mazot gideri (kuruş).
   int get mazotKurus => expenseByCategory[LedgerCategory.mazot] ?? 0;
 
   /// Rapor tamamen boş mu? (Hiç kayıt yok.)
   bool get isEmpty =>
-      incomeKurus == 0 &&
       expenseKurus == 0 &&
       grossLaborKurus == 0 &&
       netPaidKurus == 0 &&
@@ -118,7 +112,7 @@ PeriodReport buildPeriodReport({
   required List<Payroll> payrolls,
   required List<LedgerEntry> ledger,
 }) {
-  // 1. Kasa — dönemdeki ledger kayıtları (mevcut saf özet).
+  // 1. Kasa — dönemdeki gider kayıtları (mevcut saf özet).
   final inPeriodLedger =
       ledger.where((e) => _inRange(e.date, startIso, endIso)).toList();
   final ledgerSummary = summarizeLedger(inPeriodLedger);
@@ -159,7 +153,6 @@ PeriodReport buildPeriodReport({
   return PeriodReport(
     startIso: startIso,
     endIso: endIso,
-    incomeKurus: ledgerSummary.incomeKurus,
     expenseKurus: ledgerSummary.expenseKurus,
     expenseByCategory: ledgerSummary.expenseByCategory,
     grossLaborKurus: grossLabor,

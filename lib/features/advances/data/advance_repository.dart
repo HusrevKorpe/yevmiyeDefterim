@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/date/app_date.dart';
 import '../../../core/firestore/refs.dart';
+import '../../../core/firestore/write_stamp.dart';
 import 'advance.dart';
 
 abstract class AdvanceRepository {
@@ -23,6 +24,10 @@ abstract class AdvanceRepository {
 
   /// Avansı siler (yalnız kapanmamış avans için — çağıran doğrular).
   Future<void> delete(String id);
+
+  /// Dokümanın güncel sürüm numarası (`rev`) — düzenleme çakışması tespiti için.
+  /// Doküman yoksa null. Online'da sunucu değerini, offline'da önbelleği getirir.
+  Future<int?> currentRev(String id);
 }
 
 class FirestoreAdvanceRepository implements AdvanceRepository {
@@ -40,21 +45,22 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
         // Sorgu/aralık için avans gününün yerel gün-başı damgası (kural §2).
         'ts': Timestamp.fromDate(parseIsoDate(advance.date)),
         'createdAt': FieldValue.serverTimestamp(),
-        ..._touch(),
+        ...writeStamp(),
       });
 
   @override
   Future<void> update(Advance advance) => advancesCol(_db).doc(advance.id).set({
         ...advance.toMap(),
         'ts': Timestamp.fromDate(parseIsoDate(advance.date)),
-        ..._touch(),
+        ...writeStamp(),
       }, SetOptions(merge: true));
 
   @override
   Future<void> delete(String id) => advancesCol(_db).doc(id).delete();
 
-  Map<String, dynamic> _touch() => {
-        'updatedAt': FieldValue.serverTimestamp(),
-        'clientUpdatedAt': DateTime.now().millisecondsSinceEpoch,
-      };
+  @override
+  Future<int?> currentRev(String id) async {
+    final snap = await advancesCol(_db).doc(id).get();
+    return snap.exists ? revOfData(snap.data()) : null;
+  }
 }

@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../core/constants/routes.dart';
 import '../features/advances/presentation/advances_screen.dart';
 import '../features/attendance/presentation/attendance_screen.dart';
+import '../features/attendance/presentation/monthly_attendance_screen.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/data/app_user.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -62,6 +63,11 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const ReportScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.monthlyAttendance,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const MonthlyAttendanceScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             MainShell(navigationShell: navigationShell),
@@ -77,16 +83,16 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: AppRoutes.attendance,
-                builder: (context, state) => const AttendanceScreen(),
+                path: AppRoutes.workers,
+                builder: (context, state) => const WorkersScreen(),
               ),
             ],
           ),
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: AppRoutes.workers,
-                builder: (context, state) => const WorkersScreen(),
+                path: AppRoutes.attendance,
+                builder: (context, state) => const AttendanceScreen(),
               ),
             ],
           ),

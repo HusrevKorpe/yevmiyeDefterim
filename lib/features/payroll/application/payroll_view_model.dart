@@ -63,7 +63,6 @@ class PayrollViewModel extends Notifier<PayrollPayState> {
         ledgerId = newId();
         ledger = LedgerEntry(
           id: ledgerId,
-          type: LedgerType.expense,
           category: line.isCrew ? LedgerCategory.elebasi : LedgerCategory.maas,
           amountKurus: comp.netPaidKurus,
           date: paidDate,

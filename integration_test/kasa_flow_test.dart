@@ -37,10 +37,9 @@ void main() {
   const female = 180000;
   const crewRate = 150000;
 
-  // Temmuz 2026 dönemine ait karışık kayıtlar (elle + otomatik hakediş gideri).
+  // Temmuz 2026 dönemine ait gider kayıtları (elle + otomatik hakediş gideri).
   LedgerEntry entry({
     required String id,
-    required LedgerType type,
     required String category,
     required int amount,
     required String date,
@@ -49,7 +48,6 @@ void main() {
   }) =>
       LedgerEntry(
         id: id,
-        type: type,
         category: category,
         amountKurus: amount,
         date: date,
@@ -63,16 +61,7 @@ void main() {
 
     final ledger = FakeLedgerRepository([
       entry(
-        id: 'l1',
-        type: LedgerType.income,
-        category: LedgerCategory.genel,
-        amount: 1200000, // 12.000 ₺
-        date: '2026-07-12',
-        note: 'Buğday satışı',
-      ),
-      entry(
         id: 'l2',
-        type: LedgerType.expense,
         category: LedgerCategory.mazot,
         amount: 150000, // 1.500 ₺
         date: '2026-07-10',
@@ -80,14 +69,12 @@ void main() {
       ),
       entry(
         id: 'l3',
-        type: LedgerType.expense,
         category: LedgerCategory.mazot,
         amount: 90000, // 900 ₺
         date: '2026-07-05',
       ),
       entry(
         id: 'l4',
-        type: LedgerType.expense,
         category: LedgerCategory.genel,
         amount: 60000, // 600 ₺
         date: '2026-07-08',
@@ -96,7 +83,6 @@ void main() {
       // Otomatik hakediş gideri — salt-okunur (kilit ikonu).
       entry(
         id: 'l5',
-        type: LedgerType.expense,
         category: LedgerCategory.maas,
         amount: 500000, // 5.000 ₺
         date: '2026-07-16',
@@ -141,15 +127,6 @@ void main() {
     await tester.tap(find.text('Kasa').last);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('02-kasa-liste');
-
-    // Gelir filtresine bas (yalnız gelir kayıtları).
-    await tester.tap(find.text('Gelir').last);
-    await tester.pumpAndSettle();
-    await binding.takeScreenshot('03-kasa-gelir-filtre');
-
-    // Filtreyi Tümü'ye döndür.
-    await tester.tap(find.text('Tümü'));
-    await tester.pumpAndSettle();
 
     // App bar "Mazot" ikon butonu → Mazot ekranı.
     await tester.tap(find.descendant(

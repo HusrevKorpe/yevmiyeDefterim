@@ -10,10 +10,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
 import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
+import '../application/advance_providers.dart';
 import '../application/advance_view_model.dart';
 import '../data/advance.dart';
 
@@ -33,6 +35,10 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
   String? _workerId;
   late String _date;
 
+  /// Düzenlemeye başlarken avansın sürümü — kaydederken başka cihazda değişti mi
+  /// diye karşılaştırılır. Null = bilinmiyor → çakışma kontrolü atlanır.
+  int? _baseRev;
+
   bool get _isNew => widget.advance == null;
 
   @override
@@ -44,6 +50,52 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     );
     _workerId = a?.workerId;
     _date = a?.date ?? todayIso();
+    if (a != null) _loadBaseRev(a.id);
+  }
+
+  Future<void> _loadBaseRev(String id) async {
+    try {
+      final rev = await ref.read(advanceRepositoryProvider).currentRev(id);
+      if (mounted) _baseRev = rev;
+    } catch (_) {
+      // Sürüm okunamadı (offline vb.) — çakışma kontrolü sessizce atlanır.
+    }
+  }
+
+  /// Avans düzenleme başladığından beri başka cihazda değiştiyse onay ister.
+  /// `true` → devam et (değişmemiş ya da üzerine yazmayı onayladı).
+  Future<bool> _confirmIfChanged(String id) async {
+    final base = _baseRev;
+    if (base == null) return true;
+    int? now;
+    try {
+      now = await ref.read(advanceRepositoryProvider).currentRev(id);
+    } catch (_) {
+      return true;
+    }
+    if (now == null || now == base) return true;
+    if (!mounted) return false;
+    final overwrite = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Avans değişmiş'),
+        content: const Text(
+          'Bu avans siz düzenlerken başka bir cihazda değiştirildi. '
+          'Kaydederseniz onların değişikliği kaybolur. Yine de kaydedilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Üzerine Yaz'),
+          ),
+        ],
+      ),
+    );
+    return overwrite == true;
   }
 
   @override
@@ -53,14 +105,8 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: parseIsoDate(_date),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      helpText: 'Avans tarihi',
-    );
-    if (picked != null) setState(() => _date = toIsoDate(picked));
+    final iso = await pickAppDate(context, initialIso: _date, helpText: 'Avans tarihi');
+    if (iso != null) setState(() => _date = iso);
   }
 
   Future<void> _save(List<Worker> workers) async {
@@ -81,6 +127,10 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
       date: _date,
       settledPayrollId: existing?.settledPayrollId,
     );
+
+    // Düzenlemede avans başka cihazda değiştiyse üzerine yazmadan önce onay.
+    if (!_isNew && !await _confirmIfChanged(existing!.id)) return;
+
     await ref
         .read(advanceEditViewModelProvider.notifier)
         .submit(advance: advance, isNew: _isNew);

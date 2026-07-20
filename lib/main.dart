@@ -6,8 +6,10 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'app/theme_mode.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -35,5 +37,13 @@ Future<void> main() async {
   // TR tarih/para formatları için yerel veriyi yükle.
   await initializeDateFormatting('tr_TR', null);
 
-  runApp(const ProviderScope(child: YevmiyeApp()));
+  // Tema tercihini ilk kareden ÖNCE oku → açılışta tema titremez (flicker yok).
+  final prefs = await SharedPreferences.getInstance();
+
+  runApp(
+    ProviderScope(
+      overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+      child: const YevmiyeApp(),
+    ),
+  );
 }

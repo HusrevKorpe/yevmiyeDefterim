@@ -1,4 +1,4 @@
-/// Kasa — dönem gelir/gider listesi + özet + Mazot ekranı (plan §5, kural §8).
+/// Kasa — dönem gider listesi + toplam + Mazot ekranı (plan §5, kural §8).
 ///
 /// Otomatik hakediş kayıtları salt-okunur; elle kayıtlar dokununca düzenlenir.
 /// Avanslar Kasa'da YOK (ayrı akış, kural §6) → çifte sayım olmaz.
@@ -83,9 +83,15 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
               data: (entries) {
                 final visible = entries;
                 if (visible.isEmpty) return const _EmptyView();
-                return ListView.builder(
+                return ListView.separated(
                   padding: const EdgeInsets.only(bottom: 20),
                   itemCount: visible.length,
+                  separatorBuilder: (context, i) => const Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
                   itemBuilder: (context, i) {
                     final e = visible[i];
                     return LedgerEntryTile(
@@ -172,7 +178,7 @@ class _EmptyView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Sağ alttaki “Ekle” ile gelir/gider girin ya da dönemi değiştirin.',
+              'Üstteki “Ekle” ile gider girin ya da dönemi değiştirin.',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,

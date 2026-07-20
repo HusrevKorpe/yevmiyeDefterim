@@ -11,10 +11,8 @@ import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
-import '../../attendance/application/attendance_providers.dart';
 import '../../auth/application/auth_providers.dart';
-import '../../workers/application/workers_providers.dart';
-import '../../workers/data/worker.dart';
+import '../application/dashboard_providers.dart';
 import '../application/day_summary.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -45,14 +43,7 @@ class DashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final todayAsync = ref.watch(todayAttendanceProvider);
-    // Cinsiyet yoklama kaydında tutulmaz; işçi listesinden (workerId → Gender)
-    // çözülür. Liste henüz yüklenmediyse harita boş → cinsiyet sayıları 0 kalır.
-    final genderById = <String, Gender>{
-      for (final w in ref.watch(workersStreamProvider).asData?.value ??
-          const <Worker>[])
-        w.id: w.gender,
-    };
+    final summaryAsync = ref.watch(todaySummaryProvider);
 
     return Scaffold(
       body: ListView(
@@ -65,20 +56,18 @@ class DashboardScreen extends ConsumerWidget {
             onTakeAttendance: () => context.go(AppRoutes.attendance),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 22, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SectionTitle('Bugün Özeti'),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 AsyncRetry(
-                  value: todayAsync,
-                  onRetry: () => ref.invalidate(todayAttendanceProvider),
+                  value: summaryAsync,
+                  onRetry: () => ref.invalidate(todaySummaryProvider),
                   message:
                       'Özet yüklenemedi. İnternet bağlantınızı kontrol edin.',
-                  data: (records) {
-                    final summary =
-                        summarizeDay(records, genderById: genderById);
+                  data: (summary) {
                     if (summary.markedIndividuals == 0 &&
                         summary.crewCount == 0) {
                       return const _NoAttendanceYet();
@@ -318,7 +307,7 @@ class _SummaryContent extends StatelessWidget {
           female: summary.femaleCount,
           male: summary.maleCount,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         // Cinsiyet dağılımı.
         Row(
           children: [
@@ -326,7 +315,7 @@ class _SummaryContent extends StatelessWidget {
               child: _StatTile(
                 label: 'Kadın',
                 value: '${summary.femaleCount}',
-                color: kFemale,
+                color: femaleColor(context),
                 icon: Icons.woman,
               ),
             ),
@@ -335,46 +324,14 @@ class _SummaryContent extends StatelessWidget {
               child: _StatTile(
                 label: 'Erkek',
                 value: '${summary.maleCount}',
-                color: kMale,
+                color: maleColor(context),
                 icon: Icons.man,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        // Yoklama ayrıntısı (para yok).
-        Row(
-          children: [
-            Expanded(
-              child: _StatTile(
-                label: 'Tam gün',
-                value: '${summary.fullCount}',
-                color: StatusColors.full,
-                icon: Icons.check_circle,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _StatTile(
-                label: 'Yarım',
-                value: '${summary.halfCount}',
-                color: StatusColors.half,
-                icon: Icons.contrast,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _StatTile(
-                label: 'Gelmeyen',
-                value: '${summary.absentCount}',
-                color: StatusColors.absent,
-                icon: Icons.cancel,
-              ),
-            ),
-          ],
-        ),
         if (summary.crewCount > 0) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _CrewCard(
             crewCount: summary.crewCount,
             headcount: summary.crewHeadcount,
@@ -401,28 +358,28 @@ class _StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Column(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 27,
+            height: 27,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 19),
+            child: Icon(icon, color: color, size: 15),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 5),
           Text(
             value,
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: color,
             ),
@@ -433,7 +390,7 @@ class _StatTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11.5,
+              fontSize: 10.5,
               fontWeight: FontWeight.w500,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -460,34 +417,34 @@ class _WorkedHeadlineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
           colors: [kHeroTop, kHeroBottom],
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: kHeroBottom.withValues(alpha: 0.28),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            color: kHeroBottom.withValues(alpha: 0.24),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: const Icon(Icons.groups, color: Colors.white, size: 26),
+            child: const Icon(Icons.groups, color: Colors.white, size: 21),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -495,16 +452,16 @@ class _WorkedHeadlineCard extends StatelessWidget {
                 Text(
                   'Bugün çalışan',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: Colors.white.withValues(alpha: 0.85),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 1),
                 Text(
                   '$present işçi',
                   style: const TextStyle(
-                    fontSize: 23,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -513,7 +470,7 @@ class _WorkedHeadlineCard extends StatelessWidget {
             ),
           ),
           _MiniPill(icon: Icons.woman, count: female),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           _MiniPill(icon: Icons.man, count: male),
         ],
       ),
@@ -530,21 +487,21 @@ class _MiniPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 18),
-          const SizedBox(height: 2),
+          Icon(icon, color: Colors.white, size: 15),
+          const SizedBox(height: 1),
           Text(
             '$count',
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 12.5,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -562,26 +519,40 @@ class _CrewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
+    final theme = Theme.of(context);
+    // Marka yeşili — açıkta 2E7D32 (canlı), koyuda parlak yeşil (koyu zeminde
+    // okunur). Yeşil tint yeşil-krem arka planda kayboluyordu → açık temada
+    // beyaz kart net ayrışır; koyu temada düz beyaz göze batar → koyu yüzey.
+    final color = incomeColor(context);
+    final cardColor = theme.brightness == Brightness.dark
+        ? theme.colorScheme.surfaceContainerHigh
+        : Colors.white;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.engineering, color: color, size: 24),
+            child: Icon(Icons.engineering, color: color, size: 20),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -589,16 +560,16 @@ class _CrewCard extends StatelessWidget {
                 Text(
                   '$crewCount elebaşı',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 14.5,
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 Text(
                   'Toplam $headcount kişi getirdi',
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 11.5,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),

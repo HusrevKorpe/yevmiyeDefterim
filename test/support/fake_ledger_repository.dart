@@ -12,11 +12,15 @@ class FakeLedgerRepository implements LedgerRepository {
   }
 
   final Map<String, LedgerEntry> _store = {};
+  final Map<String, int> _rev = {};
   final StreamController<void> _tick = StreamController<void>.broadcast();
 
   List<LedgerEntry> get all => _store.values.toList();
   int get count => _store.length;
   LedgerEntry? byId(String id) => _store[id];
+
+  /// Testte çakışma senaryosu kurmak için sürümü elle artır.
+  void bumpRev(String id) => _rev[id] = (_rev[id] ?? 0) + 1;
 
   @override
   Stream<List<LedgerEntry>> watchAll() async* {
@@ -40,12 +44,14 @@ class FakeLedgerRepository implements LedgerRepository {
   @override
   Future<void> add(LedgerEntry entry) async {
     _store[entry.id] = entry;
+    bumpRev(entry.id);
     _tick.add(null);
   }
 
   @override
   Future<void> update(LedgerEntry entry) async {
     _store[entry.id] = entry;
+    bumpRev(entry.id);
     _tick.add(null);
   }
 
@@ -54,4 +60,8 @@ class FakeLedgerRepository implements LedgerRepository {
     _store.remove(id);
     _tick.add(null);
   }
+
+  @override
+  Future<int?> currentRev(String id) async =>
+      _store.containsKey(id) ? (_rev[id] ?? 0) : null;
 }

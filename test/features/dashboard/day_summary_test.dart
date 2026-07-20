@@ -73,4 +73,44 @@ void main() {
     expect(s.crewHeadcount, 5);
     expect(s.totalKurus, 3 * 150000 + 2 * 160000);
   });
+
+  test('cinsiyet — yalnız gelenler (tam/yarım) kadın/erkek sayılır', () {
+    final s = summarizeDay(
+      [
+        ind('kadin_tam', AttendanceStatus.full, 200000),
+        ind('kadin_yarim', AttendanceStatus.half, 200000),
+        ind('erkek_tam', AttendanceStatus.full, 200000),
+        ind('erkek_yok', AttendanceStatus.absent, 200000), // gelmedi → sayılmaz
+      ],
+      genderById: const {
+        'kadin_tam': Gender.female,
+        'kadin_yarim': Gender.female,
+        'erkek_tam': Gender.male,
+        'erkek_yok': Gender.male,
+      },
+    );
+    expect(s.femaleCount, 2);
+    expect(s.maleCount, 1);
+    expect(s.presentIndividuals, 3);
+  });
+
+  test('cinsiyet haritası boş → kadın/erkek 0, diğer sayılar bozulmaz', () {
+    final s = summarizeDay([
+      ind('a', AttendanceStatus.full, 200000),
+      ind('b', AttendanceStatus.half, 200000),
+    ]);
+    expect(s.femaleCount, 0);
+    expect(s.maleCount, 0);
+    expect(s.presentIndividuals, 2);
+  });
+
+  test('cinsiyeti bilinmeyen işçi hiçbir yana sayılmaz', () {
+    final s = summarizeDay(
+      [ind('bilinmeyen', AttendanceStatus.full, 200000)],
+      genderById: const {},
+    );
+    expect(s.femaleCount, 0);
+    expect(s.maleCount, 0);
+    expect(s.fullCount, 1);
+  });
 }

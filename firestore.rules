@@ -8,8 +8,18 @@ service cloud.firestore {
     // - Kural bilerek basit tutulur: karmaşık get()/memberUids kuralları offline
     //   yazmaların sonradan sunucuda reddedilip geri alınmasına yol açabilir.
     //   Kullanıcı sayısı artarsa memberUids tabanlı kurala sıkılaştırılabilir.
+    //
+    // EK KORUMA (denetim izi sahteciliğini önler):
+    // - Her yazma `updatedByUid` damgası taşır (uygulama: writeStamp()).
+    // - Bir yazım bu alanı taşıyorsa, DEĞERİ isteği yapan kullanıcının kendi
+    //   uid'i OLMAK ZORUNDA → biri başkasının adına kayıt "imzalayamaz".
+    // - Alan yoksa yazıma izin verilir (eski/kısmi yazımları kırmamak için;
+    //   offline yazımlar sunucuda reddedilip geri alınmasın diye eklemeli).
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, delete: if request.auth != null;
+      allow create, update: if request.auth != null
+        && (!('updatedByUid' in request.resource.data)
+            || request.resource.data.updatedByUid == request.auth.uid);
     }
   }
 }

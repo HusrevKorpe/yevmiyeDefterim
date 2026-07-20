@@ -93,7 +93,7 @@ final Provider<List<LedgerEntry>> mazotEntriesProvider =
     Provider<List<LedgerEntry>>((ref) {
   final all = ref.watch(ledgerStreamProvider).asData?.value ?? const [];
   final mazot = all
-      .where((e) => !e.isIncome && e.category == LedgerCategory.mazot)
+      .where((e) => e.category == LedgerCategory.mazot)
       .toList()
     ..sort((a, b) => b.date.compareTo(a.date));
   return mazot;

@@ -16,10 +16,10 @@ mixin _$Worker {
 
  String get id; String get name; WorkerType get type; Gender get gender;/// İşçiye özel günlük ücret (kuruş). Null => varsayılan ücret kullanılır.
 /// Elebaşı için anlamsız (kişi başı ücret ayarlardan gelir).
- int? get dailyWageOverrideKurus;/// Elebaşının olağan ekip mevcudu (kişi). Yalnız elebaşı için anlamlı;
-/// bireysel işçide null. Yoklamada o güne ait kayıt yoksa sayaç bu değerle
-/// dolu (taslak) gelir — kişi onaylayınca/ayarlayınca gerçek kayıt yazılır
-/// (kayıtlar tek kaynak; ön-dolum tek başına kazanca girmez). Null/0 => önerisiz.
+ int? get dailyWageOverrideKurus;/// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
+/// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para
+/// hesabına GİRMEZ (günlük kişi sayısı yoklamada ayrıca tutulur). Yalnız
+/// elebaşı için anlamlı; bireysel işçide null. Null/0 => gösterilmez.
  int? get defaultHeadcount;/// Soft-delete bayrağı (kural §5): pasif işçi listede gizli, raporda görünür.
  bool get active;
 /// Create a copy of Worker
@@ -229,10 +229,10 @@ class _Worker extends Worker {
 /// İşçiye özel günlük ücret (kuruş). Null => varsayılan ücret kullanılır.
 /// Elebaşı için anlamsız (kişi başı ücret ayarlardan gelir).
 @override final  int? dailyWageOverrideKurus;
-/// Elebaşının olağan ekip mevcudu (kişi). Yalnız elebaşı için anlamlı;
-/// bireysel işçide null. Yoklamada o güne ait kayıt yoksa sayaç bu değerle
-/// dolu (taslak) gelir — kişi onaylayınca/ayarlayınca gerçek kayıt yazılır
-/// (kayıtlar tek kaynak; ön-dolum tek başına kazanca girmez). Null/0 => önerisiz.
+/// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
+/// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para
+/// hesabına GİRMEZ (günlük kişi sayısı yoklamada ayrıca tutulur). Yalnız
+/// elebaşı için anlamlı; bireysel işçide null. Null/0 => gösterilmez.
 @override final  int? defaultHeadcount;
 /// Soft-delete bayrağı (kural §5): pasif işçi listede gizli, raporda görünür.
 @override@JsonKey() final  bool active;

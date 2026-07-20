@@ -82,6 +82,25 @@ void main() {
     expect(r.earningKurus, 100000);
   });
 
+  test('clearStatus: kaydı siler → gün hiç sayılmaz (otomatik Yok yok)',
+      () async {
+    await boot(settings);
+    await vm().setStatus(male, AttendanceStatus.full);
+    expect(attendance.count, 1);
+
+    await vm().clearStatus(male);
+
+    expect(attendance.count, 0); // kayıt silindi → gün boş, hesaba girmez
+    expect(container.read(attendanceViewModelProvider), isNull); // hata yok
+  });
+
+  test('clearStatus: hiç kaydı olmayan işçide sorunsuz (no-op)', () async {
+    await boot(settings);
+    await vm().clearStatus(male);
+    expect(attendance.count, 0);
+    expect(container.read(attendanceViewModelProvider), isNull);
+  });
+
   test('kadın işçi → kadın yevmiyesi snapshot alınır', () async {
     await boot(settings);
     const female = Worker(
@@ -122,6 +141,71 @@ void main() {
     expect(r.crewRateSnapshotKurus, 150000);
     expect(r.headcount, 4);
     expect(r.earningKurus, 600000);
+  });
+
+  // "Kaydet" → önden dolu (henüz kaydı olmayan) elebaşı öntanımlı mevcutları
+  // (crewSize) o güne yazılır; elle girilmiş kayıt ezilmez; kişi sayısı
+  // girilmemiş elebaşı atlanır (İşçiler'de girilen ekip sayısı yoklamaya gelsin).
+  test('commitCrewDefaults: kaydı olmayan elebaşı crewSize ile yazılır', () async {
+    final workers = FakeWorkerRepository();
+    attendance = FakeAttendanceRepository();
+    settingsRepo = FakeSettingsRepository(settings);
+    container = ProviderContainer(overrides: [
+      settingsRepositoryProvider.overrideWithValue(settingsRepo),
+      attendanceRepositoryProvider.overrideWithValue(attendance),
+      workerRepositoryProvider.overrideWithValue(workers),
+    ]);
+    container.listen(settingsStreamProvider, (_, _) {});
+    await container.read(settingsStreamProvider.future);
+
+    // A: 10 kişilik ekip, kaydı yok → 10 yazılmalı.
+    const bossA = Worker(
+      id: 'eA',
+      name: 'A Ustası',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      defaultHeadcount: 10,
+    );
+    // B: 5 kişilik ekip ama bugün elle 2 girilmiş → ezilmemeli.
+    const bossB = Worker(
+      id: 'eB',
+      name: 'B Ustası',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      defaultHeadcount: 5,
+    );
+    // C: kişi sayısı girilmemiş (crewSize 0) → atlanmalı.
+    const bossC = Worker(
+      id: 'eC',
+      name: 'C Ustası',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+    );
+    await workers.add(bossA);
+    await workers.add(bossB);
+    await workers.add(bossC);
+    await workers.add(male); // bireysel işçi → elebaşı akışına girmemeli
+
+    container.read(selectedDateProvider.notifier).set('2026-07-15');
+    await vm().setHeadcount(bossB, 2); // B için elle kayıt
+
+    // Sağlayıcıları canlı tut + ilk emisyonu bekle (ViewModel senkron okur).
+    container.listen(workersStreamProvider, (_, _) {});
+    await container.read(workersStreamProvider.future);
+    container.listen(attendanceForSelectedDateProvider, (_, _) {});
+    await container.read(attendanceForSelectedDateProvider.future);
+
+    await vm().commitCrewDefaults();
+
+    final crew = {
+      for (final r in attendance.all.whereType<CrewAttendance>())
+        r.workerId: r
+    };
+    expect(crew['eA']?.headcount, 10); // önden dolu → yazıldı
+    expect(crew['eA']?.crewRateSnapshotKurus, 150000); // ücret donduruldu
+    expect(crew['eB']?.headcount, 2); // elle girilen ezilmedi
+    expect(crew.containsKey('eC'), isFalse); // crewSize 0 → atlandı
+    expect(crew.length, 2);
   });
 
   test('ücret zammı geçmiş snapshot\'ı değiştirmez; yeni gün yeni ücret alır',

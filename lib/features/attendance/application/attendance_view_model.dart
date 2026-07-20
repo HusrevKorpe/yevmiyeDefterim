@@ -67,6 +67,20 @@ class AttendanceViewModel extends Notifier<String?> {
     ));
   }
 
+  /// Bireysel işçinin bugünkü kaydını siler → hiçbir durum seçili değil.
+  /// Yoklama alınmayan (veya geri alınan) gün "Yok" sayılmaz, hiç kayıt tutulmaz
+  /// ve hiçbir hesaba girmez. Segment düğmesinde seçili durumu boşaltır.
+  Future<void> clearStatus(Worker worker) async {
+    final date = ref.read(selectedDateProvider);
+    try {
+      await ref
+          .read(attendanceRepositoryProvider)
+          .delete(attendanceDocId(date, worker.id));
+    } catch (_) {
+      state = 'Kaydedilemedi. Tekrar deneyin.';
+    }
+  }
+
   /// Elebaşının kişi sayısını yazar; o günkü kişi ücretini dondurur.
   Future<void> setHeadcount(Worker worker, int headcount) async {
     // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---

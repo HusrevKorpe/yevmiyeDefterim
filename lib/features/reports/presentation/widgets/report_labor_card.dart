@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme.dart';
 import '../../../../core/money/money.dart';
 import '../../application/period_report.dart';
 
@@ -38,7 +39,7 @@ class ReportLaborCard extends StatelessWidget {
               icon: Icons.payments,
               label: 'Ödenen (net)',
               value: report.netPaidKurus,
-              color: Colors.green.shade700,
+              color: incomeColor(context),
             ),
             const SizedBox(height: 10),
             _Row(

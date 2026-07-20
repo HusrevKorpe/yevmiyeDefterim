@@ -7,6 +7,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/firestore/refs.dart';
+import '../../../core/firestore/write_stamp.dart';
 import 'worker.dart';
 
 abstract class WorkerRepository {
@@ -41,26 +42,19 @@ class FirestoreWorkerRepository implements WorkerRepository {
   Future<void> add(Worker worker) => workersCol(_db).doc(worker.id).set({
         ...worker.toMap(),
         'createdAt': FieldValue.serverTimestamp(),
-        ..._touch(),
+        ...writeStamp(),
       });
 
   @override
   Future<void> update(Worker worker) => workersCol(_db).doc(worker.id).set({
         ...worker.toMap(),
-        ..._touch(),
+        ...writeStamp(),
       }, SetOptions(merge: true));
 
   @override
   Future<void> setActive(String id, {required bool active}) =>
       workersCol(_db).doc(id).set({
         'active': active,
-        ..._touch(),
+        ...writeStamp(),
       }, SetOptions(merge: true));
-
-  /// updatedAt = sunucu damgası; clientUpdatedAt = cihaz zamanı (sıralama için,
-  /// offline'da serverTimestamp null gelir — kural §2).
-  Map<String, dynamic> _touch() => {
-        'updatedAt': FieldValue.serverTimestamp(),
-        'clientUpdatedAt': DateTime.now().millisecondsSinceEpoch,
-      };
 }

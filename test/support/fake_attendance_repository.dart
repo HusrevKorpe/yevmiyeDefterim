@@ -46,6 +46,12 @@ class FakeAttendanceRepository implements AttendanceRepository {
     _tick.add(null);
   }
 
+  @override
+  Future<void> delete(String id) async {
+    _store.remove(id);
+    _tick.add(null);
+  }
+
   /// Depodaki toplam kayıt sayısı (çift kayıt kontrolü için).
   int get count => _store.length;
 

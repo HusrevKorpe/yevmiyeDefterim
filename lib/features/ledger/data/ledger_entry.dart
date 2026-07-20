@@ -1,7 +1,7 @@
-/// Kasa (gelir/gider) kaydı (plan §3 `ledger/{uuid}`, kural §6).
+/// Kasa (gider) kaydı (plan §3 `ledger/{uuid}`, kural §6).
 ///
-/// Faz 2'de yalnız hakediş "Öde" akışı bunu yazar (gider = net ücret). Tam
-/// CRUD ve Kasa ekranı Faz 3'te gelir. Para = tam sayı kuruş (kural §1).
+/// Uygulama yalnız gider takip eder — gelir kavramı yoktur. Faz 2'de hakediş
+/// "Öde" akışı, Faz 3'te elle CRUD bunu yazar. Para = tam sayı kuruş (kural §1).
 /// Kaynak (`source`) çifte sayımı izler (kural §6). freezed/değişmez.
 library;
 
@@ -11,16 +11,12 @@ import '../../../core/constants/categories.dart';
 
 part 'ledger_entry.freezed.dart';
 
-/// Kayıt yönü. Enum adı = Firestore'da saklanan değer.
-enum LedgerType { income, expense }
-
 @freezed
 abstract class LedgerEntry with _$LedgerEntry {
   const LedgerEntry._();
 
   const factory LedgerEntry({
     required String id,
-    required LedgerType type,
 
     /// Kategori — [LedgerCategory] (mazot/maas/elebasi/genel).
     required String category,
@@ -43,14 +39,10 @@ abstract class LedgerEntry with _$LedgerEntry {
   /// akışının yazdığı (payroll/elebasi) kayıtlar dondurulur (kural §6).
   bool get isManual => source == LedgerSource.manual;
 
-  /// Gelir kaydı mı? (Değilse gider.)
-  bool get isIncome => type == LedgerType.income;
-
   factory LedgerEntry.fromDoc(String id, Map<String, dynamic>? data) {
     final m = data ?? const {};
     return LedgerEntry(
       id: id,
-      type: _typeFromName(m['type']),
       category: (m['category'] as String?) ?? LedgerCategory.genel,
       amountKurus: _asInt(m['amountKurus']),
       date: (m['date'] as String?) ?? '',
@@ -64,7 +56,6 @@ abstract class LedgerEntry with _$LedgerEntry {
 
   /// Domain alanları (ts/zaman damgaları repository'de eklenir — kural §2).
   Map<String, dynamic> toMap() => {
-        'type': type.name,
         'category': category,
         'amountKurus': amountKurus,
         'date': date,
@@ -75,11 +66,6 @@ abstract class LedgerEntry with _$LedgerEntry {
         'workerName': workerName,
       };
 }
-
-LedgerType _typeFromName(Object? v) => LedgerType.values.firstWhere(
-      (t) => t.name == v,
-      orElse: () => LedgerType.expense,
-    );
 
 int _asInt(Object? v) {
   if (v is int) return v;

@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/gradient_header.dart';
@@ -171,7 +172,7 @@ class _SummaryCard extends StatelessWidget {
               icon: Icons.payments,
               label: 'Ödenen',
               value: formatKurus(summary.netPaidKurus),
-              color: Colors.green.shade700,
+              color: incomeColor(context),
             ),
             if (summary.openAdvancesKurus > 0)
               _Stat(

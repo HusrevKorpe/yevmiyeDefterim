@@ -1,7 +1,7 @@
-/// Kasa kaydı ekle/düzenle ekranı (kural §8: segment, ikon+yazı, onay, ₺).
+/// Kasa gider kaydı ekle/düzenle ekranı (kural §8: ikon+yazı, onay, ₺).
 ///
-/// Gelir/Gider segmenti + kategori + tutar + tarih + (opsiyonel) not. Yalnız
-/// elle kayıtlar açılır (otomatik hakediş kayıtları salt-okunur).
+/// Kategori + tutar + tarih + (opsiyonel) not. Uygulama yalnız gider takip
+/// eder. Yalnız elle kayıtlar açılır (otomatik hakediş kayıtları salt-okunur).
 library;
 
 import 'package:flutter/material.dart';
@@ -11,24 +11,22 @@ import '../../../core/constants/categories.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
+import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
 import '../application/ledger_edit_view_model.dart';
+import '../application/ledger_providers.dart';
 import '../data/ledger_entry.dart';
 
 class LedgerEditScreen extends ConsumerStatefulWidget {
   const LedgerEditScreen({
     super.key,
     this.entry,
-    this.initialType,
     this.initialCategory,
   });
 
   /// Düzenlenecek kayıt; null ise yeni kayıt.
   final LedgerEntry? entry;
-
-  /// Yeni kayıtta ön seçili tür (ör. Mazot ekranından gider). Yoksa gider.
-  final LedgerType? initialType;
 
   /// Yeni kayıtta ön seçili kategori (ör. Mazot ekranından mazot).
   final String? initialCategory;
@@ -41,15 +39,17 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _amountCtrl;
   late final TextEditingController _noteCtrl;
-  late LedgerType _type;
   late String _category;
   late String _date;
 
+  /// Düzenlemeye başlarken kaydın sürümü — kaydederken değişti mi diye karşılaştırılır
+  /// (başka cihaz eş zamanlı düzenleme yaptıysa üzerine yazmadan önce onay). Null =
+  /// bilinmiyor (henüz okunmadı / offline) → çakışma kontrolü atlanır.
+  int? _baseRev;
+
   bool get _isNew => widget.entry == null;
 
-  List<String> get _categories => _type == LedgerType.income
-      ? LedgerCategory.manualIncome
-      : LedgerCategory.manualExpense;
+  List<String> get _categories => LedgerCategory.manualExpense;
 
   @override
   void initState() {
@@ -59,13 +59,19 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
       text: e == null ? '' : formatKurusPlain(e.amountKurus),
     );
     _noteCtrl = TextEditingController(text: e?.note ?? '');
-    _type = e?.type ?? widget.initialType ?? LedgerType.expense;
-    _category = e?.category ??
-        widget.initialCategory ??
-        (_type == LedgerType.income
-            ? LedgerCategory.manualIncome.first
-            : LedgerCategory.genel);
+    _category =
+        e?.category ?? widget.initialCategory ?? LedgerCategory.genel;
     _date = e?.date ?? todayIso();
+    if (e != null) _loadBaseRev(e.id);
+  }
+
+  Future<void> _loadBaseRev(String id) async {
+    try {
+      final rev = await ref.read(ledgerRepositoryProvider).currentRev(id);
+      if (mounted) _baseRev = rev;
+    } catch (_) {
+      // Sürüm okunamadı (offline vb.) — çakışma kontrolü sessizce atlanır.
+    }
   }
 
   @override
@@ -75,23 +81,9 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
     super.dispose();
   }
 
-  void _setType(LedgerType type) {
-    setState(() {
-      _type = type;
-      // Kategori yeni tür için geçersizse ilk geçerliye çek.
-      if (!_categories.contains(_category)) _category = _categories.first;
-    });
-  }
-
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: parseIsoDate(_date),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      helpText: 'Kayıt tarihi',
-    );
-    if (picked != null) setState(() => _date = toIsoDate(picked));
+    final iso = await pickAppDate(context, initialIso: _date, helpText: 'Kayıt tarihi');
+    if (iso != null) setState(() => _date = iso);
   }
 
   Future<void> _save() async {
@@ -104,16 +96,94 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
     final note = _noteCtrl.text.trim();
     final entry = LedgerEntry(
       id: existing?.id ?? newId(),
-      type: _type,
       category: _category,
       amountKurus: amount,
       date: _date,
       source: LedgerSource.manual,
       note: note.isEmpty ? null : note,
     );
+
+    // Yeni kayıtta aynı gün/tutar/kategori zaten varsa çift-giriş uyarısı.
+    if (_isNew && !await _confirmIfDuplicate(entry)) return;
+    // Düzenlemede kayıt başka cihazda değiştiyse üzerine yazmadan önce onay.
+    if (!_isNew && !await _confirmIfChanged(existing!.id)) return;
+
     await ref
         .read(ledgerEditViewModelProvider.notifier)
         .submit(entry: entry, isNew: _isNew);
+  }
+
+  /// Aynı gün + tutar + kategoride başka bir elle kayıt varsa kullanıcıya sorar.
+  /// `true` → devam et (kayıt yok ya da kullanıcı onayladı), `false` → vazgeç.
+  Future<bool> _confirmIfDuplicate(LedgerEntry entry) async {
+    final all = ref.read(ledgerStreamProvider).asData?.value ?? const [];
+    final duplicate = all.any((e) =>
+        e.id != entry.id &&
+        e.isManual &&
+        e.category == entry.category &&
+        e.amountKurus == entry.amountKurus &&
+        e.date == entry.date);
+    if (!duplicate) return true;
+    if (!mounted) return false;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aynı kayıt var'),
+        content: Text(
+          '${formatHumanDate(entry.date)} tarihinde '
+          '${LedgerCategory.label(entry.category)} için '
+          '${formatKurus(entry.amountKurus)} tutarında kayıt zaten var. '
+          'Yine de eklensin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yine de Ekle'),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
+  }
+
+  /// Kayıt düzenleme başladığından beri (başka cihazda) değiştiyse onay ister.
+  /// `true` → devam et (değişmemiş ya da üzerine yazmayı onayladı).
+  Future<bool> _confirmIfChanged(String id) async {
+    final base = _baseRev;
+    if (base == null) return true; // sürüm bilinmiyor → akışı bloklama
+    int? now;
+    try {
+      now = await ref.read(ledgerRepositoryProvider).currentRev(id);
+    } catch (_) {
+      return true; // sürüm okunamadı (offline) → üzerine yazmaya izin ver
+    }
+    if (now == null || now == base) return true;
+    if (!mounted) return false;
+    final overwrite = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Kayıt değişmiş'),
+        content: const Text(
+          'Bu kayıt siz düzenlerken başka bir cihazda değiştirildi. '
+          'Kaydederseniz onların değişikliği kaybolur. Yine de kaydedilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Üzerine Yaz'),
+          ),
+        ],
+      ),
+    );
+    return overwrite == true;
   }
 
   Future<void> _delete() async {
@@ -166,24 +236,6 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SegmentedButton<LedgerType>(
-                segments: const [
-                  ButtonSegment(
-                    value: LedgerType.expense,
-                    icon: Icon(Icons.arrow_downward),
-                    label: Text('Gider'),
-                  ),
-                  ButtonSegment(
-                    value: LedgerType.income,
-                    icon: Icon(Icons.arrow_upward),
-                    label: Text('Gelir'),
-                  ),
-                ],
-                selected: {_type},
-                onSelectionChanged:
-                    saving ? null : (s) => _setType(s.first),
-              ),
-              const SizedBox(height: 20),
               DropdownButtonFormField<String>(
                 initialValue: _category,
                 decoration: const InputDecoration(

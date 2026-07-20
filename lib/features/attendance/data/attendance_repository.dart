@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/date/app_date.dart';
 import '../../../core/firestore/refs.dart';
+import '../../../core/firestore/write_stamp.dart';
 import 'attendance_record.dart';
 
 abstract class AttendanceRepository {
@@ -22,6 +23,10 @@ abstract class AttendanceRepository {
   /// Kaydı yazar. ID deterministik ({date}_{workerId}), `merge:true` →
   /// aynı işçi-gün çift kayıt olmaz (kural §3).
   Future<void> save(AttendanceRecord record);
+
+  /// Kaydı siler (deterministik ID). Yoklama alınmayan/geri alınan gün için:
+  /// kayıt hiç tutulmaz → gün "Yok" sayılmaz, hiçbir hesaba girmez.
+  Future<void> delete(String id);
 }
 
 class FirestoreAttendanceRepository implements AttendanceRepository {
@@ -64,7 +69,9 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
         ...record.toMap(),
         // Sorgu/aralık için iş gününün yerel gün-başı damgası (kural §2).
         'ts': Timestamp.fromDate(parseIsoDate(record.date)),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'clientUpdatedAt': DateTime.now().millisecondsSinceEpoch,
+        ...writeStamp(),
       }, SetOptions(merge: true));
+
+  @override
+  Future<void> delete(String id) => attendanceCol(_db).doc(id).delete();
 }
