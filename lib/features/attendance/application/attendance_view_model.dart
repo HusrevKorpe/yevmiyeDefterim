@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ids/ids.dart';
 import '../../settings/application/settings_providers.dart';
 import '../../settings/data/app_settings.dart';
+import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import '../data/attendance_record.dart';
 import 'attendance_providers.dart';
@@ -84,6 +85,24 @@ class AttendanceViewModel extends Notifier<String?> {
       headcount: count,
       crewRateSnapshotKurus: _settings.defaultCrewRateKurus,
     ));
+  }
+
+  /// "Kaydet" dokunuşunda çağrılır. Yoklamada elebaşı sayacı, işçiye kayıtlı
+  /// ekip mevcuduyla (crewSize) ÖNDEN DOLU görünür ama o değer henüz Firestore'a
+  /// yazılmamıştır (kullanıcı yanlışlıkla iş olmayan güne kayıt düşürmesin diye).
+  /// Bu metot, seçili günde henüz kaydı OLMAYAN her aktif elebaşının öntanımlı
+  /// mevcudunu kalıcı yazar. Zaten kaydı olan (elle değiştirilmiş) elebaşı EZİLMEZ;
+  /// kişi sayısı girilmemiş (crewSize == 0) elebaşı atlanır.
+  Future<void> commitCrewDefaults() async {
+    final records =
+        ref.read(attendanceForSelectedDateProvider).asData?.value ?? const [];
+    final recorded = {for (final r in records) r.workerId};
+    for (final w in ref.read(activeWorkersProvider)) {
+      if (!w.type.isCrew || w.crewSize <= 0 || recorded.contains(w.id)) {
+        continue;
+      }
+      await setHeadcount(w, w.crewSize);
+    }
   }
 
   Future<void> _save(AttendanceRecord record) async {

@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/money/money.dart';
 import 'paid_lock_badge.dart';
 
 class CrewAttendanceTile extends StatelessWidget {
@@ -13,12 +12,21 @@ class CrewAttendanceTile extends StatelessWidget {
     required this.headcount,
     required this.crewRateKurus,
     required this.onChanged,
+    this.pending = false,
     this.maxHeadcount = 99,
     this.locked = false,
   });
 
   final String name;
   final int headcount;
+
+  /// Gösterilen sayı kaydedilmiş bir yoklamadan değil, işçiye kayıtlı ekip
+  /// mevcudundan (crewSize) önden dolduruldu → henüz Firestore'da yok, "Kaydet"
+  /// ile kesinleşir. Alt yazıda kullanıcıyı uyarmak için kullanılır.
+  final bool pending;
+
+  /// Kişi başı ücret — para satırı şu an rafta (bkz. build). Değer hâlâ
+  /// ayarlardan geçiliyor ki para hesabı geri açılınca çağrı yeri değişmesin.
   final int crewRateKurus;
   final ValueChanged<int> onChanged;
   final int maxHeadcount;
@@ -29,11 +37,17 @@ class CrewAttendanceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dailyKurus = headcount * crewRateKurus;
-    final subtitle = crewRateKurus == 0
-        ? 'Kişi başı ücret girilmemiş'
-        : '$headcount kişi × ${formatKurus(crewRateKurus)} = '
-            '${formatKurus(dailyKurus)}';
+    // --- ELEBAŞI PARA SATIRI ŞİMDİLİK RAFTA ---
+    // Elebaşıya sabit/kişi-başı ücret girilmiyor; ödeme elden toplu yapılıyor.
+    // Yoklamada yalnız gelen kişi sayısı tutulur (para hesabı yok). Geri açmak
+    // için: `import '../../../../core/money/money.dart';` ekle ve subtitle'ı
+    // crewRateKurus==0 iken 'Kişi başı ücret girilmemiş', aksi halde
+    // '$headcount kişi × ${formatKurus(crewRateKurus)} = ${formatKurus(headcount*crewRateKurus)}' yap.
+    final subtitle = headcount == 0
+        ? 'Bugün gelen kişi sayısını girin'
+        : pending
+            ? '$headcount kişi · Kaydet ile onayla'
+            : '$headcount kişi geldi';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -57,9 +71,7 @@ class CrewAttendanceTile extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         fontSize: 13,
-                        color: crewRateKurus == 0
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],

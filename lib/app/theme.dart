@@ -14,6 +14,10 @@ class StatusColors {
   static const Color absent = Color(0xFF9E9E9E); // gri  = yok
 }
 
+/// Cinsiyet vurgu renkleri (Ana Sayfa özet kutucukları).
+const Color kFemale = Color(0xFFD81B60); // pembe/magenta = kadın
+const Color kMale = Color(0xFF1E88E5); // mavi = erkek
+
 const Color _seed = Color(0xFF2E7D32);
 
 /// Ortak "hero" degrade tonları (başlıklar, özet kartları). Tüm ekranlarda aynı.

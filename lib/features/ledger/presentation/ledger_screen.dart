@@ -18,9 +18,6 @@ import 'mazot_screen.dart';
 import 'widgets/ledger_entry_tile.dart';
 import 'widgets/ledger_summary_card.dart';
 
-/// Liste filtresi.
-enum _Filter { all, income, expense }
-
 class LedgerScreen extends ConsumerStatefulWidget {
   const LedgerScreen({super.key});
 
@@ -29,8 +26,6 @@ class LedgerScreen extends ConsumerStatefulWidget {
 }
 
 class _LedgerScreenState extends ConsumerState<LedgerScreen> {
-  _Filter _filter = _Filter.all;
-
   void _openEdit(BuildContext context, {LedgerEntry? entry}) {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
@@ -44,12 +39,6 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
       MaterialPageRoute<void>(builder: (_) => const MazotScreen()),
     );
   }
-
-  bool _matches(LedgerEntry e) => switch (_filter) {
-        _Filter.all => true,
-        _Filter.income => e.isIncome,
-        _Filter.expense => !e.isIncome,
-      };
 
   @override
   Widget build(BuildContext context) {
@@ -86,17 +75,13 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
             summary: summary,
             showBreakdown: false,
           ),
-          _FilterBar(
-            filter: _filter,
-            onChanged: (f) => setState(() => _filter = f),
-          ),
           Expanded(
             child: AsyncRetry(
               value: async,
               onRetry: () => ref.invalidate(ledgerInPeriodProvider),
               message: 'Kasa yüklenemedi. İnternet bağlantınızı kontrol edin.',
               data: (entries) {
-                final visible = entries.where(_matches).toList();
+                final visible = entries;
                 if (visible.isEmpty) return const _EmptyView();
                 return ListView.builder(
                   padding: const EdgeInsets.only(bottom: 20),
@@ -152,37 +137,6 @@ class _AddButton extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({required this.filter, required this.onChanged});
-
-  final _Filter filter;
-  final ValueChanged<_Filter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: SegmentedButton<_Filter>(
-        segments: const [
-          ButtonSegment(value: _Filter.all, label: Text('Tümü')),
-          ButtonSegment(
-            value: _Filter.income,
-            icon: Icon(Icons.arrow_upward),
-            label: Text('Gelir'),
-          ),
-          ButtonSegment(
-            value: _Filter.expense,
-            icon: Icon(Icons.arrow_downward),
-            label: Text('Gider'),
-          ),
-        ],
-        selected: {filter},
-        onSelectionChanged: (s) => onChanged(s.first),
       ),
     );
   }

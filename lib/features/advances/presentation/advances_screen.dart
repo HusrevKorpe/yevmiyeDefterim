@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
@@ -31,12 +32,14 @@ class AdvancesScreen extends ConsumerWidget {
     final advancesAsync = ref.watch(advancesStreamProvider);
 
     return Scaffold(
-      appBar: const GradientAppBar(title: 'Avanslar'),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab-advances',
-        onPressed: () => _openEdit(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Avans Ver'),
+      appBar: GradientAppBar(
+        title: 'Avanslar',
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 10, left: 2),
+            child: _AddButton(onPressed: () => _openEdit(context)),
+          ),
+        ],
       ),
       body: AsyncRetry(
         value: advancesAsync,
@@ -106,6 +109,44 @@ class AdvancesScreen extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Başlıktaki küçük beyaz "Avans Ver" hapı — degrade üzerinde güçlü kontrast
+/// (İşçiler/Kasa ekranlarındaki "Ekle" ile aynı desen).
+class _AddButton extends StatelessWidget {
+  const _AddButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onPressed,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 18, color: kHeroBottom),
+              SizedBox(width: 4),
+              Text(
+                'Avans Ver',
+                style: TextStyle(
+                  color: kHeroBottom,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -198,7 +239,7 @@ class _EmptyAdvances extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Sağ alttaki “Avans Ver” ile başlayın.',
+              'Sağ üstteki “Avans Ver” ile başlayın.',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,

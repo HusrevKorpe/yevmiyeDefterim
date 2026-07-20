@@ -9,11 +9,12 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
-import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../attendance/application/attendance_providers.dart';
 import '../../auth/application/auth_providers.dart';
+import '../../workers/application/workers_providers.dart';
+import '../../workers/data/worker.dart';
 import '../application/day_summary.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -45,6 +46,13 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final todayAsync = ref.watch(todayAttendanceProvider);
+    // Cinsiyet yoklama kaydında tutulmaz; işçi listesinden (workerId → Gender)
+    // çözülür. Liste henüz yüklenmediyse harita boş → cinsiyet sayıları 0 kalır.
+    final genderById = <String, Gender>{
+      for (final w in ref.watch(workersStreamProvider).asData?.value ??
+          const <Worker>[])
+        w.id: w.gender,
+    };
 
     return Scaffold(
       body: ListView(
@@ -69,7 +77,8 @@ class DashboardScreen extends ConsumerWidget {
                   message:
                       'Özet yüklenemedi. İnternet bağlantınızı kontrol edin.',
                   data: (records) {
-                    final summary = summarizeDay(records);
+                    final summary =
+                        summarizeDay(records, genderById: genderById);
                     if (summary.markedIndividuals == 0 &&
                         summary.crewCount == 0) {
                       return const _NoAttendanceYet();
@@ -300,47 +309,77 @@ class _SummaryContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tiles = <Widget>[
-      _StatTile(
-        label: 'Tam gün',
-        value: '${summary.fullCount}',
-        color: StatusColors.full,
-        icon: Icons.check_circle,
-      ),
-      _StatTile(
-        label: 'Yarım',
-        value: '${summary.halfCount}',
-        color: StatusColors.half,
-        icon: Icons.contrast,
-      ),
-      _StatTile(
-        label: 'Gelmeyen',
-        value: '${summary.absentCount}',
-        color: StatusColors.absent,
-        icon: Icons.cancel,
-      ),
-      if (summary.crewHeadcount > 0)
-        _StatTile(
-          label: 'Elebaşı',
-          value: '${summary.crewHeadcount}',
-          color: Theme.of(context).colorScheme.primary,
-          icon: Icons.groups,
-        ),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            for (var i = 0; i < tiles.length; i++) ...[
-              if (i > 0) const SizedBox(width: 10),
-              Expanded(child: tiles[i]),
-            ],
-          ],
+        // "Kaç işçi çalıştı" — degrade vurgu kartı (eski işçilik kartının yerine).
+        _WorkedHeadlineCard(
+          present: summary.presentIndividuals,
+          female: summary.femaleCount,
+          male: summary.maleCount,
         ),
         const SizedBox(height: 14),
-        _TotalCard(totalKurus: summary.totalKurus),
+        // Cinsiyet dağılımı.
+        Row(
+          children: [
+            Expanded(
+              child: _StatTile(
+                label: 'Kadın',
+                value: '${summary.femaleCount}',
+                color: kFemale,
+                icon: Icons.woman,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatTile(
+                label: 'Erkek',
+                value: '${summary.maleCount}',
+                color: kMale,
+                icon: Icons.man,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Yoklama ayrıntısı (para yok).
+        Row(
+          children: [
+            Expanded(
+              child: _StatTile(
+                label: 'Tam gün',
+                value: '${summary.fullCount}',
+                color: StatusColors.full,
+                icon: Icons.check_circle,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatTile(
+                label: 'Yarım',
+                value: '${summary.halfCount}',
+                color: StatusColors.half,
+                icon: Icons.contrast,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _StatTile(
+                label: 'Gelmeyen',
+                value: '${summary.absentCount}',
+                color: StatusColors.absent,
+                icon: Icons.cancel,
+              ),
+            ),
+          ],
+        ),
+        if (summary.crewCount > 0) ...[
+          const SizedBox(height: 14),
+          _CrewCard(
+            crewCount: summary.crewCount,
+            headcount: summary.crewHeadcount,
+          ),
+        ],
       ],
     );
   }
@@ -405,10 +444,18 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-/// Günün işçilik maliyeti — başlıkla uyumlu degrade kart.
-class _TotalCard extends StatelessWidget {
-  const _TotalCard({required this.totalKurus});
-  final int totalKurus;
+/// Bugün fiilen çalışan işçi sayısı — başlıkla uyumlu degrade vurgu kart
+/// (eski işçilik/para kartının yerine; para gösterilmez).
+class _WorkedHeadlineCard extends StatelessWidget {
+  const _WorkedHeadlineCard({
+    required this.present,
+    required this.female,
+    required this.male,
+  });
+
+  final int present;
+  final int female;
+  final int male;
 
   @override
   Widget build(BuildContext context) {
@@ -438,7 +485,7 @@ class _TotalCard extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.payments, color: Colors.white, size: 26),
+            child: const Icon(Icons.groups, color: Colors.white, size: 26),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -446,7 +493,7 @@ class _TotalCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bugünkü işçilik',
+                  'Bugün çalışan',
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.white.withValues(alpha: 0.85),
@@ -455,11 +502,104 @@ class _TotalCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  formatKurus(totalKurus),
+                  '$present işçi',
                   style: const TextStyle(
                     fontSize: 23,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _MiniPill(icon: Icons.woman, count: female),
+          const SizedBox(width: 8),
+          _MiniPill(icon: Icons.man, count: male),
+        ],
+      ),
+    );
+  }
+}
+
+/// Degrade kart üzerinde küçük yarı saydam cinsiyet rozeti (ikon + sayı).
+class _MiniPill extends StatelessWidget {
+  const _MiniPill({required this.icon, required this.count});
+  final IconData icon;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 2),
+          Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Elebaşı özeti — kaç elebaşı ve toplam kaç kişi getirdikleri (para yok).
+class _CrewCard extends StatelessWidget {
+  const _CrewCard({required this.crewCount, required this.headcount});
+  final int crewCount;
+  final int headcount;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.engineering, color: color, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$crewCount elebaşı',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Toplam $headcount kişi getirdi',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],

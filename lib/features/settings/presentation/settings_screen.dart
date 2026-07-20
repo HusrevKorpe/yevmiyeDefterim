@@ -111,18 +111,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     label: 'Kadın yevmiye (günlük)',
                     enabled: !saving,
                     allowEmpty: true,
-                    textInputAction: TextInputAction.next,
-                  ),
-                  const SizedBox(height: 16),
-                  MoneyField(
-                    controller: _crewCtrl,
-                    label: 'Elebaşı kişi başı (günlük)',
-                    helperText: 'Elebaşıya bağlı her kişi için günlük ücret.',
-                    enabled: !saving,
-                    allowEmpty: true,
                     textInputAction: TextInputAction.done,
                     onSubmitted: _save,
                   ),
+                  // --- ELEBAŞI KİŞİ BAŞI ÜCRETİ ŞİMDİLİK RAFTA ---
+                  // Elebaşıya sabit ücret girilmiyor; ödeme elden toplu
+                  // veriliyor. Alan gizli ama _crewCtrl prefill/save'e bağlı
+                  // kaldı → kayıtlı değer korunur. Geri açmak için aşağıdaki
+                  // MoneyField'ı geri koy (textInputAction.next → female).
+                  // const SizedBox(height: 16),
+                  // MoneyField(
+                  //   controller: _crewCtrl,
+                  //   label: 'Elebaşı kişi başı (günlük)',
+                  //   helperText: 'Elebaşıya bağlı her kişi için günlük ücret.',
+                  //   enabled: !saving,
+                  //   allowEmpty: true,
+                  //   textInputAction: TextInputAction.done,
+                  //   onSubmitted: _save,
+                  // ),
                   const SizedBox(height: 32),
                   FilledButton.icon(
                     onPressed: saving ? null : _save,

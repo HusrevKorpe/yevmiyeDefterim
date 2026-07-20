@@ -6,10 +6,12 @@ import 'package:yevmiye_defterim/features/attendance/application/attendance_view
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
 import 'package:yevmiye_defterim/features/settings/application/settings_providers.dart';
 import 'package:yevmiye_defterim/features/settings/data/app_settings.dart';
+import 'package:yevmiye_defterim/features/workers/application/workers_providers.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
 import '../../support/fake_attendance_repository.dart';
 import '../../support/fake_settings_repository.dart';
+import '../../support/fake_worker_repository.dart';
 
 /// ViewModel + depo entegrasyonu: ücret dondurma (kural §4) ve deterministik
 /// ID ile çift kayıt olmaması (kural §3, §11).

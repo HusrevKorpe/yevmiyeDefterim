@@ -51,46 +51,91 @@ class AttendanceScreen extends ConsumerWidget {
 
 /// Sağ üstteki "Kaydet" düğmesi.
 ///
-/// NOT: Yoklama zaten her dokunuşta otomatik kaydediliyor (bkz.
-/// [attendanceViewModelProvider] → setStatus/setHeadcount doğrudan Firestore'a
-/// yazar). Bu düğme fiilen kayıt tetiklemez; kullanıcıya "günün yoklaması
-/// kaydedildi" güvencesi vermek için görsel/dokunsal onay üretir.
-class _SaveButton extends ConsumerWidget {
+/// Bireysel yoklama ve elle değiştirilen elebaşı sayısı zaten her dokunuşta
+/// otomatik kaydedilir (bkz. [attendanceViewModelProvider]). Bu düğmenin tek
+/// İŞLEVSEL görevi: önden dolu ama henüz kaydı olmayan elebaşı öntanımlı
+/// mevcutlarını (crewSize) o güne yazmak (commitCrewDefaults). Ayrıca kullanıcıya
+/// "günün yoklaması kaydedildi" görsel/dokunsal onayı verir.
+class _SaveButton extends ConsumerStatefulWidget {
   const _SaveButton();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return TextButton.icon(
-      onPressed: () {
-        HapticFeedback.mediumImpact();
-        final date = ref.read(selectedDateProvider);
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: StatusColors.full,
-              duration: const Duration(seconds: 2),
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '${formatHumanDateNoWeekday(date)} yoklaması kaydedildi',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
+  ConsumerState<_SaveButton> createState() => _SaveButtonState();
+}
+
+class _SaveButtonState extends ConsumerState<_SaveButton> {
+  // Basma hissini görünür kılmak için basılıyken kartı küçültüp gölgesini
+  // düşürürüz (yeşil header üzerinde beyaz hap "buton" gibi okunur).
+  bool _pressed = false;
+
+  Future<void> _confirm() async {
+    HapticFeedback.mediumImpact();
+    // Önden dolu (henüz kaydı olmayan) elebaşı mevcutlarını şimdi kalıcı yaz —
+    // bu ekranda gerçekten Firestore'a yazan tek nokta budur.
+    await ref.read(attendanceViewModelProvider.notifier).commitCrewDefaults();
+    if (!mounted) return;
+    final date = ref.read(selectedDateProvider);
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: StatusColors.full,
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '${formatHumanDateNoWeekday(date)} yoklaması kaydedildi',
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
+      child: AnimatedScale(
+        scale: _pressed ? 0.90 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        child: Material(
+          color: Colors.white,
+          elevation: _pressed ? 0 : 3,
+          shadowColor: Colors.black54,
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            splashColor: StatusColors.full.withValues(alpha: 0.22),
+            highlightColor: StatusColors.full.withValues(alpha: 0.10),
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapCancel: () => setState(() => _pressed = false),
+            onTap: () {
+              setState(() => _pressed = false);
+              _confirm();
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+              child: Text(
+                'Kaydet',
+                style: TextStyle(
+                  color: StatusColors.full,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  letterSpacing: 0.2,
+                ),
               ),
             ),
-          );
-      },
-      icon: const Icon(Icons.check, color: Colors.white, size: 20),
-      label: const Text(
-        'Kaydet',
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
       ),
     );
   }
@@ -257,18 +302,26 @@ class _List extends ConsumerWidget {
           onChanged: (s) => vm.setStatus(w, s),
         );
 
-    Widget crewTile(Worker w) => CrewAttendanceTile(
-          name: w.name,
-          headcount: switch (byWorker[w.id]) {
-            CrewAttendance(:final headcount) => headcount,
-            _ => 0,
-          },
-          crewRateKurus: settings.defaultCrewRateKurus,
-          // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-          // Hakedişi geri açınca: `locked: byWorker[w.id]?.isPaid ?? false`.
-          locked: false,
-          onChanged: (c) => vm.setHeadcount(w, c),
-        );
+    Widget crewTile(Worker w) {
+      // Kaydı olan gün kayıtlı sayıyı gösterir; kaydı yoksa işçiye girilen ekip
+      // mevcudu (crewSize) ile ÖNDEN DOLU gelir (henüz kaydedilmedi → "Kaydet"
+      // kesinleştirir, bkz. _SaveButton.commitCrewDefaults). crewSize==0 ise 0.
+      final saved = byWorker[w.id];
+      final headcount = switch (saved) {
+        CrewAttendance(:final headcount) => headcount,
+        _ => w.crewSize,
+      };
+      return CrewAttendanceTile(
+        name: w.name,
+        headcount: headcount,
+        pending: saved is! CrewAttendance && headcount > 0,
+        crewRateKurus: settings.defaultCrewRateKurus,
+        // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
+        // Hakedişi geri açınca: `locked: byWorker[w.id]?.isPaid ?? false`.
+        locked: false,
+        onChanged: (c) => vm.setHeadcount(w, c),
+      );
+    }
 
     // Erkekler + Kadınlar her zaman; Elebaşılar yalnız elebaşı işçi varsa.
     final tabTitles = <String>[
