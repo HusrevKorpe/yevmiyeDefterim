@@ -1,0 +1,15 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Güvenlik modeli (kural.md §3, §9):
+    // - Açık kayıt KAPALI; yalnız 3 kullanıcı elle oluşturulur.
+    // - Bu yüzden "kimliği doğrulanmış istek = güvenilir 3 kullanıcıdan biri".
+    // - Kural bilerek basit tutulur: karmaşık get()/memberUids kuralları offline
+    //   yazmaların sonradan sunucuda reddedilip geri alınmasına yol açabilir.
+    //   Kullanıcı sayısı artarsa memberUids tabanlı kurala sıkılaştırılabilir.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
