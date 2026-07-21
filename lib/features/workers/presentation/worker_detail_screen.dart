@@ -10,10 +10,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/money/money.dart';
+import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../advances/application/advance_providers.dart';
 import '../../advances/data/advance.dart';
 import '../../auth/application/user_access.dart';
 import '../../attendance/data/attendance_record.dart';
+import '../../payroll/application/payroll_providers.dart';
 // --- HAKEDİŞ ŞİMDİLİK RAFTA --- geri açınca bu import'u da aç.
 // import '../../payroll/data/payroll.dart';
 // --- /HAKEDİŞ ---
@@ -39,8 +42,10 @@ class WorkerDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final id = worker.id;
     final canSeeMoney = ref.watch(canSeeMoneyProvider);
+    final historyState = ref.watch(workerHistoryStateProvider(id));
+    // Değerler dış build'de izlenir (AsyncData iken hepsi hazır); AsyncRetry'nin
+    // data closure'ında ref.watch YOK — o closure build dışında çalışır.
     final summary = ref.watch(workerHistorySummaryProvider(id));
-    final loading = ref.watch(workerHistoryLoadingProvider(id));
     final attendance =
         ref.watch(attendanceByWorkerProvider(id)).asData?.value ?? const [];
     // Avanslar para → kısıtlı hesapta hiç izlenmez/gösterilmez.
@@ -62,45 +67,56 @@ class WorkerDetailScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
+      body: Column(
         children: [
+          // Başlık kartı her zaman görünür (async değil); geçmiş aşağıda yüklenir.
           _HeaderCard(worker: worker, canSeeMoney: canSeeMoney),
-          if (loading)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            _SummaryCard(
-              worker: worker,
-              summary: summary,
-              canSeeMoney: canSeeMoney,
+          Expanded(
+            child: AsyncRetry<void>(
+              value: historyState,
+              message: 'Geçmiş yüklenemedi. İnternet bağlantınızı kontrol edin.',
+              onRetry: () {
+                ref.invalidate(attendanceByWorkerProvider(id));
+                if (canSeeMoney) {
+                  ref.invalidate(advancesStreamProvider);
+                  ref.invalidate(payrollsStreamProvider);
+                }
+              },
+              data: (_) => ListView(
+                padding: const EdgeInsets.only(bottom: 32),
+                children: [
+                  _SummaryCard(
+                    worker: worker,
+                    summary: summary,
+                    canSeeMoney: canSeeMoney,
+                  ),
+                  _Section('Yoklama Geçmişi (${attendance.length})'),
+                  if (attendance.isEmpty)
+                    const _EmptyLine('Bu işçi için yoklama kaydı yok.')
+                  else
+                    for (final r in attendance)
+                      _AttendanceRow(record: r, canSeeMoney: canSeeMoney),
+                  // Avanslar bölümü tamamen para → kısıtlı hesapta gizli.
+                  if (canSeeMoney) ...[
+                    _Section('Avanslar (${advances.length})'),
+                    if (advances.isEmpty)
+                      const _EmptyLine('Avans kaydı yok.')
+                    else
+                      for (final a in advances) _AdvanceRow(advance: a),
+                  ],
+                  // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
+                  // Geri açmak için bu bloğu, yukarıdaki `payrolls` izlemesini,
+                  // `_PayrollRow` sınıfını ve payroll import'unu birlikte aç.
+                  // _Section('Ödenen Hakedişler (${payrolls.length})'),
+                  // if (payrolls.isEmpty)
+                  //   const _EmptyLine('Ödenmiş hakediş yok.')
+                  // else
+                  //   for (final p in payrolls) _PayrollRow(payroll: p),
+                  // --- /HAKEDİŞ ---
+                ],
+              ),
             ),
-            _Section('Yoklama Geçmişi (${attendance.length})'),
-            if (attendance.isEmpty)
-              const _EmptyLine('Bu işçi için yoklama kaydı yok.')
-            else
-              for (final r in attendance)
-                _AttendanceRow(record: r, canSeeMoney: canSeeMoney),
-            // Avanslar bölümü tamamen para → kısıtlı hesapta gizli.
-            if (canSeeMoney) ...[
-              _Section('Avanslar (${advances.length})'),
-              if (advances.isEmpty)
-                const _EmptyLine('Avans kaydı yok.')
-              else
-                for (final a in advances) _AdvanceRow(advance: a),
-            ],
-            // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
-            // Geri açmak için bu bloğu, yukarıdaki `payrolls` izlemesini,
-            // `_PayrollRow` sınıfını ve payroll import'unu birlikte aç.
-            // _Section('Ödenen Hakedişler (${payrolls.length})'),
-            // if (payrolls.isEmpty)
-            //   const _EmptyLine('Ödenmiş hakediş yok.')
-            // else
-            //   for (final p in payrolls) _PayrollRow(payroll: p),
-            // --- /HAKEDİŞ ---
-          ],
+          ),
         ],
       ),
     );

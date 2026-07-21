@@ -11,6 +11,7 @@ import '../../advances/application/advance_providers.dart';
 import '../../advances/data/advance.dart';
 import '../../attendance/application/attendance_providers.dart';
 import '../../attendance/data/attendance_record.dart';
+import '../../auth/application/user_access.dart';
 import '../../payroll/application/payroll_providers.dart';
 import '../../payroll/data/payroll.dart';
 import 'worker_history.dart';
@@ -55,10 +56,30 @@ final workerHistorySummaryProvider =
   );
 });
 
-/// İşçi yoklama geçmişi yükleniyor mu?
-final workerHistoryLoadingProvider =
-    Provider.family<bool, String>((ref, workerId) {
-  return ref.watch(attendanceByWorkerProvider(workerId)).isLoading ||
-      ref.watch(advancesStreamProvider).isLoading ||
-      ref.watch(payrollsStreamProvider).isLoading;
+/// İşçi geçmişi kaynak akışlarının birleşik durumu (kural §8: sonsuz spinner /
+/// yutulan hata yerine yükleniyor→veri / hata→"Yeniden Dene").
+///
+/// Yoklama her zaman izlenir; avans/hakediş yalnız para görebilen hesapta
+/// (kısıtlı hesap bu akışların hata/gecikmesinden etkilenmez). Herhangi biri
+/// hata verirse → [AsyncError]; hepsi hazır → [AsyncData]; aksi → [AsyncLoading].
+final workerHistoryStateProvider =
+    Provider.family<AsyncValue<void>, String>((ref, workerId) {
+  final attendance = ref.watch(attendanceByWorkerProvider(workerId));
+  final canSeeMoney = ref.watch(canSeeMoneyProvider);
+  final advances = canSeeMoney
+      ? ref.watch(advancesStreamProvider)
+      : const AsyncData<List<Advance>>(<Advance>[]);
+  final payrolls = canSeeMoney
+      ? ref.watch(payrollsStreamProvider)
+      : const AsyncData<List<Payroll>>(<Payroll>[]);
+
+  for (final src in [attendance, advances, payrolls]) {
+    if (src.hasError) {
+      return AsyncError<void>(src.error!, src.stackTrace ?? StackTrace.current);
+    }
+  }
+  if (attendance.hasValue && advances.hasValue && payrolls.hasValue) {
+    return const AsyncData<void>(null);
+  }
+  return const AsyncLoading<void>();
 });

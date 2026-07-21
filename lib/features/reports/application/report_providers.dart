@@ -74,24 +74,41 @@ final StreamProvider<List<LedgerEntry>> reportLedgerProvider =
   return ref.watch(ledgerRepositoryProvider).watchByRange(p.start, p.end);
 });
 
-/// Dönem raporu — saf [buildPeriodReport]'tan türetilir. Veri yüklenmediyse
-/// boş özet döner (builder aralık dışını süzer).
-final Provider<PeriodReport> reportProvider = Provider<PeriodReport>((ref) {
+/// Dönem raporu — saf [buildPeriodReport]'tan türetilir; kaynak akışların
+/// durumunu tek [AsyncValue] olarak birleştirir (kural §8: sonsuz spinner /
+/// yutulan hata yerine yükleniyor→veri / hata→"Yeniden Dene").
+///
+/// - Herhangi bir kaynak **hata** verirse → [AsyncError] (ekran hata kutusu
+///   gösterir; boş dönem ile karışmaz).
+/// - Hepsi değer verene kadar → [AsyncLoading] (spinner + zaman aşımı, kilitli
+///   kural / erişilemez sunucu durumunda takılıp kalmaz).
+/// - Hepsi hazır → [AsyncData] (aralık dışını builder süzer).
+final Provider<AsyncValue<PeriodReport>> reportProvider =
+    Provider<AsyncValue<PeriodReport>>((ref) {
   final p = ref.watch(reportPeriodProvider);
-  return buildPeriodReport(
-    startIso: p.start,
-    endIso: p.end,
-    attendance: ref.watch(reportAttendanceProvider).asData?.value ?? const [],
-    advances: ref.watch(advancesStreamProvider).asData?.value ?? const [],
-    payrolls: ref.watch(payrollsStreamProvider).asData?.value ?? const [],
-    ledger: ref.watch(reportLedgerProvider).asData?.value ?? const [],
-  );
-});
+  final attendance = ref.watch(reportAttendanceProvider);
+  final advances = ref.watch(advancesStreamProvider);
+  final payrolls = ref.watch(payrollsStreamProvider);
+  final ledger = ref.watch(reportLedgerProvider);
 
-/// Rapor verisi henüz yükleniyor mu? (Herhangi bir kaynak beklemede.)
-final Provider<bool> reportLoadingProvider = Provider<bool>((ref) {
-  return ref.watch(reportAttendanceProvider).isLoading ||
-      ref.watch(reportLedgerProvider).isLoading ||
-      ref.watch(advancesStreamProvider).isLoading ||
-      ref.watch(payrollsStreamProvider).isLoading;
+  for (final src in [attendance, advances, payrolls, ledger]) {
+    if (src.hasError) {
+      return AsyncError<PeriodReport>(
+          src.error!, src.stackTrace ?? StackTrace.current);
+    }
+  }
+  if (attendance.hasValue &&
+      advances.hasValue &&
+      payrolls.hasValue &&
+      ledger.hasValue) {
+    return AsyncData(buildPeriodReport(
+      startIso: p.start,
+      endIso: p.end,
+      attendance: attendance.requireValue,
+      advances: advances.requireValue,
+      payrolls: payrolls.requireValue,
+      ledger: ledger.requireValue,
+    ));
+  }
+  return const AsyncLoading<PeriodReport>();
 });

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/ledger_providers.dart';
+import '../application/ledger_summary.dart';
 import '../data/ledger_entry.dart';
 import '../../../app/theme.dart';
 import '../../../core/widgets/async_retry.dart';
@@ -45,7 +46,6 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
     final period = ref.watch(ledgerPeriodProvider);
     final periodNotifier = ref.read(ledgerPeriodProvider.notifier);
     final async = ref.watch(ledgerInPeriodProvider);
-    final summary = ref.watch(ledgerSummaryProvider);
 
     return Scaffold(
       appBar: GradientAppBar(
@@ -70,36 +70,47 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
             onSetStart: periodNotifier.setStart,
             onSetEnd: periodNotifier.setEnd,
           ),
-          LedgerSummaryCard(
-            summary: summary,
-            showBreakdown: false,
-          ),
           Expanded(
             child: AsyncRetry(
               value: async,
               onRetry: () => ref.invalidate(ledgerInPeriodProvider),
               message: 'Kasa yüklenemedi. İnternet bağlantınızı kontrol edin.',
+              // Özet kartı da yalnız veri hazır olunca (data closure) türetilir.
+              // Yükleniyor/hata durumunda ₺0'lık "boş özet" GÖSTERİLMEZ; bunun
+              // yerine spinner ya da "Yeniden Dene" çıkar (kural §8 — rapor ve
+              // işçi geçmişi ekranlarıyla aynı: hata yutulmaz, boş sanılmaz).
               data: (entries) {
-                final visible = entries;
-                if (visible.isEmpty) return const _EmptyView();
-                return ListView.separated(
-                  padding: const EdgeInsets.only(bottom: 20),
-                  itemCount: visible.length,
-                  separatorBuilder: (context, i) => const Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  itemBuilder: (context, i) {
-                    final e = visible[i];
-                    return LedgerEntryTile(
-                      entry: e,
-                      onTap: e.isManual
-                          ? () => _openEdit(context, entry: e)
-                          : null,
-                    );
-                  },
+                final summary = summarizeLedger(entries);
+                return Column(
+                  children: [
+                    LedgerSummaryCard(
+                      summary: summary,
+                      showBreakdown: false,
+                    ),
+                    Expanded(
+                      child: entries.isEmpty
+                          ? const _EmptyView()
+                          : ListView.separated(
+                              padding: const EdgeInsets.only(bottom: 20),
+                              itemCount: entries.length,
+                              separatorBuilder: (context, i) => const Divider(
+                                height: 1,
+                                thickness: 1,
+                                indent: 16,
+                                endIndent: 16,
+                              ),
+                              itemBuilder: (context, i) {
+                                final e = entries[i];
+                                return LedgerEntryTile(
+                                  entry: e,
+                                  onTap: e.isManual
+                                      ? () => _openEdit(context, entry: e)
+                                      : null,
+                                );
+                              },
+                            ),
+                    ),
+                  ],
                 );
               },
             ),

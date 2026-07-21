@@ -7,10 +7,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/period_range_selector.dart';
+import '../../advances/application/advance_providers.dart';
 import '../../ledger/application/ledger_summary.dart';
 import '../../ledger/presentation/widgets/ledger_summary_card.dart';
+import '../../payroll/application/payroll_providers.dart';
 import '../application/period_report.dart';
 import '../application/report_providers.dart';
 import '../application/report_share.dart';
@@ -65,8 +68,9 @@ class ReportScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final period = ref.watch(reportPeriodProvider);
     final notifier = ref.read(reportPeriodProvider.notifier);
-    final report = ref.watch(reportProvider);
-    final loading = ref.watch(reportLoadingProvider);
+    final reportAsync = ref.watch(reportProvider);
+    // Paylaşım yalnız veri hazır ve doluyken açık (yüklenirken/hata/boşta kapalı).
+    final ready = reportAsync.asData?.value;
 
     return Scaffold(
       appBar: GradientAppBar(
@@ -75,8 +79,9 @@ class ReportScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.ios_share),
             tooltip: 'Paylaş',
-            onPressed:
-                report.isEmpty ? null : () => _share(context, report),
+            onPressed: (ready == null || ready.isEmpty)
+                ? null
+                : () => _share(context, ready),
           ),
         ],
       ),
@@ -89,9 +94,17 @@ class ReportScreen extends ConsumerWidget {
             onSetEnd: notifier.setEnd,
           ),
           Expanded(
-            child: (loading && report.isEmpty)
-                ? const Center(child: CircularProgressIndicator())
-                : _ReportBody(report: report),
+            child: AsyncRetry<PeriodReport>(
+              value: reportAsync,
+              message: 'Rapor yüklenemedi. İnternet bağlantınızı kontrol edin.',
+              onRetry: () {
+                ref.invalidate(reportAttendanceProvider);
+                ref.invalidate(reportLedgerProvider);
+                ref.invalidate(advancesStreamProvider);
+                ref.invalidate(payrollsStreamProvider);
+              },
+              data: (report) => _ReportBody(report: report),
+            ),
           ),
         ],
       ),

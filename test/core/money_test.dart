@@ -58,6 +58,32 @@ void main() {
     test('artı işareti: "+2000" => 200000', () {
       expect(parseTlToKurus('+2000'), 200000);
     });
+
+    // Nokta ondalık düzeltmesi: sayısal klavye '.' üretince 100x/10x olmasın.
+    test('nokta ondalık 2 hane: "1500.50" => 150050 (100x değil)', () {
+      expect(parseTlToKurus('1500.50'), 150050);
+    });
+
+    test('nokta ondalık 1 hane: "0.5" => 50', () {
+      expect(parseTlToKurus('0.5'), 50);
+    });
+
+    test('nokta ondalık: "2.00" => 200 (2,00 TL, binlik değil)', () {
+      expect(parseTlToKurus('2.00'), 200);
+    });
+
+    test('nokta ondalık: "1.5" => 150', () {
+      expect(parseTlToKurus('1.5'), 150);
+    });
+
+    // Binlik davranışı korunur: nokta sonrası tam 3 hane.
+    test('nokta binlik korunur: "12.500" => 1250000', () {
+      expect(parseTlToKurus('12.500'), 1250000);
+    });
+
+    test('çoklu nokta binlik (virgülsüz): "1.234.567" => 123456700', () {
+      expect(parseTlToKurus('1.234.567'), 123456700);
+    });
   });
 
   group('parseTlToKurus — geçersiz girişler (null)', () {
@@ -95,6 +121,14 @@ void main() {
 
     test('yalnız işaret: "-"', () {
       expect(parseTlToKurus('-'), isNull);
+    });
+
+    test('tek nokta + 4 hane (ne binlik ne ondalık): "1.2345"', () {
+      expect(parseTlToKurus('1.2345'), isNull);
+    });
+
+    test('hatalı binlik gruplaması: "1.23.456"', () {
+      expect(parseTlToKurus('1.23.456'), isNull);
     });
   });
 

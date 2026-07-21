@@ -1,7 +1,9 @@
 /// Kasa Riverpod sağlayıcıları (kural §7).
 ///
-/// Dönem seçimi → o dönemin kayıtları (aralık sorgusu) → saf [summarizeLedger]
-/// ile özet. Mazot ekranı için tüm mazot kayıtları ayrıca sunulur.
+/// Dönem seçimi → o dönemin kayıtları (aralık sorgusu). Dönem özeti ekranda,
+/// veri hazır olunca saf `summarizeLedger` ile türetilir (yükleniyor/hata
+/// durumunda ₺0 boş özet gösterilmez). Mazot ekranı için tüm mazot kayıtları
+/// ayrıca sunulur.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +13,6 @@ import '../../../core/date/app_date.dart';
 import '../../../core/firestore/firestore_providers.dart';
 import '../data/ledger_entry.dart';
 import '../data/ledger_repository.dart';
-import 'ledger_summary.dart';
 
 /// Kasa deposu. Testlerde `overrideWithValue(FakeLedgerRepository(...))`.
 final Provider<LedgerRepository> ledgerRepositoryProvider =
@@ -80,13 +81,6 @@ final StreamProvider<List<LedgerEntry>> ledgerInPeriodProvider =
     return sorted;
   });
 });
-
-/// Dönem özeti — saf [summarizeLedger]'dan türetilir. Yüklenmediyse boş özet.
-final Provider<LedgerSummary> ledgerSummaryProvider = Provider<LedgerSummary>(
-  (ref) => summarizeLedger(
-    ref.watch(ledgerInPeriodProvider).asData?.value ?? const [],
-  ),
-);
 
 /// Tüm mazot gider kayıtları (dönemden bağımsız), yeni→eski — Mazot ekranı.
 final Provider<List<LedgerEntry>> mazotEntriesProvider =
