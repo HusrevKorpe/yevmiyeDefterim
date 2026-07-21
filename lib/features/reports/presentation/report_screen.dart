@@ -87,8 +87,6 @@ class ReportScreen extends ConsumerWidget {
             endIso: period.end,
             onSetStart: notifier.setStart,
             onSetEnd: notifier.setEnd,
-            onThisWeek: notifier.thisWeek,
-            onThisMonth: notifier.thisMonth,
           ),
           Expanded(
             child: (loading && report.isEmpty)

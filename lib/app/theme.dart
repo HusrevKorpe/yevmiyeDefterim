@@ -11,8 +11,9 @@ class StatusColors {
 
   static const Color full = Color(0xFF2E7D32); // yeşil = geldi (tam gün)
   static const Color half = Color(0xFFF9A825); // sarı  = yarım gün
-  static const Color absent =
-      Color(0xFFE0554A); // yumuşak kırmızı = yok (trafik-ışığı üçlüsü)
+  static const Color absent = Color(
+    0xFFE0554A,
+  ); // yumuşak kırmızı = yok (trafik-ışığı üçlüsü)
 }
 
 /// Cinsiyet vurgu renkleri (Ana Sayfa özet kutucukları) — AÇIK tema tonu.
@@ -36,19 +37,47 @@ Color maleColor(BuildContext context) =>
 /// Gelir/ödenen/pozitif tutarlar için tema-duyarlı yeşil. Açık temada koyu
 /// yeşil okunur; koyu temada `green.700` zeminde kaybolur → daha parlak ton.
 Color incomeColor(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark ? _incomeDark : _incomeLight;
+    Theme.of(context).brightness == Brightness.dark
+    ? _incomeDark
+    : _incomeLight;
 
 const Color _seed = Color(0xFF2E7D32);
 
-/// Ortak "hero" degrade tonları (başlıklar, özet kartları). Tüm ekranlarda aynı.
+/// Ortak "hero" degrade tonları — AÇIK tema (başlıklar, özet kartları).
+/// Beyaz pill/kart üstünde marka yeşili yazı/ikon rengi olarak da kullanılır.
 const Color kHeroTop = Color(0xFF43A047);
 const Color kHeroBottom = Color(0xFF1B5E20);
 
-/// Başlık ve vurgu kartlarında kullanılan ortak degrade.
+// Koyu tema hero tonları — düz koyu zeminde parlak degrade "havada durduğu" için
+// (kullanıcı geri bildirimi) daha koyu + hafif kırık yeşil; zeminle kaynaşır,
+// beyaz metin yine okunur. Yalnız degrade zeminlerde geçerli; beyaz pill üstündeki
+// yeşil yazılar (Ekle butonları) iki temada da açık tonda kalır.
+const Color _kHeroTopDark = Color(0xFF1B5E20); // green.800
+const Color _kHeroBottomDark = Color(0xFF0C2E12); // neredeyse siyah-yeşil
+
+/// Tema-duyarlı hero üst tonu (degrade başlangıcı).
+Color heroTop(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? _kHeroTopDark : kHeroTop;
+
+/// Tema-duyarlı hero alt tonu (degrade bitişi; kart gölge tonu olarak da).
+Color heroBottom(BuildContext context) => Theme.of(context).brightness == Brightness.dark
+    ? _kHeroBottomDark
+    : kHeroBottom;
+
+/// Başlık ve vurgu kartlarında kullanılan ortak degrade — AÇIK tema tonu.
+/// Tema-duyarlı gerekiyorsa [heroGradient] kullan (tercih edilen yol).
 const LinearGradient kHeroGradient = LinearGradient(
   begin: Alignment.topLeft,
   end: Alignment.bottomRight,
   colors: [kHeroTop, kHeroBottom],
+);
+
+/// Tema-duyarlı ortak hero degradesi (topLeft→bottomRight). Açık temada parlak
+/// marka yeşili; koyu temada zeminle kaynaşan derin yeşil.
+LinearGradient heroGradient(BuildContext context) => LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [heroTop(context), heroBottom(context)],
 );
 
 /// Açık tema. Büyük dokunma hedefleri ve okunaklı fontlar.
@@ -77,10 +106,7 @@ ThemeData _buildTheme(Brightness brightness) {
   return base.copyWith(
     appBarTheme: const AppBarTheme(
       centerTitle: true,
-      titleTextStyle: TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-      ),
+      titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -102,9 +128,28 @@ ThemeData _buildTheme(Brightness brightness) {
     ),
     navigationBarTheme: NavigationBarThemeData(
       height: 74,
+      // Alt bar appbar'la aynı yeşil degradeyle sarılı (main_shell.dart);
+      // burada arkaplan şeffaf, seçili hap ve ikon/etiket beyaz → yeşil
+      // üstünde okunur. Açık/koyu temada aynı (degrade her iki temada da yeşil).
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      indicatorColor: Colors.white.withValues(alpha: 0.24),
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      labelTextStyle: WidgetStateProperty.all(
-        const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      iconTheme: WidgetStateProperty.resolveWith(
+        (states) => IconThemeData(
+          color: Colors.white.withValues(
+            alpha: states.contains(WidgetState.selected) ? 1.0 : 0.72,
+          ),
+        ),
+      ),
+      labelTextStyle: WidgetStateProperty.resolveWith(
+        (states) => TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.white.withValues(
+            alpha: states.contains(WidgetState.selected) ? 1.0 : 0.78,
+          ),
+        ),
       ),
     ),
   );

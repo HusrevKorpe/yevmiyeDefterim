@@ -14,6 +14,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../auth/application/user_access.dart';
 import '../../workers/application/workers_providers.dart';
 import '../application/monthly_grid.dart';
 import '../application/monthly_grid_providers.dart';
@@ -160,33 +161,31 @@ class _MonthlyBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final month = ref.watch(selectedMonthProvider);
-    final recordsAsync = ref.watch(monthlyAttendanceProvider);
-    final workersAsync = ref.watch(workersStreamProvider);
+    // Izgara memoize provider'da hesaplanır (buildMonthlyGrid her build'de DEĞİL,
+    // yalnız ay/kayıt/işçi değişince). Tek AsyncRetry hem yükleme hem hatayı sarar.
+    final gridAsync = ref.watch(monthlyGridProvider);
+    // Kısıtlı hesap tabloyu görür ama tutarları (Toplam sütunu + alt işçilik)
+    // gizlidir; gün sayıları kalır.
+    final canSeeMoney = ref.watch(canSeeMoneyProvider);
 
-    return AsyncRetry<List<AttendanceRecord>>(
-      value: recordsAsync,
-      onRetry: () => ref.invalidate(monthlyAttendanceProvider),
+    return AsyncRetry<MonthlyAttendanceGrid>(
+      value: gridAsync,
+      onRetry: () {
+        ref.invalidate(monthlyAttendanceProvider);
+        ref.invalidate(workersStreamProvider);
+      },
       message: 'Yoklama yüklenemedi. İnternet bağlantınızı kontrol edin.',
-      data: (records) => AsyncRetry(
-        value: workersAsync,
-        onRetry: () => ref.invalidate(workersStreamProvider),
-        message: 'İşçiler yüklenemedi. İnternet bağlantınızı kontrol edin.',
-        data: (workers) {
-          final grid = buildMonthlyGrid(
-            monthIso: month,
-            workers: workers,
-            records: records,
-          );
-          if (grid.isEmpty) return const _EmptyMonth();
-          return Column(
-            children: [
-              Expanded(child: _MonthlyGridTable(grid: grid)),
-              _SummaryBar(grid: grid),
-            ],
-          );
-        },
-      ),
+      data: (grid) {
+        if (grid.isEmpty) return const _EmptyMonth();
+        return Column(
+          children: [
+            Expanded(
+              child: _MonthlyGridTable(grid: grid, canSeeMoney: canSeeMoney),
+            ),
+            _SummaryBar(grid: grid, canSeeMoney: canSeeMoney),
+          ],
+        );
+      },
     );
   }
 }
@@ -225,11 +224,13 @@ class _EmptyMonth extends StatelessWidget {
   }
 }
 
-/// Alt özet: ayın toplam işçilik brütü + işçi sayısı.
+/// Alt özet: ayın toplam işçilik brütü + işçi sayısı. Kısıtlı hesapta yalnız
+/// işçi sayısı gösterilir (para gizli).
 class _SummaryBar extends StatelessWidget {
-  const _SummaryBar({required this.grid});
+  const _SummaryBar({required this.grid, required this.canSeeMoney});
 
   final MonthlyAttendanceGrid grid;
+  final bool canSeeMoney;
 
   @override
   Widget build(BuildContext context) {
@@ -258,30 +259,31 @@ class _SummaryBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Flexible(
-            flex: 6,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Toplam işçilik: ',
+          if (canSeeMoney)
+            Flexible(
+              flex: 6,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Toplam işçilik: ',
+                        maxLines: 1,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant)),
+                    Text(
+                      formatKurus(grid.grossKurus),
                       maxLines: 1,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  Text(
-                    formatKurus(grid.grossKurus),
-                    maxLines: 1,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: incomeColor(context),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: incomeColor(context),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -298,6 +300,40 @@ Color _halfColor(BuildContext c) =>
 Color _crewColor(BuildContext c) =>
     _isDark(c) ? const Color(0xFF9FA8DA) : const Color(0xFF3949AB);
 
+// ── Gün sütunu meta verisi ─────────────────────────────────────────────────
+
+/// Bir gün sütununun önceden hesaplanmış bilgisi. ISO tarih burada BİR KEZ
+/// parse edilir; başlık ve gövde hücreleri hazır alanları okur. Böylece aylık
+/// tabloda `parseIsoDate` (pahalı intl parseStrict) çağrısı 31·N'den (hücre
+/// başına) 31'e (gün başına) iner — ekranın en büyük ana-thread yükü kalkar.
+class _DayMeta {
+  const _DayMeta({
+    required this.iso,
+    required this.dayNum,
+    required this.weekdayShort,
+    required this.weekend,
+  });
+
+  final String iso;
+  final int dayNum;
+  final String weekdayShort;
+  final bool weekend;
+}
+
+List<_DayMeta> _dayMetasOf(List<String> days) {
+  final metas = <_DayMeta>[];
+  for (final iso in days) {
+    final d = parseIsoDate(iso);
+    metas.add(_DayMeta(
+      iso: iso,
+      dayNum: d.day,
+      weekdayShort: _kWeekdayShort[d.weekday - 1],
+      weekend: d.weekday == DateTime.saturday || d.weekday == DateTime.sunday,
+    ));
+  }
+  return metas;
+}
+
 // ── Tablo ─────────────────────────────────────────────────────────────────
 
 /// Donuk sol sütun + donuk başlık + iki eksenli kaydırılan gövde.
@@ -307,9 +343,10 @@ Color _crewColor(BuildContext c) =>
 /// gövdeyi dinleyerek `jumpTo` ile aynalanır. İçerik genişlik/yükseklikleri
 /// birebir eştir → offset daima geçerli aralıkta.
 class _MonthlyGridTable extends StatefulWidget {
-  const _MonthlyGridTable({required this.grid});
+  const _MonthlyGridTable({required this.grid, required this.canSeeMoney});
 
   final MonthlyAttendanceGrid grid;
+  final bool canSeeMoney;
 
   @override
   State<_MonthlyGridTable> createState() => _MonthlyGridTableState();
@@ -320,6 +357,18 @@ class _MonthlyGridTableState extends State<_MonthlyGridTable> {
   final _bodyH = ScrollController(); // gövde yatay (sürüklenir)
   final _nameV = ScrollController(); // ad sütunu dikey (aynalanır)
   final _bodyV = ScrollController(); // gövde dikey (sürüklenir)
+
+  // Gün sütunları bir kez parse edilir; ay değişmedikçe yeniden hesaplanmaz
+  // (aynı ay için günler birebir aynı → kayıt değişiminde boşa parse yok).
+  late List<_DayMeta> _dayMetas = _dayMetasOf(widget.grid.days);
+
+  @override
+  void didUpdateWidget(covariant _MonthlyGridTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.grid.monthIso != widget.grid.monthIso) {
+      _dayMetas = _dayMetasOf(widget.grid.days);
+    }
+  }
 
   @override
   void initState() {
@@ -369,8 +418,8 @@ class _MonthlyGridTableState extends State<_MonthlyGridTable> {
                   physics: const NeverScrollableScrollPhysics(),
                   child: Row(
                     children: [
-                      for (final day in grid.days)
-                        _HeaderDayCell(dayIso: day, line: line),
+                      for (final m in _dayMetas)
+                        _HeaderDayCell(meta: m, line: line),
                       _HeaderTotalCell(line: line),
                     ],
                   ),
@@ -384,34 +433,36 @@ class _MonthlyGridTableState extends State<_MonthlyGridTable> {
               // üstten başlar (ortalanmaz) ve içerik ekranı aşınca dikey kaydırır.
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Donuk ad sütunu.
+                // Donuk ad sütunu — tembel (yalnız görünür satırlar). itemExtent
+                // gövdeyle birebir eşit → dikey aynalama (jumpTo) piksel-tam.
                 SizedBox(
                   width: _kNameW,
-                  child: SingleChildScrollView(
+                  child: ListView.builder(
                     controller: _nameV,
                     physics: const NeverScrollableScrollPhysics(),
-                    child: Column(
-                      children: [
-                        for (final row in grid.rows)
-                          _NameCell(row: row, line: line),
-                      ],
-                    ),
+                    itemExtent: _kRowH,
+                    itemCount: grid.rows.length,
+                    itemBuilder: (context, i) =>
+                        _NameCell(row: grid.rows[i], line: line),
                   ),
                 ),
-                // Kaydırılan gövde (yatay dış, dikey iç).
+                // Kaydırılan gövde (yatay dış, dikey iç tembel liste → yalnız
+                // görünür satırlar inşa edilir; N işçi büyüdükçe kasmaz).
                 Expanded(
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     controller: _bodyH,
                     child: SizedBox(
                       width: gridWidth,
-                      child: SingleChildScrollView(
+                      child: ListView.builder(
                         controller: _bodyV,
-                        child: Column(
-                          children: [
-                            for (final row in grid.rows)
-                              _BodyRow(row: row, days: grid.days, line: line),
-                          ],
+                        itemExtent: _kRowH,
+                        itemCount: grid.rows.length,
+                        itemBuilder: (context, i) => _BodyRow(
+                          row: grid.rows[i],
+                          days: _dayMetas,
+                          line: line,
+                          canSeeMoney: widget.canSeeMoney,
                         ),
                       ),
                     ),
@@ -451,15 +502,14 @@ class _CornerCell extends StatelessWidget {
 }
 
 class _HeaderDayCell extends StatelessWidget {
-  const _HeaderDayCell({required this.dayIso, required this.line});
-  final String dayIso;
+  const _HeaderDayCell({required this.meta, required this.line});
+  final _DayMeta meta;
   final Color line;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final d = parseIsoDate(dayIso);
-    final weekend = d.weekday == DateTime.saturday || d.weekday == DateTime.sunday;
+    final weekend = meta.weekend;
     return Container(
       width: _kDayW,
       height: _kHeaderH,
@@ -476,10 +526,10 @@ class _HeaderDayCell extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('${d.day}',
+          Text('${meta.dayNum}',
               style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
           Text(
-            _kWeekdayShort[d.weekday - 1],
+            meta.weekdayShort,
             style: TextStyle(
               fontSize: 9,
               color: weekend
@@ -554,34 +604,39 @@ class _NameCell extends StatelessWidget {
 }
 
 class _BodyRow extends StatelessWidget {
-  const _BodyRow({required this.row, required this.days, required this.line});
+  const _BodyRow({
+    required this.row,
+    required this.days,
+    required this.line,
+    required this.canSeeMoney,
+  });
   final MonthlyWorkerRow row;
-  final List<String> days;
+  final List<_DayMeta> days;
   final Color line;
+  final bool canSeeMoney;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (final day in days)
-          _DayCell(cell: row.cells[day], dayIso: day, line: line),
-        _TotalCell(row: row, line: line),
+        for (final m in days)
+          _DayCell(cell: row.cells[m.iso], meta: m, line: line),
+        _TotalCell(row: row, line: line, canSeeMoney: canSeeMoney),
       ],
     );
   }
 }
 
 class _DayCell extends StatelessWidget {
-  const _DayCell({required this.cell, required this.dayIso, required this.line});
+  const _DayCell({required this.cell, required this.meta, required this.line});
   final MonthlyGridCell? cell;
-  final String dayIso;
+  final _DayMeta meta;
   final Color line;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final d = parseIsoDate(dayIso);
-    final weekend = d.weekday == DateTime.saturday || d.weekday == DateTime.sunday;
+    final weekend = meta.weekend;
 
     Color? bg;
     Widget? mark;
@@ -634,9 +689,16 @@ class _DayCell extends StatelessWidget {
 }
 
 class _TotalCell extends StatelessWidget {
-  const _TotalCell({required this.row, required this.line});
+  const _TotalCell({
+    required this.row,
+    required this.line,
+    required this.canSeeMoney,
+  });
   final MonthlyWorkerRow row;
   final Color line;
+
+  /// false → brüt tutar gizli; yalnız gün/kişi özeti gösterilir.
+  final bool canSeeMoney;
 
   @override
   Widget build(BuildContext context) {
@@ -660,14 +722,15 @@ class _TotalCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              formatKurus(row.grossKurus),
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 12,
-                color: incomeColor(context),
+            if (canSeeMoney)
+              Text(
+                formatKurus(row.grossKurus),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  color: incomeColor(context),
+                ),
               ),
-            ),
             Text(
               subtitle,
               style: theme.textTheme.bodySmall

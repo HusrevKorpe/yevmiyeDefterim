@@ -11,8 +11,8 @@ import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/app_date_picker.dart';
+import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
-import '../../../core/widgets/money_field.dart';
 import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import '../application/advance_providers.dart';
@@ -185,19 +185,21 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     return Scaffold(
       appBar: GradientAppBar(title: _isNew ? 'Avans Ver' : 'Avansı Düzenle'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const FieldLabel('İşçi'),
               if (_isNew)
                 DropdownButtonFormField<String>(
                   initialValue: _workerId,
-                  decoration: const InputDecoration(
-                    labelText: 'İşçi',
-                    prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder(),
+                  isExpanded: true,
+                  decoration: entryFieldDecoration(
+                    context,
+                    hint: 'İşçi seçin',
+                    icon: Icons.person_outline,
                   ),
                   items: [
                     for (final w in workers)
@@ -208,34 +210,20 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
                   validator: (v) => v == null ? 'İşçi seçin.' : null,
                 )
               else
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(child: Icon(Icons.person)),
-                  title: Text(existing!.workerName),
-                  subtitle: const Text('İşçi'),
-                ),
-              const SizedBox(height: 20),
-              MoneyField(
+                _WorkerTile(name: existing!.workerName),
+              const SizedBox(height: 24),
+              AmountHeroField(
                 controller: _amountCtrl,
                 label: 'Avans tutarı',
                 enabled: !saving,
                 autofocus: _isNew,
               ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: saving ? null : _pickDate,
-                icon: const Icon(Icons.calendar_today),
-                // Uzun TR tarih ("31 Ağustos 2026, Çarşamba") + büyük yazı
-                // ölçeğinde buton etiketi taşmasın/satır bölünmesin diye tek
-                // satırda küçültülerek sığdırılır (kesme değil, ölçekle).
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'Tarih: ${formatHumanDate(_date)}',
-                    maxLines: 1,
-                    softWrap: false,
-                  ),
-                ),
+              const SizedBox(height: 24),
+              const FieldLabel('Tarih'),
+              PickerTile(
+                icon: Icons.event,
+                value: formatHumanDateNoWeekday(_date),
+                onTap: saving ? null : _pickDate,
               ),
               const SizedBox(height: 32),
               FilledButton.icon(
@@ -246,13 +234,17 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.save),
+                    : const Icon(Icons.check),
                 label: Text(saving ? 'Kaydediliyor…' : 'Kaydet'),
               ),
               if (!_isNew && existing!.isOpen) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
+                const SizedBox(height: 8),
+                TextButton.icon(
                   onPressed: saving ? null : _delete,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Avansı Sil'),
                 ),
@@ -260,6 +252,42 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Düzenlemede sabit işçi satırı — avatar + ad (işçi değiştirilemez).
+class _WorkerTile extends StatelessWidget {
+  const _WorkerTile({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.14),
+            child: Icon(Icons.person, color: theme.colorScheme.primary),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              name,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }

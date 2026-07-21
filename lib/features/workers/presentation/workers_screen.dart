@@ -8,6 +8,7 @@ import '../../../app/theme.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../auth/application/user_access.dart';
 import '../application/workers_providers.dart';
 import '../data/worker.dart';
 import 'worker_detail_screen.dart';
@@ -40,7 +41,6 @@ class WorkersScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: 'İşçiler',
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10, left: 2),
@@ -152,16 +152,18 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _WorkerTile extends StatelessWidget {
+class _WorkerTile extends ConsumerWidget {
   const _WorkerTile({required this.worker, required this.onTap});
 
   final Worker worker;
   final VoidCallback onTap;
 
-  String get _subtitle {
+  String _subtitleText(bool canSeeMoney) {
     if (worker.type.isCrew) {
       return worker.crewSize > 0 ? '${worker.crewSize} kişilik ekip' : 'Elebaşı';
     }
+    // Kısıtlı hesap ücret göremez → yalnız cinsiyet gösterilir.
+    if (!canSeeMoney) return worker.gender.label;
     final wage = worker.dailyWageOverrideKurus;
     final wageText =
         wage == null ? 'Varsayılan ücret' : '${formatKurus(wage)} özel ücret';
@@ -169,7 +171,8 @@ class _WorkerTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final canSeeMoney = ref.watch(canSeeMoneyProvider);
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
     return Padding(
@@ -208,7 +211,7 @@ class _WorkerTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        _subtitle,
+                        _subtitleText(canSeeMoney),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

@@ -29,11 +29,7 @@ class LedgerSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const gradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [kHeroTop, kHeroBottom],
-    );
+    final gradient = heroGradient(context);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
@@ -43,7 +39,7 @@ class LedgerSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: kHeroBottom.withValues(alpha: 0.30),
+            color: heroBottom(context).withValues(alpha: 0.30),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),

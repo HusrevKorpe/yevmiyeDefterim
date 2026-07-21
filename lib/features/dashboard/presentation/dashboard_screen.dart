@@ -12,6 +12,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../auth/application/auth_providers.dart';
+import '../../auth/application/user_access.dart';
 import '../application/dashboard_providers.dart';
 import '../application/day_summary.dart';
 
@@ -44,12 +45,15 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(todaySummaryProvider);
+    final canSeeMoney = ref.watch(canSeeMoneyProvider);
 
     return Scaffold(
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
           _HeroHeader(
+            // Rapor ve Ayarlar para/gider içerir → kısıtlı hesapta gizli.
+            canSeeMoney: canSeeMoney,
             onReport: () => context.push(AppRoutes.report),
             onSettings: () => context.push(AppRoutes.settings),
             onLogout: () => _confirmLogout(context, ref),
@@ -87,12 +91,15 @@ class DashboardScreen extends ConsumerWidget {
 /// Degrade "hero" başlık: selamlama, tarih, kısayol ikonları ve ana eylem.
 class _HeroHeader extends StatelessWidget {
   const _HeroHeader({
+    required this.canSeeMoney,
     required this.onReport,
     required this.onSettings,
     required this.onLogout,
     required this.onTakeAttendance,
   });
 
+  /// Para/gider görebilir mi? false → Rapor + Ayarlar ikonları gizlenir.
+  final bool canSeeMoney;
   final VoidCallback onReport;
   final VoidCallback onSettings;
   final VoidCallback onLogout;
@@ -113,13 +120,9 @@ class _HeroHeader extends StatelessWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [kHeroTop, kHeroBottom],
-          ),
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+        decoration: BoxDecoration(
+          gradient: heroGradient(context),
+          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
         ),
         child: Stack(
           children: [
@@ -166,16 +169,18 @@ class _HeroHeader extends StatelessWidget {
                           ],
                         ),
                       ),
-                      _HeaderIcon(
-                        icon: Icons.assessment_outlined,
-                        tooltip: 'Rapor',
-                        onPressed: onReport,
-                      ),
-                      _HeaderIcon(
-                        icon: Icons.settings_outlined,
-                        tooltip: 'Ayarlar',
-                        onPressed: onSettings,
-                      ),
+                      if (canSeeMoney) ...[
+                        _HeaderIcon(
+                          icon: Icons.assessment_outlined,
+                          tooltip: 'Rapor',
+                          onPressed: onReport,
+                        ),
+                        _HeaderIcon(
+                          icon: Icons.settings_outlined,
+                          tooltip: 'Ayarlar',
+                          onPressed: onSettings,
+                        ),
+                      ],
                       _HeaderIcon(
                         icon: Icons.logout,
                         tooltip: 'Çıkış',
@@ -419,15 +424,15 @@ class _WorkedHeadlineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [kHeroTop, kHeroBottom],
+          colors: [heroTop(context), heroBottom(context)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: kHeroBottom.withValues(alpha: 0.24),
+            color: heroBottom(context).withValues(alpha: 0.24),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

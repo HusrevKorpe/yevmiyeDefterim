@@ -12,6 +12,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../advances/data/advance.dart';
+import '../../auth/application/user_access.dart';
 import '../../attendance/data/attendance_record.dart';
 // --- HAKEDİŞ ŞİMDİLİK RAFTA --- geri açınca bu import'u da aç.
 // import '../../payroll/data/payroll.dart';
@@ -37,11 +38,15 @@ class WorkerDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final id = worker.id;
+    final canSeeMoney = ref.watch(canSeeMoneyProvider);
     final summary = ref.watch(workerHistorySummaryProvider(id));
     final loading = ref.watch(workerHistoryLoadingProvider(id));
     final attendance =
         ref.watch(attendanceByWorkerProvider(id)).asData?.value ?? const [];
-    final advances = ref.watch(advancesByWorkerProvider(id));
+    // Avanslar para → kısıtlı hesapta hiç izlenmez/gösterilmez.
+    final advances = canSeeMoney
+        ? ref.watch(advancesByWorkerProvider(id))
+        : const <Advance>[];
     // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
     // final payrolls = ref.watch(payrollsByWorkerProvider(id));
     // --- /HAKEDİŞ ---
@@ -60,24 +65,32 @@ class WorkerDetailScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 32),
         children: [
-          _HeaderCard(worker: worker),
+          _HeaderCard(worker: worker, canSeeMoney: canSeeMoney),
           if (loading)
             const Padding(
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             )
           else ...[
-            _SummaryCard(worker: worker, summary: summary),
+            _SummaryCard(
+              worker: worker,
+              summary: summary,
+              canSeeMoney: canSeeMoney,
+            ),
             _Section('Yoklama Geçmişi (${attendance.length})'),
             if (attendance.isEmpty)
               const _EmptyLine('Bu işçi için yoklama kaydı yok.')
             else
-              for (final r in attendance) _AttendanceRow(record: r),
-            _Section('Avanslar (${advances.length})'),
-            if (advances.isEmpty)
-              const _EmptyLine('Avans kaydı yok.')
-            else
-              for (final a in advances) _AdvanceRow(advance: a),
+              for (final r in attendance)
+                _AttendanceRow(record: r, canSeeMoney: canSeeMoney),
+            // Avanslar bölümü tamamen para → kısıtlı hesapta gizli.
+            if (canSeeMoney) ...[
+              _Section('Avanslar (${advances.length})'),
+              if (advances.isEmpty)
+                const _EmptyLine('Avans kaydı yok.')
+              else
+                for (final a in advances) _AdvanceRow(advance: a),
+            ],
             // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
             // Geri açmak için bu bloğu, yukarıdaki `payrolls` izlemesini,
             // `_PayrollRow` sınıfını ve payroll import'unu birlikte aç.
@@ -95,8 +108,9 @@ class WorkerDetailScreen extends ConsumerWidget {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.worker});
+  const _HeaderCard({required this.worker, required this.canSeeMoney});
   final Worker worker;
+  final bool canSeeMoney;
 
   String get _subtitle {
     if (worker.type.isCrew) {
@@ -104,6 +118,8 @@ class _HeaderCard extends StatelessWidget {
           ? '${worker.crewSize} kişilik ekip'
           : 'Kişi sayısı belirtilmemiş';
     }
+    // Kısıtlı hesap ücret göremez → yalnız cinsiyet.
+    if (!canSeeMoney) return worker.gender.label;
     final wage = worker.dailyWageOverrideKurus;
     final wageText =
         wage == null ? 'Varsayılan ücret' : '${formatKurus(wage)} özel ücret';
@@ -138,9 +154,16 @@ class _HeaderCard extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.worker, required this.summary});
+  const _SummaryCard({
+    required this.worker,
+    required this.summary,
+    required this.canSeeMoney,
+  });
   final Worker worker;
   final WorkerHistorySummary summary;
+
+  /// false → yalnız "Çalışılan gün" gösterilir; brüt/ödenen/avans gizlenir.
+  final bool canSeeMoney;
 
   @override
   Widget build(BuildContext context) {
@@ -162,25 +185,28 @@ class _SummaryCard extends StatelessWidget {
               value: daysText,
               color: theme.colorScheme.primary,
             ),
-            _Stat(
-              icon: Icons.receipt_long,
-              label: 'Brüt kazanç',
-              value: formatKurus(summary.grossEarnedKurus),
-              color: theme.colorScheme.primary,
-            ),
-            _Stat(
-              icon: Icons.payments,
-              label: 'Ödenen',
-              value: formatKurus(summary.netPaidKurus),
-              color: incomeColor(context),
-            ),
-            if (summary.openAdvancesKurus > 0)
+            // Para istatistikleri yalnız yetkili hesapta.
+            if (canSeeMoney) ...[
               _Stat(
-                icon: Icons.account_balance_wallet,
-                label: 'Açık avans',
-                value: formatKurus(summary.openAdvancesKurus),
-                color: theme.colorScheme.error,
+                icon: Icons.receipt_long,
+                label: 'Brüt kazanç',
+                value: formatKurus(summary.grossEarnedKurus),
+                color: theme.colorScheme.primary,
               ),
+              _Stat(
+                icon: Icons.payments,
+                label: 'Ödenen',
+                value: formatKurus(summary.netPaidKurus),
+                color: incomeColor(context),
+              ),
+              if (summary.openAdvancesKurus > 0)
+                _Stat(
+                  icon: Icons.account_balance_wallet,
+                  label: 'Açık avans',
+                  value: formatKurus(summary.openAdvancesKurus),
+                  color: theme.colorScheme.error,
+                ),
+            ],
           ],
         ),
       ),
@@ -238,8 +264,11 @@ class _Stat extends StatelessWidget {
 }
 
 class _AttendanceRow extends StatelessWidget {
-  const _AttendanceRow({required this.record});
+  const _AttendanceRow({required this.record, required this.canSeeMoney});
   final AttendanceRecord record;
+
+  /// false → satırda kazanç tutarı gösterilmez (yalnız tarih + durum).
+  final bool canSeeMoney;
 
   @override
   Widget build(BuildContext context) {
@@ -252,20 +281,22 @@ class _AttendanceRow extends StatelessWidget {
       leading: const Icon(Icons.event, size: 20),
       title: Text(formatHumanDate(record.date)),
       subtitle: Text(detail),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-          // Hakedişi geri açınca kilit ikonunu da geri getir:
-          // if (record.isPaid)
-          //   Icon(Icons.lock, size: 15, color: theme.colorScheme.outline),
-          // if (record.isPaid) const SizedBox(width: 6),
-          Text(
-            formatKurus(record.earningKurus),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+      trailing: canSeeMoney
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
+                // Hakedişi geri açınca kilit ikonunu da geri getir:
+                // if (record.isPaid)
+                //   Icon(Icons.lock, size: 15, color: theme.colorScheme.outline),
+                // if (record.isPaid) const SizedBox(width: 6),
+                Text(
+                  formatKurus(record.earningKurus),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            )
+          : null,
     );
   }
 }

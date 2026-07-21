@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/constants/categories.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
@@ -37,12 +38,14 @@ class MazotScreen extends ConsumerWidget {
     final total = mazot.fold<int>(0, (s, e) => s + e.amountKurus);
 
     return Scaffold(
-      appBar: const GradientAppBar(title: 'Mazot'),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'fab-mazot',
-        onPressed: () => _openEdit(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Mazot Ekle'),
+      appBar: GradientAppBar(
+        title: 'Mazot',
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 10, left: 2),
+            child: _AddButton(onPressed: () => _openEdit(context)),
+          ),
+        ],
       ),
       body: AsyncRetry(
         value: async,
@@ -143,12 +146,49 @@ class _EmptyMazot extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Sağ alttaki “Mazot Ekle” ile başlayın.',
+              'Üstteki “Ekle” ile başlayın.',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Başlıktaki küçük beyaz "Ekle" hapı — degrade üzerinde güçlü kontrast.
+class _AddButton extends StatelessWidget {
+  const _AddButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onPressed,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 18, color: kHeroBottom),
+              SizedBox(width: 4),
+              Text(
+                'Ekle',
+                style: TextStyle(
+                  color: kHeroBottom,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

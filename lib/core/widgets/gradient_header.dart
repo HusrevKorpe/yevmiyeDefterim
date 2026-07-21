@@ -15,13 +15,15 @@ import '../../app/theme.dart';
 class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
   const GradientAppBar({
     super.key,
-    required this.title,
+    this.title,
     this.actions,
     this.leading,
     this.automaticallyImplyLeading = true,
   });
 
-  final String title;
+  /// Boş bırakılırsa (alt menü kök sekmelerinde olduğu gibi) başlık gösterilmez;
+  /// yalnızca degrade çubuk ile aksiyonlar kalır.
+  final String? title;
   final List<Widget>? actions;
   final Widget? leading;
   final bool automaticallyImplyLeading;
@@ -41,7 +43,7 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: Text(title),
+      title: title == null ? null : Text(title!),
       actions: actions,
       leading: leading,
       automaticallyImplyLeading: automaticallyImplyLeading,
@@ -64,7 +66,7 @@ class _HeaderBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRect(
       child: DecoratedBox(
-        decoration: const BoxDecoration(gradient: kHeroGradient),
+        decoration: BoxDecoration(gradient: heroGradient(context)),
         child: Stack(
           children: [
             Positioned(

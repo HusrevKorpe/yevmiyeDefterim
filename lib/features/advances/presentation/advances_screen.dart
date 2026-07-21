@@ -33,7 +33,6 @@ class AdvancesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: 'Avanslar',
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 10, left: 2),

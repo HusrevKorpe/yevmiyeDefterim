@@ -6,11 +6,13 @@
 /// akışının yazdığı otomatik kayıtlar dokunulmaz; çağıran ([isManual]) doğrular.
 ///
 /// Uygulama artık yalnız gider takip eder. Eski sürümde girilmiş gelir
-/// (`type == 'income'`) dokümanları okurken elenir → toplamları bozmaz.
+/// (`type == 'income'`) ile hakediş "Öde" akışının yazdığı otomatik maaş/elebaşı
+/// kayıtları okurken elenir → Kasa/rapor toplamlarını bozmaz.
 library;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../core/constants/categories.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/firestore/refs.dart';
 import '../../../core/firestore/write_stamp.dart';
@@ -46,7 +48,7 @@ class FirestoreLedgerRepository implements LedgerRepository {
   @override
   Stream<List<LedgerEntry>> watchAll() => ledgerCol(_db).snapshots().map(
       (snap) => snap.docs
-          .where(_notIncome)
+          .where(_isVisibleExpense)
           .map((d) => LedgerEntry.fromDoc(d.id, d.data()))
           .toList());
 
@@ -58,13 +60,24 @@ class FirestoreLedgerRepository implements LedgerRepository {
           .where('date', isLessThanOrEqualTo: endDate)
           .snapshots()
           .map((snap) => snap.docs
-              .where(_notIncome)
+              .where(_isVisibleExpense)
               .map((d) => LedgerEntry.fromDoc(d.id, d.data()))
               .toList());
 
-  /// Eski sürümden kalma gelir kayıtlarını eler (uygulama artık gider-only).
-  static bool _notIncome(QueryDocumentSnapshot<Map<String, dynamic>> d) =>
-      d.data()['type'] != 'income';
+  /// Kasa'da görünmemesi gereken dokümanları okurken eler. İki kural:
+  ///
+  /// 1. **Gelir** (`type == 'income'`) — gelir kavramı kaldırıldı, KALICI elenir.
+  /// 2. **Otomatik maaş/elebaşı** (`source: payroll/elebasi`) — hakediş "Öde"
+  ///    akışının yazdığı salt-okunur kayıtlar. Hakediş rafa kalkınca bunları
+  ///    silecek arayüz kalmadığından Kasa'da asılı kalıyorlardı → eleniyorlar.
+  ///    --- HAKEDİŞ ŞİMDİLİK RAFTA ---: hakediş geri açılınca bu source süzgecini
+  ///    kaldır ki maaş ödemeleri Kasa'ya yeniden yansısın (kural §6 çifte-sayım).
+  static bool _isVisibleExpense(QueryDocumentSnapshot<Map<String, dynamic>> d) {
+    final data = d.data();
+    if (data['type'] == 'income') return false;
+    final source = data['source'];
+    return source != LedgerSource.payroll && source != LedgerSource.elebasi;
+  }
 
   @override
   Future<void> add(LedgerEntry entry) => ledgerCol(_db).doc(entry.id).set({

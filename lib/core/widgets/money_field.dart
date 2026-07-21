@@ -20,6 +20,7 @@ class MoneyField extends StatelessWidget {
     this.textInputAction,
     this.onSubmitted,
     this.helperText,
+    this.filled = false,
   });
 
   final TextEditingController controller;
@@ -32,6 +33,10 @@ class MoneyField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final VoidCallback? onSubmitted;
   final String? helperText;
+
+  /// Dolgulu, yuvarlak, çerçevesiz görünüm (yeni giriş ekranlarının sade dili).
+  /// Varsayılan çerçeveli — eski çağrı yerleri (Ayarlar) etkilenmez.
+  final bool filled;
 
   String? _validate(String? v) {
     final t = (v ?? '').trim();
@@ -46,6 +51,33 @@ class MoneyField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final base = InputDecoration(
+      labelText: label,
+      helperText: helperText,
+      helperMaxLines: 2,
+      prefixText: '₺ ',
+      border: const OutlineInputBorder(),
+    );
+    final decoration = !filled
+        ? base
+        : base.copyWith(
+            filled: true,
+            fillColor: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.5),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+            ),
+          );
     return TextFormField(
       controller: controller,
       enabled: enabled,
@@ -57,12 +89,7 @@ class MoneyField extends StatelessWidget {
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
       ],
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: helperText,
-        prefixText: '₺ ',
-        border: const OutlineInputBorder(),
-      ),
+      decoration: decoration,
       validator: _validate,
     );
   }

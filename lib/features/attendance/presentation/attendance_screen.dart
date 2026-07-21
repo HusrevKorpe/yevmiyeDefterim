@@ -12,6 +12,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../auth/application/user_access.dart';
 import '../../settings/application/settings_providers.dart';
 import '../../settings/data/app_settings.dart';
 import '../../workers/application/workers_providers.dart';
@@ -37,7 +38,6 @@ class AttendanceScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const GradientAppBar(
-        title: 'Yoklama',
         actions: [_MonthlyButton(), _SaveButton()],
       ),
       body: const Column(
@@ -126,9 +126,9 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
           color: Colors.white,
           elevation: _pressed ? 0 : 3,
           shadowColor: Colors.black54,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           child: InkWell(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(18),
             splashColor: StatusColors.full.withValues(alpha: 0.22),
             highlightColor: StatusColors.full.withValues(alpha: 0.10),
             onTapDown: (_) => setState(() => _pressed = true),
@@ -138,13 +138,13 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
               _confirm();
             },
             child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+              padding: EdgeInsets.symmetric(horizontal: 15, vertical: 7),
               child: Text(
                 'Kaydet',
                 style: TextStyle(
                   color: StatusColors.full,
                   fontWeight: FontWeight.w800,
-                  fontSize: 15,
+                  fontSize: 13,
                   letterSpacing: 0.2,
                 ),
               ),
@@ -269,19 +269,18 @@ class _AttendanceBody extends ConsumerWidget {
   }
 }
 
-class _List extends ConsumerWidget {
+/// İşçileri sekmelere ayırır (Erkekler / Kadınlar / Elebaşılar). Artık yoklama
+/// akışını İZLEMEZ (StatelessWidget) → bir işçiye dokunmak bu ağacı yeniden
+/// kurmaz; yalnız `active`/`settings` değişince (nadir) yeniden çizilir.
+/// Her satırın güncel durumu, satırın kendi `Consumer`'ında `.select` ile alınır.
+class _List extends StatelessWidget {
   const _List({required this.active, required this.settings});
 
   final List<Worker> active;
   final AppSettings settings;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final records =
-        ref.watch(attendanceForSelectedDateProvider).asData?.value ?? const [];
-    final byWorker = {for (final r in records) r.workerId: r};
-    final vm = ref.read(attendanceViewModelProvider.notifier);
-
+  Widget build(BuildContext context) {
     // Bireysel işçiler cinsiyete göre ayrı sekmelere düşer (Erkekler / Kadınlar).
     // Her grup kendi içinde ada göre sıralı kalır (compareWorkers).
     final males = active
@@ -292,60 +291,27 @@ class _List extends ConsumerWidget {
         .toList();
     final crews = active.where((w) => w.type.isCrew).toList();
 
-    Widget individualTile(Worker w) => IndividualAttendanceTile(
-          worker: w,
-          // Kaydı olmayan işçi → null (hiçbir segment seçili değil). Yoklama
-          // alınmayan gün otomatik "Yok" işaretlenmez, hiç sayılmaz.
-          status: switch (byWorker[w.id]) {
-            IndividualAttendance(:final status) => status,
-            _ => null,
-          },
-          resolvedWageKurus: resolveWageKurus(
-            gender: w.gender,
-            overrideKurus: w.dailyWageOverrideKurus,
-            maleWageKurus: settings.defaultWageMaleKurus,
-            femaleWageKurus: settings.defaultWageFemaleKurus,
-          ),
-          // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-          // Hakedişi geri açınca: `locked: byWorker[w.id]?.isPaid ?? false`.
-          locked: false,
-          onChanged: (s) => vm.setStatus(w, s),
-          onCleared: () => vm.clearStatus(w),
-        );
-
-    Widget crewTile(Worker w) {
-      // Kaydı olan gün kayıtlı sayıyı gösterir; kaydı yoksa işçiye girilen ekip
-      // mevcudu (crewSize) ile ÖNDEN DOLU gelir (henüz kaydedilmedi → "Kaydet"
-      // kesinleştirir, bkz. _SaveButton.commitCrewDefaults). crewSize==0 ise 0.
-      final saved = byWorker[w.id];
-      final headcount = switch (saved) {
-        CrewAttendance(:final headcount) => headcount,
-        _ => w.crewSize,
-      };
-      return CrewAttendanceTile(
-        name: w.name,
-        headcount: headcount,
-        pending: saved is! CrewAttendance && headcount > 0,
-        crewRateKurus: settings.defaultCrewRateKurus,
-        // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-        // Hakedişi geri açınca: `locked: byWorker[w.id]?.isPaid ?? false`.
-        locked: false,
-        onChanged: (c) => vm.setHeadcount(w, c),
-      );
-    }
-
     // Erkekler + Kadınlar her zaman; Elebaşılar yalnız elebaşı işçi varsa.
     final tabTitles = <String>[
       'Erkekler (${males.length})',
       'Kadınlar (${females.length})',
     ];
     final tabViews = <Widget>[
-      _TabList(tiles: [for (final w in males) individualTile(w)]),
-      _TabList(tiles: [for (final w in females) individualTile(w)]),
+      _WorkerTabList(
+        workers: males,
+        tileBuilder: (w) => _IndividualTile(worker: w, settings: settings),
+      ),
+      _WorkerTabList(
+        workers: females,
+        tileBuilder: (w) => _IndividualTile(worker: w, settings: settings),
+      ),
     ];
     if (crews.isNotEmpty) {
       tabTitles.add('Elebaşılar (${crews.length})');
-      tabViews.add(_TabList(tiles: [for (final w in crews) crewTile(w)]));
+      tabViews.add(_WorkerTabList(
+        workers: crews,
+        tileBuilder: (w) => _CrewTile(worker: w, settings: settings),
+      ));
     }
 
     return DefaultTabController(
@@ -363,15 +329,17 @@ class _List extends ConsumerWidget {
   }
 }
 
-/// Tek bir sekmenin gövdesi: dolu ise işçi kartları listesi, boşsa kısa bilgi.
-class _TabList extends StatelessWidget {
-  const _TabList({required this.tiles});
+/// Bir sekmenin gövdesi: dolu ise işçi kartları (tembel `ListView.builder` →
+/// yalnız görünür kartlar inşa edilir), boşsa kısa bilgi.
+class _WorkerTabList extends StatelessWidget {
+  const _WorkerTabList({required this.workers, required this.tileBuilder});
 
-  final List<Widget> tiles;
+  final List<Worker> workers;
+  final Widget Function(Worker worker) tileBuilder;
 
   @override
   Widget build(BuildContext context) {
-    if (tiles.isEmpty) {
+    if (workers.isEmpty) {
       final theme = Theme.of(context);
       return Center(
         child: Padding(
@@ -385,18 +353,98 @@ class _TabList extends StatelessWidget {
         ),
       );
     }
-    return ListView(
+    return ListView.builder(
       padding: const EdgeInsets.only(top: 8, bottom: 24),
-      children: tiles,
+      itemCount: workers.length,
+      itemBuilder: (context, i) => tileBuilder(workers[i]),
     );
   }
 }
 
-class _WagesUnsetBanner extends StatelessWidget {
+/// Tek bir bireysel işçi satırı — YALNIZ kendi kaydını dinler.
+///
+/// `attendanceByWorkerForDateProvider.select` ile sadece bu işçinin durumunu
+/// izler → başka bir işçiye dokunmak (stream re-emit) bu tile'ı yeniden ÇİZMEZ;
+/// yalnız bu işçinin durumu değişince çizilir (kural §7).
+class _IndividualTile extends ConsumerWidget {
+  const _IndividualTile({required this.worker, required this.settings});
+
+  final Worker worker;
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final status = ref.watch(
+      attendanceByWorkerForDateProvider.select((byWorker) {
+        // Kaydı olmayan işçi → null (hiçbir segment seçili değil). Yoklama
+        // alınmayan gün otomatik "Yok" işaretlenmez, hiç sayılmaz.
+        return switch (byWorker[worker.id]) {
+          IndividualAttendance(:final status) => status,
+          _ => null,
+        };
+      }),
+    );
+    final vm = ref.read(attendanceViewModelProvider.notifier);
+    return IndividualAttendanceTile(
+      worker: worker,
+      status: status,
+      resolvedWageKurus: resolveWageKurus(
+        gender: worker.gender,
+        overrideKurus: worker.dailyWageOverrideKurus,
+        maleWageKurus: settings.defaultWageMaleKurus,
+        femaleWageKurus: settings.defaultWageFemaleKurus,
+      ),
+      // Para/gider kısıtlı hesap yevmiye tutarını görmez (yoklama açık kalır).
+      showWage: ref.watch(canSeeMoneyProvider),
+      // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
+      // Hakedişi geri açınca: `locked: byWorker[worker.id]?.isPaid ?? false`.
+      locked: false,
+      onChanged: (s) => vm.setStatus(worker, s),
+      onCleared: () => vm.clearStatus(worker),
+    );
+  }
+}
+
+/// Tek bir elebaşı satırı — YALNIZ kendi kaydını dinler.
+class _CrewTile extends ConsumerWidget {
+  const _CrewTile({required this.worker, required this.settings});
+
+  final Worker worker;
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Kaydı olan gün kayıtlı sayıyı gösterir; kaydı yoksa işçiye girilen ekip
+    // mevcudu (crewSize) ile ÖNDEN DOLU gelir (henüz kaydedilmedi → "Kaydet"
+    // kesinleştirir, bkz. _SaveButton.commitCrewDefaults). crewSize==0 ise 0.
+    final saved = ref.watch(
+      attendanceByWorkerForDateProvider
+          .select((byWorker) => byWorker[worker.id]),
+    );
+    final crew = saved is CrewAttendance ? saved : null;
+    final headcount = crew?.headcount ?? worker.crewSize;
+    final vm = ref.read(attendanceViewModelProvider.notifier);
+    return CrewAttendanceTile(
+      name: worker.name,
+      headcount: headcount,
+      pending: crew == null && headcount > 0,
+      crewRateKurus: settings.defaultCrewRateKurus,
+      // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
+      // Hakedişi geri açınca: `locked: crew?.isPaid ?? false`.
+      locked: false,
+      onChanged: (c) => vm.setHeadcount(worker, c),
+    );
+  }
+}
+
+class _WagesUnsetBanner extends ConsumerWidget {
   const _WagesUnsetBanner();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Ücret/ayar uyarısı para bilgisidir ve engelli Ayarlar'a gider →
+    // kısıtlı hesapta hiç gösterilmez.
+    if (!ref.watch(canSeeMoneyProvider)) return const SizedBox.shrink();
     final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.all(12),

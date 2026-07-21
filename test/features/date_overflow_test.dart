@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:yevmiye_defterim/core/widgets/entry_form.dart';
 import 'package:yevmiye_defterim/core/widgets/period_range_selector.dart';
 import 'package:yevmiye_defterim/features/advances/application/advance_providers.dart';
 import 'package:yevmiye_defterim/features/advances/presentation/advance_edit_screen.dart';
@@ -91,10 +92,10 @@ void main() {
     });
   }
 
-  // Kasa (gelir/gider) düzenleme ekranındaki "Tarih: …" takvim butonu: uzun
-  // TR tarih + büyük yazı ölçeğinde taşmamalı ve etiket FittedBox ile
-  // sığdırılmalı (regresyon: birisi düz Text'e geri dönerse test kırılır).
-  testWidgets('Kasa düzenleme tarih butonu dar ekran x2.0 taşmaz',
+  // Kasa (gider) düzenleme ekranındaki tarih [PickerTile]: uzun TR tarih +
+  // büyük yazı ölçeğinde taşmamalı ve değer FittedBox ile sığdırılmalı
+  // (regresyon: birisi düz Text'e geri dönerse test kırılır).
+  testWidgets('Kasa düzenleme tarih satırı dar ekran x2.0 taşmaz',
       (tester) async {
     await _pumpNarrow(
       tester,
@@ -109,16 +110,16 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(
-      find.ancestor(
-        of: find.textContaining('Tarih:'),
+      find.descendant(
+        of: find.byType(PickerTile),
         matching: find.byType(FittedBox),
       ),
       findsOneWidget,
     );
   });
 
-  // Avans ekle/düzenle ekranındaki "Tarih: …" takvim butonu için aynı güvence.
-  testWidgets('Avans düzenleme tarih butonu dar ekran x2.0 taşmaz',
+  // Avans ekle/düzenle ekranındaki tarih [PickerTile] için aynı güvence.
+  testWidgets('Avans düzenleme tarih satırı dar ekran x2.0 taşmaz',
       (tester) async {
     await _pumpNarrow(
       tester,
@@ -134,8 +135,8 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(
-      find.ancestor(
-        of: find.textContaining('Tarih:'),
+      find.descendant(
+        of: find.byType(PickerTile),
         matching: find.byType(FittedBox),
       ),
       findsOneWidget,

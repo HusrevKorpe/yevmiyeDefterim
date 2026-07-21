@@ -49,7 +49,6 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
 
     return Scaffold(
       appBar: GradientAppBar(
-        title: 'Kasa',
         actions: [
           IconButton(
             onPressed: () => _openMazot(context),

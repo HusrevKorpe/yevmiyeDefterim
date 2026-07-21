@@ -113,7 +113,7 @@ class _TotalNetCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(12, 14, 12, 8),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: kHeroGradient,
+        gradient: heroGradient(context),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

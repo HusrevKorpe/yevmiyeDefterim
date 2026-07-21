@@ -10,6 +10,7 @@ import '../features/advances/presentation/advances_screen.dart';
 import '../features/attendance/presentation/attendance_screen.dart';
 import '../features/attendance/presentation/monthly_attendance_screen.dart';
 import '../features/auth/application/auth_providers.dart';
+import '../features/auth/application/user_access.dart';
 import '../features/auth/data/app_user.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
@@ -42,10 +43,26 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoutes.home,
     refreshListenable: authNotifier,
     redirect: (context, state) {
-      final loggedIn = authNotifier.value != null;
+      final user = authNotifier.value;
+      final loggedIn = user != null;
       final atLogin = state.matchedLocation == AppRoutes.login;
       if (!loggedIn) return atLogin ? null : AppRoutes.login;
       if (atLogin) return AppRoutes.home;
+      // Para/gider kısıtlı hesap para ekranlarına giremez — derin link ya da
+      // geri tuşuyla da sızmasın diye ana sayfaya döndürülür (sekmeleri zaten
+      // main_shell gizler; bu router katmanı ikinci güvenlik hattıdır).
+      // Aylık yoklama BİLEREK listede yok: erişilebilir kalır, sadece
+      // içindeki tutarlar gizlenir (bkz. monthly_attendance_screen).
+      if (isMoneyRestricted(user.email)) {
+        const blocked = <String>{
+          AppRoutes.ledger,
+          AppRoutes.advances,
+          AppRoutes.report,
+          AppRoutes.settings,
+          AppRoutes.payroll,
+        };
+        if (blocked.contains(state.matchedLocation)) return AppRoutes.home;
+      }
       return null;
     },
     routes: [

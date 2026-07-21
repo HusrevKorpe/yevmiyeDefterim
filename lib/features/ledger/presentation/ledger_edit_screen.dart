@@ -12,8 +12,8 @@ import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/app_date_picker.dart';
+import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
-import '../../../core/widgets/money_field.dart';
 import '../application/ledger_edit_view_model.dart';
 import '../application/ledger_providers.dart';
 import '../data/ledger_entry.dart';
@@ -230,60 +230,45 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
     return Scaffold(
       appBar: GradientAppBar(title: _isNew ? 'Yeni Kayıt' : 'Kaydı Düzenle'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: _category,
-                decoration: const InputDecoration(
-                  labelText: 'Kategori',
-                  prefixIcon: Icon(Icons.category_outlined),
-                  border: OutlineInputBorder(),
-                ),
-                items: [
-                  for (final c in _categories)
-                    DropdownMenuItem(
-                        value: c, child: Text(LedgerCategory.label(c))),
-                ],
-                onChanged: saving
-                    ? null
-                    : (v) => setState(() => _category = v ?? _category),
-              ),
-              const SizedBox(height: 20),
-              MoneyField(
+              AmountHeroField(
                 controller: _amountCtrl,
-                label: 'Tutar',
                 enabled: !saving,
                 autofocus: _isNew,
               ),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: saving ? null : _pickDate,
-                icon: const Icon(Icons.calendar_today),
-                // Uzun TR tarih ("31 Ağustos 2026, Çarşamba") + büyük yazı
-                // ölçeğinde buton etiketi taşmasın/satır bölünmesin diye tek
-                // satırda küçültülerek sığdırılır (kesme değil, ölçekle).
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    'Tarih: ${formatHumanDate(_date)}',
-                    maxLines: 1,
-                    softWrap: false,
-                  ),
-                ),
+              const SizedBox(height: 26),
+              const FieldLabel('Kategori'),
+              _CategoryPicker(
+                categories: _categories,
+                selected: _category,
+                onSelected: saving
+                    ? null
+                    : (c) => setState(() => _category = c),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
+              const FieldLabel('Tarih'),
+              PickerTile(
+                icon: Icons.event,
+                value: formatHumanDateNoWeekday(_date),
+                onTap: saving ? null : _pickDate,
+              ),
+              const SizedBox(height: 24),
+              const FieldLabel('Not (isteğe bağlı)'),
               TextFormField(
                 controller: _noteCtrl,
                 enabled: !saving,
                 textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Not (isteğe bağlı)',
-                  prefixIcon: Icon(Icons.notes),
-                  border: OutlineInputBorder(),
+                minLines: 1,
+                maxLines: 3,
+                decoration: entryFieldDecoration(
+                  context,
+                  hint: 'Kısa açıklama ekleyin',
+                  icon: Icons.notes,
                 ),
               ),
               const SizedBox(height: 32),
@@ -295,13 +280,17 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.save),
+                    : const Icon(Icons.check),
                 label: Text(saving ? 'Kaydediliyor…' : 'Kaydet'),
               ),
               if (!_isNew) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
+                const SizedBox(height: 8),
+                TextButton.icon(
                   onPressed: saving ? null : _delete,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('Kaydı Sil'),
                 ),
@@ -310,6 +299,41 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Kategori seçici — düz dropdown yerine ikonlu seçim çipleri (kural §8).
+class _CategoryPicker extends StatelessWidget {
+  const _CategoryPicker({
+    required this.categories,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final List<String> categories;
+  final String selected;
+  final ValueChanged<String>? onSelected;
+
+  static const Map<String, IconData> _icons = {
+    LedgerCategory.mazot: Icons.local_gas_station,
+    LedgerCategory.genel: Icons.receipt_long,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (final c in categories)
+          SelectableChip(
+            selected: selected == c,
+            label: LedgerCategory.label(c),
+            icon: _icons[c] ?? Icons.category_outlined,
+            onSelected: onSelected == null ? null : (_) => onSelected!(c),
+          ),
+      ],
     );
   }
 }

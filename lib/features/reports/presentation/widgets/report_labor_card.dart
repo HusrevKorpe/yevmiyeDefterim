@@ -1,9 +1,8 @@
-/// İşçilik özet kartı — dönem brüt işçilik / ödenen net / verilen avans (§8).
+/// İşçilik özet kartı — dönem brüt işçilik / verilen avans (§8).
 library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../app/theme.dart';
 import '../../../../core/money/money.dart';
 import '../../application/period_report.dart';
 
@@ -36,13 +35,6 @@ class ReportLaborCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             _Row(
-              icon: Icons.payments,
-              label: 'Ödenen (net)',
-              value: report.netPaidKurus,
-              color: incomeColor(context),
-            ),
-            const SizedBox(height: 10),
-            _Row(
               icon: Icons.account_balance_wallet,
               label: 'Verilen avans',
               value: report.advancesGivenKurus,
@@ -59,13 +51,11 @@ class _Row extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    this.color,
   });
 
   final IconData icon;
   final String label;
   final int value;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +71,6 @@ class _Row extends StatelessWidget {
           formatKurus(value),
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.bold,
-            color: color,
           ),
         ),
       ],

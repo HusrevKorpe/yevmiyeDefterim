@@ -69,7 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       width: 88,
                       height: 88,
                       decoration: BoxDecoration(
-                        gradient: kHeroGradient,
+                        gradient: heroGradient(context),
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(

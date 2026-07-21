@@ -12,7 +12,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:yevmiye_defterim/app/app.dart';
 import 'package:yevmiye_defterim/core/constants/categories.dart';
-import 'package:yevmiye_defterim/core/widgets/money_field.dart';
+import 'package:yevmiye_defterim/core/widgets/entry_form.dart';
 import 'package:yevmiye_defterim/features/advances/application/advance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/auth/application/auth_providers.dart';
@@ -136,16 +136,19 @@ void main() {
     await tester.pumpAndSettle();
     await binding.takeScreenshot('04-mazot-ekrani');
 
-    // "Mazot Ekle" → önceden Gider/Mazot seçili form.
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'Mazot Ekle'));
+    // App bar "Ekle" hapı → önceden Mazot seçili form.
+    await tester.tap(find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text('Ekle'),
+    ));
     await tester.pumpAndSettle();
 
-    // Tutar (ilk alan = MoneyField) ve not gir.
-    final amountField =
-        find.descendant(of: find.byType(MoneyField), matching: find.byType(TextField));
+    // Tutar (odak alan = AmountHeroField) ve not gir.
+    final amountField = find.descendant(
+        of: find.byType(AmountHeroField), matching: find.byType(TextField));
     await tester.enterText(amountField, '2.500');
-    await tester.enterText(find.widgetWithText(TextField, 'Not (isteğe bağlı)'),
-        'Depo dolumu');
+    // Not = formdaki ikinci (son) metin alanı.
+    await tester.enterText(find.byType(TextField).last, 'Depo dolumu');
     await tester.pumpAndSettle();
     await binding.takeScreenshot('05-mazot-ekle-formu');
 

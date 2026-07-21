@@ -18,6 +18,7 @@ class IndividualAttendanceTile extends StatelessWidget {
     required this.onChanged,
     required this.onCleared,
     this.locked = false,
+    this.showWage = true,
   });
 
   final Worker worker;
@@ -25,6 +26,9 @@ class IndividualAttendanceTile extends StatelessWidget {
   /// Bu günün durumu; `null` → yoklama alınmamış, hiçbir segment seçili değil.
   final AttendanceStatus? status;
   final int resolvedWageKurus;
+
+  /// Yevmiye tutarı satırda gösterilsin mi? Para/gider kısıtlı hesapta `false`.
+  final bool showWage;
   final ValueChanged<AttendanceStatus> onChanged;
 
   /// Seçili durum boşaltılınca (gün geri alınınca) çağrılır → kayıt silinir.
@@ -81,17 +85,20 @@ class IndividualAttendanceTile extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                wageText,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: resolvedWageKurus == 0
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
+              // Yevmiye tutarı yalnız para görebilen hesapta gösterilir.
+              if (showWage) ...[
+                const SizedBox(width: 8),
+                Text(
+                  wageText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: resolvedWageKurus == 0
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-              ),
+              ],
               if (locked) ...[
                 const SizedBox(width: 6),
                 const PaidLockBadge(),

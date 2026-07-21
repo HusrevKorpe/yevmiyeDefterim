@@ -1,5 +1,5 @@
-/// Görsel doğrulama: Kasa ve Avans düzenleme ekranlarındaki "Tarih: …" takvim
-/// butonu, uzun TR tarih ("31 Ağustos 2026, Pazartesi") + büyük sistem yazısında
+/// Görsel doğrulama: Kasa ve Avans düzenleme ekranlarındaki tarih [PickerTile]
+/// satırı, uzun TR tarih ("31 Ağustos 2026") + büyük sistem yazısında
 /// taşmamalı/satır bölünmemeli. FittedBox(scaleDown) ile tek satırda küçülerek
 /// sığar. Bu regresyon `flutter test` ile tam yakalanamaz (gerçek font metrikleri)
 /// → simülatörde ekran görüntüsüyle doğrulanır.

@@ -34,6 +34,29 @@ final StreamProvider<List<AttendanceRecord>> attendanceForSelectedDateProvider =
   return ref.watch(attendanceRepositoryProvider).watchByDate(date);
 });
 
+/// Seçili günün kayıtları `workerId → kayıt` haritası olarak.
+///
+/// Yoklama satırları (tile) bu haritayı `.select` ile dinler → bir işçiye
+/// dokunmak (Firestore write → stream re-emit) yalnız O TILE'ı yeniden çizer,
+/// tüm listeyi değil (kural §7: dar kapsamlı rebuild). Harita her emisyonda bir
+/// kez kurulur; tile'lar O(1) `map[workerId]` ile kendi durumunu seçer.
+///
+/// `.valueOrNull` (asData yerine): gün değişiminde stream yeniden abone olurken
+/// (AsyncLoading) önceki değer korunur → segmentler bir kare "boşalıp" dolmaz
+/// (seçim titremesi yok). Yeni günün verisi (offline önbellekten anında) gelince
+/// harita güncellenir.
+final Provider<Map<String, AttendanceRecord>> attendanceByWorkerForDateProvider =
+    Provider<Map<String, AttendanceRecord>>((ref) {
+  final async = ref.watch(attendanceForSelectedDateProvider);
+  // hasValue: gün değişiminde (yeniden abonelik) önceki veri korunur → requireValue
+  // önceki günü döndürür, segmentler bir kare "boşalmaz". Hata/ilk yükleme (önceki
+  // değer yok) → boş harita: eski `.asData?.value ?? []` gibi hatayı yutar, tile'lar
+  // patlamaz (value getter önceki-değersiz hatada rethrow ederdi — ondan kaçınılır).
+  final records =
+      async.hasValue ? async.requireValue : const <AttendanceRecord>[];
+  return {for (final r in records) r.workerId: r};
+});
+
 /// Bugünün yoklama kayıtları — Ana Sayfa özeti için (seçili tarihten bağımsız).
 final StreamProvider<List<AttendanceRecord>> todayAttendanceProvider =
     StreamProvider<List<AttendanceRecord>>(

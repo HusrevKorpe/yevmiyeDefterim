@@ -4,10 +4,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
+import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
+import '../../auth/application/user_access.dart';
 import '../application/worker_edit_view_model.dart';
 import '../data/worker.dart';
 
@@ -229,123 +232,120 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
     });
 
     final saving = ref.watch(workerEditViewModelProvider).saving;
+    final canSeeMoney = ref.watch(canSeeMoneyProvider);
     final w = widget.worker;
+
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: GradientAppBar(title: _isNew ? 'Yeni İşçi' : 'İşçiyi Düzenle'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const FieldLabel('İsim'),
               TextFormField(
                 controller: _nameCtrl,
                 enabled: !saving,
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'İsim',
-                  prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
+                decoration: entryFieldDecoration(
+                  context,
+                  hint: 'Ad soyad',
+                  icon: Icons.person_outline,
                 ),
                 validator: (v) =>
                     (v ?? '').trim().isEmpty ? 'İsim girin.' : null,
               ),
               const SizedBox(height: 24),
-              const Text('Tür', style: TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              SegmentedButton<WorkerType>(
-                segments: const [
-                  ButtonSegment(
-                    value: WorkerType.sabit,
-                    label: Text('Sabit'),
-                    icon: Icon(Icons.badge_outlined),
-                  ),
-                  ButtonSegment(
-                    value: WorkerType.gundelik,
-                    label: Text('Gündelik'),
-                    icon: Icon(Icons.today_outlined),
-                  ),
-                  ButtonSegment(
-                    value: WorkerType.elebasi,
-                    label: Text('Elebaşı'),
-                    icon: Icon(Icons.groups_outlined),
-                  ),
+              const FieldLabel('Tür'),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final t in WorkerType.values)
+                    SelectableChip(
+                      selected: _type == t,
+                      label: t.label,
+                      icon: _typeIcon(t),
+                      onSelected: saving
+                          ? null
+                          : (_) => setState(() {
+                                _type = t;
+                                _genderError = null;
+                              }),
+                    ),
                 ],
-                selected: {_type},
-                onSelectionChanged: saving
-                    ? null
-                    : (s) => setState(() {
-                          _type = s.first;
-                          _genderError = null;
-                        }),
               ),
               if (_type.isIndividual) ...[
                 const SizedBox(height: 24),
-                const Text('Cinsiyet',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                SegmentedButton<Gender>(
-                  // Varsayılan seçim yok: kullanıcı Erkek/Kadın'ı açıkça
-                  // seçmeden kaydedemez (boş seçime izin verilir).
-                  emptySelectionAllowed: true,
-                  segments: const [
-                    ButtonSegment(
-                      value: Gender.male,
-                      label: Text('Erkek'),
-                      icon: Icon(Icons.male),
-                    ),
-                    ButtonSegment(
-                      value: Gender.female,
-                      label: Text('Kadın'),
-                      icon: Icon(Icons.female),
-                    ),
+                const FieldLabel('Cinsiyet'),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final g in Gender.values)
+                      SelectableChip(
+                        selected: _gender == g,
+                        label: g.label,
+                        icon: g == Gender.male ? Icons.male : Icons.female,
+                        accent:
+                            g == Gender.male ? maleColor(context) : femaleColor(context),
+                        onSelected: saving
+                            ? null
+                            : (_) => setState(() {
+                                  _gender = g;
+                                  _genderError = null;
+                                }),
+                      ),
                   ],
-                  selected: _gender == null ? const {} : {_gender!},
-                  onSelectionChanged: saving
-                      ? null
-                      : (s) => setState(() {
-                            _gender = s.isEmpty ? null : s.first;
-                            _genderError = null;
-                          }),
                 ),
                 if (_genderError != null) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    _genderError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      _genderError!,
+                      style: TextStyle(color: cs.error, fontSize: 12),
                     ),
                   ),
                 ],
-                const SizedBox(height: 24),
-                MoneyField(
-                  controller: _overrideCtrl,
-                  label: 'Özel yevmiye (isteğe bağlı)',
-                  helperText: 'Boş bırakılırsa varsayılan ücret kullanılır.',
-                  enabled: !saving,
-                  allowEmpty: true,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: _save,
-                ),
+                // Özel yevmiye para → kısıtlı hesapta gizli (boş kalır → işçi
+                // varsayılan ücreti kullanır).
+                if (canSeeMoney) ...[
+                  const SizedBox(height: 24),
+                  const FieldLabel('Özel yevmiye (isteğe bağlı)'),
+                  MoneyField(
+                    controller: _overrideCtrl,
+                    label: 'Günlük ücret',
+                    helperText: 'Boş bırakılırsa varsayılan ücret kullanılır.',
+                    enabled: !saving,
+                    allowEmpty: true,
+                    filled: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: _save,
+                  ),
+                ],
               ] else ...[
                 const SizedBox(height: 24),
+                const FieldLabel('Kaç kişi getiriyor? (isteğe bağlı)'),
                 TextFormField(
                   controller: _headcountCtrl,
                   enabled: !saving,
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _save(),
-                  decoration: const InputDecoration(
-                    labelText: 'Kaç kişi getiriyor? (isteğe bağlı)',
+                  decoration: entryFieldDecoration(
+                    context,
+                    hint: 'Örn. 8',
+                    icon: Icons.groups_outlined,
+                  ).copyWith(
                     helperText:
                         'Yalnızca bilgi için — listede görünür, para hesabına girmez.',
                     helperMaxLines: 2,
-                    prefixIcon: Icon(Icons.groups_outlined),
-                    border: OutlineInputBorder(),
                   ),
                   validator: (v) {
                     final t = (v ?? '').trim();
@@ -357,10 +357,9 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  'Elebaşı bireysel takip edilmez; yoklamada kişi sayısı girilir, '
-                  'ödeme toplu yapılır.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                _InfoNote(
+                  'Elebaşı bireysel takip edilmez; yoklamada kişi sayısı '
+                  'girilir, ödeme toplu yapılır.',
                 ),
               ],
               const SizedBox(height: 32),
@@ -372,14 +371,18 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.save),
+                    : const Icon(Icons.check),
                 label: Text(saving ? 'Kaydediliyor…' : 'Kaydet'),
               ),
               if (!_isNew) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
+                const SizedBox(height: 8),
+                TextButton.icon(
                   onPressed: saving ? null : _toggleActive,
-                  icon: Icon(w!.active
+                  style: TextButton.styleFrom(
+                    foregroundColor: w!.active ? cs.error : cs.primary,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: Icon(w.active
                       ? Icons.person_off_outlined
                       : Icons.person_add_outlined),
                   label: Text(w.active ? 'Pasif Yap' : 'Aktif Yap'),
@@ -388,6 +391,48 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  static IconData _typeIcon(WorkerType t) => switch (t) {
+        WorkerType.sabit => Icons.badge_outlined,
+        WorkerType.gundelik => Icons.today_outlined,
+        WorkerType.elebasi => Icons.groups_outlined,
+      };
+}
+
+/// İpucu notu — yumuşak tonlu kutuda bilgi ikonu + metin (elebaşı açıklaması).
+class _InfoNote extends StatelessWidget {
+  const _InfoNote(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline,
+              size: 20, color: theme.colorScheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
