@@ -1,13 +1,14 @@
 /// Kasa liste satırı — gider kaydı (kural §8: ikon+yazı, büyük/kontrast).
 ///
-/// Gider kırmızı ↓ (mazot yakıt ikonu). Otomatik (maaş/elebaşı) kayıtlar kilit
-/// ikonuyla salt-okunur; elle kayıtlar dokununca düzenlenir.
+/// Gider kırmızı ↓ (mazot/tamir/bakkal kendi ikonuyla). Otomatik (maaş/elebaşı)
+/// kayıtlar kilit ikonuyla salt-okunur; elle kayıtlar dokununca düzenlenir.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/categories.dart';
 import '../../../../core/date/app_date.dart';
+import '../../../../core/widgets/category_icon.dart';
 import '../../../../core/money/money.dart';
 import '../../data/ledger_entry.dart';
 
@@ -56,7 +57,6 @@ class LedgerEntryTile extends StatelessWidget {
     );
   }
 
-  IconData _leadingIcon() => entry.category == LedgerCategory.mazot
-      ? Icons.local_gas_station
-      : Icons.arrow_downward;
+  IconData _leadingIcon() =>
+      categoryIcon(entry.category, fallback: Icons.arrow_downward);
 }

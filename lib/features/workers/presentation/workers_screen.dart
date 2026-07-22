@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/money/money.dart';
@@ -58,13 +59,15 @@ class WorkersScreen extends ConsumerWidget {
             if (workers.isEmpty) return const _EmptyWorkers();
             final active = workers.where((w) => w.active).toList();
             final passive = workers.where((w) => !w.active).toList();
-            return ListView(
-              padding: const EdgeInsets.only(bottom: 96),
-              children: [
-                for (final type in WorkerType.values)
-                  ..._section(context, type, active),
-                if (passive.isNotEmpty) _passiveSection(context, passive),
-              ],
+            return SlidableAutoCloseBehavior(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 96),
+                children: [
+                  for (final type in WorkerType.values)
+                    ..._section(context, type, active),
+                  if (passive.isNotEmpty) _passiveSection(context, passive),
+                ],
+              ),
             );
           },
         ),
@@ -82,7 +85,11 @@ class WorkersScreen extends ConsumerWidget {
     return [
       _Header('${type.label} (${group.length})'),
       for (final w in group)
-        _WorkerTile(worker: w, onTap: () => _openDetail(context, w)),
+        _WorkerTile(
+          worker: w,
+          onTap: () => _openDetail(context, w),
+          canDelete: true,
+        ),
     ];
   }
 
@@ -153,10 +160,59 @@ class _Header extends StatelessWidget {
 }
 
 class _WorkerTile extends ConsumerWidget {
-  const _WorkerTile({required this.worker, required this.onTap});
+  const _WorkerTile({
+    required this.worker,
+    required this.onTap,
+    this.canDelete = false,
+  });
 
   final Worker worker;
   final VoidCallback onTap;
+
+  /// Sola kaydırma silme kısayolu bu karta eklensin mi (yalnız aktif liste).
+  final bool canDelete;
+
+  /// Kaydırınca açılan çöp kutusu butonuna basınca ÖNCE onay sorar; onaylanırsa
+  /// işçiyi listeden kaldırır — soft-delete: kayıt Firestore'da kalır
+  /// (yoklama/avans geçmişi korunur), yalnız "Pasif İşçiler"e taşınır.
+  /// SnackBar'daki "Geri Al" ile geri alınır.
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(workerRepositoryProvider);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('İşçiyi kaldır'),
+        content: Text(
+          '${worker.name} listeden kaldırılsın mı? Kaydı ve geçmişi korunur, '
+          '“Pasif İşçiler”e taşınır.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Kaldır'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await repo.setActive(worker.id, active: false);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('${worker.name} listeden kaldırıldı'),
+        action: SnackBarAction(
+          label: 'Geri Al',
+          onPressed: () => repo.setActive(worker.id, active: true),
+        ),
+      ),
+    );
+  }
 
   String _subtitleText(bool canSeeMoney) {
     if (worker.type.isCrew) {
@@ -175,57 +231,79 @@ class _WorkerTile extends ConsumerWidget {
     final canSeeMoney = ref.watch(canSeeMoneyProvider);
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: Material(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+    final Widget card = Material(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    worker.type.isCrew ? Icons.groups : Icons.person,
-                    color: accent,
-                  ),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        worker.name,
-                        style: theme.textTheme.titleSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _subtitleText(canSeeMoney),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  worker.type.isCrew ? Icons.groups : Icons.person,
+                  color: accent,
                 ),
-                Icon(Icons.chevron_right,
-                    color: theme.colorScheme.onSurfaceVariant),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      worker.name,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _subtitleText(canSeeMoney),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
+            ],
           ),
         ),
       ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: canDelete
+          ? Slidable(
+              key: ValueKey('worker-${worker.id}'),
+              // Sola kaydırınca sağdan açılan çöp kutusu butonu; SİLME yalnız
+              // butona basınca olur (kaydırma tek başına silmez).
+              endActionPane: ActionPane(
+                motion: const DrawerMotion(),
+                extentRatio: 0.28,
+                children: [
+                  SlidableAction(
+                    onPressed: (ctx) => _delete(ctx, ref),
+                    backgroundColor: theme.colorScheme.error,
+                    foregroundColor: Colors.white,
+                    icon: Icons.delete_outline,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ],
+              ),
+              child: card,
+            )
+          : card,
     );
   }
 }

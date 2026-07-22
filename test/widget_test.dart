@@ -48,7 +48,7 @@ void main() {
     expect(find.text('Yoklama'), findsWidgets);
     expect(find.text('İşçiler'), findsWidgets);
     expect(find.text('Avans'), findsWidgets);
-    expect(find.text('Kasa'), findsWidgets);
+    expect(find.text('Giderler'), findsWidgets);
     // Hakediş sekmesi şimdilik rafta — görünmemeli.
     expect(find.text('Hakediş'), findsNothing);
   });

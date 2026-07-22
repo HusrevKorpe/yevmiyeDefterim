@@ -313,17 +313,18 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                     ),
                   ),
                 ],
-                // Özel yevmiye para → kısıtlı hesapta gizli (boş kalır → işçi
-                // varsayılan ücreti kullanır).
+                // Yevmiye para bilgisidir → kısıtlı hesapta gizli. Artık sabit/
+                // varsayılan yevmiye yok: her işçinin günlük ücreti burada elle
+                // girilir (zorunlu) ve yoklamada o işçinin kendi ücreti kullanılır.
                 if (canSeeMoney) ...[
                   const SizedBox(height: 24),
-                  const FieldLabel('Özel yevmiye (isteğe bağlı)'),
+                  const FieldLabel('Yevmiye'),
                   MoneyField(
                     controller: _overrideCtrl,
                     label: 'Günlük ücret',
-                    helperText: 'Boş bırakılırsa varsayılan ücret kullanılır.',
+                    helperText: 'Bu işçinin günlük yevmiyesi.',
                     enabled: !saving,
-                    allowEmpty: true,
+                    allowEmpty: false,
                     filled: true,
                     textInputAction: TextInputAction.done,
                     onSubmitted: _save,

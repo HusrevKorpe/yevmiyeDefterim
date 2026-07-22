@@ -15,6 +15,7 @@ import '../../../core/widgets/gradient_header.dart';
 import '../application/advance_providers.dart';
 import '../data/advance.dart';
 import 'advance_edit_screen.dart';
+import 'widgets/advance_note_chip.dart';
 
 class AdvancesScreen extends ConsumerWidget {
   const AdvancesScreen({super.key});
@@ -101,7 +102,14 @@ class AdvancesScreen extends ConsumerWidget {
         for (final a in settled)
           ListTile(
             title: Text(a.workerName),
-            subtitle: Text(formatHumanDate(a.date)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(formatHumanDate(a.date)),
+                if (a.note != null && a.note!.isNotEmpty)
+                  AdvanceNoteChip(a.note!),
+              ],
+            ),
             trailing: Text(
               formatKurus(a.amountKurus),
               style: const TextStyle(fontWeight: FontWeight.w600),
@@ -186,6 +194,12 @@ class _WorkerAdvancesCard extends StatelessWidget {
             ListTile(
               dense: true,
               title: Text(formatHumanDate(a.date)),
+              subtitle: a.note == null || a.note!.isEmpty
+                  ? null
+                  : Align(
+                      alignment: Alignment.centerLeft,
+                      child: AdvanceNoteChip(a.note!),
+                    ),
               trailing: Text(formatKurus(a.amountKurus)),
               onTap: () => onTapAdvance(a),
             ),

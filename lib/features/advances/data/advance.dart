@@ -29,6 +29,9 @@ abstract class Advance with _$Advance {
     /// Mahsup edildiği hakediş ID'si. Null => kapanmamış (bir sonraki döneme
     /// devreder). Doluysa kilitli/geçmiş (kural §6).
     String? settledPayrollId,
+
+    /// İsteğe bağlı kısa açıklama (ör. neden/nasıl verildiği).
+    String? note,
   }) = _Advance;
 
   /// Kapanmamış (henüz bir hakedişte mahsup edilmemiş) avans mı?
@@ -45,6 +48,7 @@ abstract class Advance with _$Advance {
       amountKurus: _asInt(m['amountKurus']),
       date: (m['date'] as String?) ?? '',
       settledPayrollId: m['settledPayrollId'] as String?,
+      note: (m['note'] as String?)?.trim(),
     );
   }
 
@@ -55,6 +59,7 @@ abstract class Advance with _$Advance {
         'amountKurus': amountKurus,
         'date': date,
         'settledPayrollId': settledPayrollId,
+        'note': note,
       };
 }
 

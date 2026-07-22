@@ -20,8 +20,11 @@ class LedgerSummary {
   /// Gider kategorisine göre kırılım (kategori kodu → kuruş).
   final Map<String, int> expenseByCategory;
 
+  /// Verilen kategorinin dönem gideri (kuruş).
+  int categoryKurus(String category) => expenseByCategory[category] ?? 0;
+
   /// Dönemdeki mazot gideri (kuruş) — mazot ayrı takip edilir.
-  int get mazotKurus => expenseByCategory[LedgerCategory.mazot] ?? 0;
+  int get mazotKurus => categoryKurus(LedgerCategory.mazot);
 }
 
 /// Kayıt listesini toplam gider ve kategori kırılımına göre özetler.

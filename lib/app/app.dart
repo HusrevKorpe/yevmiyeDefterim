@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/notifications/push_notifications.dart';
 import 'router.dart';
 import 'theme.dart';
 import 'theme_mode.dart';
@@ -19,6 +20,9 @@ class YevmiyeApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeControllerProvider);
     return MaterialApp.router(
       title: 'Yevmiye Defterim',
+      // Ön planda gelen push'u SnackBar olarak göstermek için kök messenger
+      // (bkz. push_notifications.dart).
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),

@@ -10,7 +10,11 @@ void main() {
         startIso: '2026-07-01',
         endIso: '2026-07-31',
         expenseKurus: 200000,
-        expenseByCategory: const {'mazot': 120000},
+        expenseByCategory: const {
+          'mazot': 120000,
+          'tamir': 50000,
+          'bakkal': 30000,
+        },
         grossLaborKurus: 900000,
         netPaidKurus: 400000,
         advancesGivenKurus: 70000,
@@ -27,6 +31,8 @@ void main() {
     expect(csv, contains('İŞÇİLİK'));
     expect(csv, contains('Toplam gider;2.000,00')); // 200000 kuruş = 2000 TL
     expect(csv, contains('Mazot;1.200,00'));
+    expect(csv, contains('Tamir;500,00'));
+    expect(csv, contains('Bakkal;300,00'));
     expect(csv, contains('Tahakkuk eden brüt;9.000,00'));
   });
 

@@ -130,7 +130,7 @@ class _ReportBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(top: 4, bottom: 32),
       children: [
-        const _Section('Kasa'),
+        const _Section('Giderler'),
         LedgerSummaryCard(summary: kasa),
         const SizedBox(height: 8),
         ReportLaborCard(report: report),
@@ -195,7 +195,7 @@ class _EmptyReport extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Farklı bir dönem seçin ya da yoklama/kasa kaydı girin.',
+              'Farklı bir dönem seçin ya da yoklama/gider kaydı girin.',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,

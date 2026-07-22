@@ -4,6 +4,7 @@ import 'package:yevmiye_defterim/core/ids/ids.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_view_model.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
+import 'package:yevmiye_defterim/features/attendance/data/field.dart';
 import 'package:yevmiye_defterim/features/settings/application/settings_providers.dart';
 import 'package:yevmiye_defterim/features/settings/data/app_settings.dart';
 import 'package:yevmiye_defterim/features/workers/application/workers_providers.dart';
@@ -208,6 +209,18 @@ void main() {
     expect(crew.length, 2);
   });
 
+  // "Kaydet" → günün işaret dokümanı yazılır (attendanceDays/{date}) →
+  // Cloud Function diğer cihazlara "yoklama alındı" push bildirimi gönderir.
+  test('markDaySaved: seçili günün işaret dokümanı yazılır', () async {
+    await boot(settings);
+    container.read(selectedDateProvider.notifier).set('2026-07-22');
+
+    await vm().markDaySaved();
+
+    expect(attendance.markedDays, ['2026-07-22']);
+    expect(attendance.count, 0); // yoklama verisine dokunulmaz
+  });
+
   test('ücret zammı geçmiş snapshot\'ı değiştirmez; yeni gün yeni ücret alır',
       () async {
     await boot(settings);
@@ -315,5 +328,132 @@ void main() {
     final r = attendance.all.single as IndividualAttendance;
     expect(r.isPaid, isFalse);
     expect(r.status, AttendanceStatus.full);
+  });
+
+  // --- Tarla seçimi (setField) — "kim nerede çalıştı" (isteğe bağlı) ---
+
+  group('tarla seçimi (setField)', () {
+    const tarla = Field(id: 't1', name: 'Aşağı Tarla');
+
+    test('bireysel: kayda tarla yazılır; durum değişince korunur', () async {
+      await boot(settings);
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+
+      await vm().setStatus(male, AttendanceStatus.full);
+      await waitUntil(() => container
+          .read(attendanceByWorkerForDateProvider)
+          .containsKey(male.id));
+      await vm().setField(male, tarla);
+
+      var r = attendance.all.single as IndividualAttendance;
+      expect(r.fieldId, 't1');
+      expect(r.fieldName, 'Aşağı Tarla'); // ad denormalize donduruldu
+      expect(r.status, AttendanceStatus.full); // durum bozulmadı
+
+      // Durum Tam → Yarım: tarla seçimi mevcut kayıttan taşınır.
+      await waitUntil(() =>
+          container.read(attendanceByWorkerForDateProvider)[male.id]?.fieldId ==
+          't1');
+      await vm().setStatus(male, AttendanceStatus.half);
+      r = attendance.all.single as IndividualAttendance;
+      expect(r.status, AttendanceStatus.half);
+      expect(r.fieldId, 't1');
+      expect(r.fieldName, 'Aşağı Tarla');
+      expect(attendance.count, 1); // çift kayıt yok (deterministik ID)
+    });
+
+    test('null ile seçim kaldırılır', () async {
+      await boot(settings);
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+
+      await vm().setStatus(male, AttendanceStatus.full);
+      await waitUntil(() => container
+          .read(attendanceByWorkerForDateProvider)
+          .containsKey(male.id));
+      await vm().setField(male, tarla);
+      await waitUntil(() =>
+          container.read(attendanceByWorkerForDateProvider)[male.id]?.fieldId ==
+          't1');
+
+      await vm().setField(male, null);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.fieldId, isNull);
+      expect(r.fieldName, isNull);
+      expect(r.status, AttendanceStatus.full); // durum bozulmadı
+    });
+
+    test('bireysel: kaydı olmayan işçide no-op (çipler zaten gizli)', () async {
+      await boot(settings);
+      await loadSelectedDate();
+      await vm().setField(male, tarla);
+      expect(attendance.count, 0);
+      expect(container.read(attendanceViewModelProvider), isNull);
+    });
+
+    test('elebaşı: kaydı yokken tarla seçmek crewSize ile kesinleştirir',
+        () async {
+      await boot(settings);
+      const boss = Worker(
+        id: 'e1',
+        name: 'Usta',
+        type: WorkerType.elebasi,
+        gender: Gender.male,
+        defaultHeadcount: 7,
+      );
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+
+      await vm().setField(boss, tarla);
+
+      final r = attendance.all.single as CrewAttendance;
+      expect(r.headcount, 7); // önden dolu mevcut kalıcılaştı
+      expect(r.crewRateSnapshotKurus, 150000); // ücret donduruldu
+      expect(r.fieldId, 't1');
+      expect(r.fieldName, 'Aşağı Tarla');
+    });
+
+    test('elebaşı: crewSize girilmemişse (0) kaydı yokken no-op', () async {
+      await boot(settings);
+      const boss = Worker(
+        id: 'e1',
+        name: 'Usta',
+        type: WorkerType.elebasi,
+        gender: Gender.male,
+      );
+      await loadSelectedDate();
+      await vm().setField(boss, tarla);
+      expect(attendance.count, 0);
+    });
+
+    test('elebaşı: kişi sayısı değişince tarla korunur', () async {
+      await boot(settings);
+      const boss = Worker(
+        id: 'e1',
+        name: 'Usta',
+        type: WorkerType.elebasi,
+        gender: Gender.male,
+      );
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+
+      await vm().setHeadcount(boss, 4);
+      await waitUntil(() => container
+          .read(attendanceByWorkerForDateProvider)
+          .containsKey(boss.id));
+      await vm().setField(boss, tarla);
+      await waitUntil(() =>
+          container.read(attendanceByWorkerForDateProvider)[boss.id]?.fieldId ==
+          't1');
+
+      await vm().setHeadcount(boss, 6);
+
+      final r = attendance.all.single as CrewAttendance;
+      expect(r.headcount, 6);
+      expect(r.fieldId, 't1'); // tarla taşındı
+      expect(r.fieldName, 'Aşağı Tarla');
+    });
   });
 }

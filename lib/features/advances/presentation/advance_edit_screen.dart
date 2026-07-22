@@ -1,7 +1,8 @@
 /// Avans ekle/düzenle ekranı (kural §8: ikon+yazı, onay, ₺ giriş).
 ///
 /// Yeni: işçi seç + tutar + tarih. Düzenle: işçi sabit, tutar/tarih değişir,
-/// açık avans silinebilir. Elebaşıya avans yok (kural §10) → listeden hariç.
+/// açık avans silinebilir. Elebaşı da avans alabilir (2026-07-22: kural §10
+/// gevşetildi — yoklamadaki elebaşı kartından da açılır).
 library;
 
 import 'package:flutter/material.dart';
@@ -20,10 +21,14 @@ import '../application/advance_view_model.dart';
 import '../data/advance.dart';
 
 class AdvanceEditScreen extends ConsumerStatefulWidget {
-  const AdvanceEditScreen({super.key, this.advance});
+  const AdvanceEditScreen({super.key, this.advance, this.initialWorkerId});
 
   /// Düzenlenecek avans; null ise yeni avans.
   final Advance? advance;
+
+  /// Yeni avansta işçi ön-seçili gelsin (yoklamadaki elebaşı kartından açılış).
+  /// Yalnız [advance] null iken anlamlı; düzenlemede işçi zaten sabittir.
+  final String? initialWorkerId;
 
   @override
   ConsumerState<AdvanceEditScreen> createState() => _AdvanceEditScreenState();
@@ -32,6 +37,7 @@ class AdvanceEditScreen extends ConsumerStatefulWidget {
 class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _amountCtrl;
+  late final TextEditingController _noteCtrl;
   String? _workerId;
   late String _date;
 
@@ -48,7 +54,8 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     _amountCtrl = TextEditingController(
       text: a == null ? '' : formatKurusPlain(a.amountKurus),
     );
-    _workerId = a?.workerId;
+    _noteCtrl = TextEditingController(text: a?.note ?? '');
+    _workerId = a?.workerId ?? widget.initialWorkerId;
     _date = a?.date ?? todayIso();
     if (a != null) _loadBaseRev(a.id);
   }
@@ -101,6 +108,7 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
   @override
   void dispose() {
     _amountCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 
@@ -118,6 +126,7 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     final existing = widget.advance;
     final workerName = existing?.workerName ??
         workers.firstWhere((w) => w.id == _workerId).name;
+    final note = _noteCtrl.text.trim();
 
     final advance = Advance(
       id: existing?.id ?? newId(),
@@ -126,6 +135,7 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
       amountKurus: amount,
       date: _date,
       settledPayrollId: existing?.settledPayrollId,
+      note: note.isEmpty ? null : note,
     );
 
     // Düzenlemede avans başka cihazda değiştiyse üzerine yazmadan önce onay.
@@ -175,12 +185,13 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     });
 
     final saving = ref.watch(advanceEditViewModelProvider).saving;
-    // Elebaşı hariç aktif işçiler (avans yalnız bireysel işçiye).
-    final workers = ref
-        .watch(activeWorkersProvider)
-        .where((w) => w.type.isIndividual)
-        .toList();
+    // Tüm aktif işçiler — elebaşı dahil (elebaşı da avans alabilir).
+    final workers = ref.watch(activeWorkersProvider);
     final existing = widget.advance;
+    // Ön-seçili işçi listede yoksa (ör. bu arada pasife alındı) seçimi düşür —
+    // dropdown initialValue listede olmayan değerle assert atar.
+    final selectedId =
+        workers.any((w) => w.id == _workerId) ? _workerId : null;
 
     return Scaffold(
       appBar: GradientAppBar(title: _isNew ? 'Avans Ver' : 'Avansı Düzenle'),
@@ -194,7 +205,7 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
               const FieldLabel('İşçi'),
               if (_isNew)
                 DropdownButtonFormField<String>(
-                  initialValue: _workerId,
+                  initialValue: selectedId,
                   isExpanded: true,
                   decoration: entryFieldDecoration(
                     context,
@@ -203,7 +214,12 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
                   ),
                   items: [
                     for (final w in workers)
-                      DropdownMenuItem(value: w.id, child: Text(w.name)),
+                      DropdownMenuItem(
+                        value: w.id,
+                        child: Text(
+                          w.type.isCrew ? '${w.name} (Elebaşı)' : w.name,
+                        ),
+                      ),
                   ],
                   onChanged:
                       saving ? null : (v) => setState(() => _workerId = v),
@@ -224,6 +240,20 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
                 icon: Icons.event,
                 value: formatHumanDateNoWeekday(_date),
                 onTap: saving ? null : _pickDate,
+              ),
+              const SizedBox(height: 24),
+              const FieldLabel('Açıklama (isteğe bağlı)'),
+              TextFormField(
+                controller: _noteCtrl,
+                enabled: !saving,
+                textCapitalization: TextCapitalization.sentences,
+                minLines: 1,
+                maxLines: 3,
+                decoration: entryFieldDecoration(
+                  context,
+                  hint: 'Kısa açıklama ekleyin',
+                  icon: Icons.notes,
+                ),
               ),
               const SizedBox(height: 32),
               FilledButton.icon(

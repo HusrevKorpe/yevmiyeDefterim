@@ -116,6 +116,62 @@ void main() {
     });
   });
 
+  group('fieldId/fieldName — çalışılan tarla (denormalize, kural §5)', () {
+    test('varsayılan boş (tarla seçilmemiş)', () {
+      final r = ind(AttendanceStatus.full, 200000);
+      expect(r.fieldId, isNull);
+      expect(r.fieldName, isNull);
+    });
+
+    test('bireysel round-trip (tarla dolu)', () {
+      final r = AttendanceRecord.individual(
+        id: '2026-07-18_w1',
+        date: '2026-07-18',
+        workerId: 'w1',
+        workerName: 'Ahmet',
+        workerType: WorkerType.gundelik,
+        status: AttendanceStatus.full,
+        wageSnapshotKurus: 200000,
+        fieldId: 't1',
+        fieldName: 'Aşağı Tarla',
+      );
+      expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
+    });
+
+    test('elebaşı round-trip (tarla dolu)', () {
+      final r = AttendanceRecord.crew(
+        id: '2026-07-18_e1',
+        date: '2026-07-18',
+        workerId: 'e1',
+        workerName: 'Usta',
+        headcount: 4,
+        crewRateSnapshotKurus: 160000,
+        fieldId: 't2',
+        fieldName: 'Yukarı Bağ',
+      );
+      expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
+    });
+
+    test('toMap tarla null iken de alanı YAZAR (merge:true altında temizler)',
+        () {
+      final m = ind(AttendanceStatus.full, 200000).toMap();
+      expect(m.containsKey('fieldId'), isTrue);
+      expect(m['fieldId'], isNull);
+      expect(m.containsKey('fieldName'), isTrue);
+      expect(m['fieldName'], isNull);
+    });
+
+    test('tarla alanı olmayan eski doküman sorunsuz okunur (null)', () {
+      final r = AttendanceRecord.fromDoc('x', {
+        'workerType': 'gundelik',
+        'status': 'full',
+        'wageSnapshotKurus': 200000,
+      });
+      expect(r.fieldId, isNull);
+      expect(r.fieldName, isNull);
+    });
+  });
+
   group('paidPayrollId / isPaid (çifte ödeme engeli — kural §6)', () {
     test('varsayılan ödenmemiş', () {
       expect(ind(AttendanceStatus.full, 200000).isPaid, isFalse);

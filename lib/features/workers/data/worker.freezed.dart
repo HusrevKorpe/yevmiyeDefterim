@@ -14,8 +14,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$Worker {
 
- String get id; String get name; WorkerType get type; Gender get gender;/// İşçiye özel günlük ücret (kuruş). Null => varsayılan ücret kullanılır.
-/// Elebaşı için anlamsız (kişi başı ücret ayarlardan gelir).
+ String get id; String get name; WorkerType get type; Gender get gender;/// İşçinin günlük ücreti (kuruş). Sabit/varsayılan yevmiye kaldırıldı →
+/// bireysel işçide bu alan TEK ücret kaynağıdır (ekle/düzenlede zorunlu).
+/// Null yalnız eski ya da kısıtlı-hesap kayıtlarında olur → yoklamada 0 sayılır.
+/// Elebaşı için anlamsız (ödeme toplu, kişi bazlı ücret yok).
  int? get dailyWageOverrideKurus;/// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
 /// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para
 /// hesabına GİRMEZ (günlük kişi sayısı yoklamada ayrıca tutulur). Yalnız
@@ -226,8 +228,10 @@ class _Worker extends Worker {
 @override final  String name;
 @override final  WorkerType type;
 @override final  Gender gender;
-/// İşçiye özel günlük ücret (kuruş). Null => varsayılan ücret kullanılır.
-/// Elebaşı için anlamsız (kişi başı ücret ayarlardan gelir).
+/// İşçinin günlük ücreti (kuruş). Sabit/varsayılan yevmiye kaldırıldı →
+/// bireysel işçide bu alan TEK ücret kaynağıdır (ekle/düzenlede zorunlu).
+/// Null yalnız eski ya da kısıtlı-hesap kayıtlarında olur → yoklamada 0 sayılır.
+/// Elebaşı için anlamsız (ödeme toplu, kişi bazlı ücret yok).
 @override final  int? dailyWageOverrideKurus;
 /// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
 /// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para

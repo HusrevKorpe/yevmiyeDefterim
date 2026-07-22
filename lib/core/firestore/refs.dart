@@ -38,3 +38,16 @@ DocumentReference<Map<String, dynamic>> settingsDocRef(FirebaseFirestore db) =>
     workspaceRef(db)
         .collection(FsCollections.settings)
         .doc(kSettingsDocId);
+
+/// `workspaces/main/attendanceDays` — "günün yoklaması kaydedildi" işaretleri.
+CollectionReference<Map<String, dynamic>> attendanceDaysCol(
+        FirebaseFirestore db) =>
+    workspaceRef(db).collection(FsCollections.attendanceDays);
+
+/// `workspaces/main/fcmTokens` — cihaz push token kayıtları.
+CollectionReference<Map<String, dynamic>> fcmTokensCol(FirebaseFirestore db) =>
+    workspaceRef(db).collection(FsCollections.fcmTokens);
+
+/// `workspaces/main/fields` — yoklamadaki tarla seçiminin kaynağı.
+CollectionReference<Map<String, dynamic>> fieldsCol(FirebaseFirestore db) =>
+    workspaceRef(db).collection(FsCollections.fields);

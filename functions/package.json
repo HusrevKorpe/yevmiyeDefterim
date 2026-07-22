@@ -1,0 +1,13 @@
+{
+  "name": "yevmiye-defterim-functions",
+  "description": "Yevmiye Defterim Cloud Functions — yoklama push bildirimi",
+  "private": true,
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.1.0"
+  }
+}

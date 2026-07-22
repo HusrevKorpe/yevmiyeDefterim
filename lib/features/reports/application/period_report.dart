@@ -85,6 +85,12 @@ class PeriodReport {
   /// Dönem mazot gideri (kuruş).
   int get mazotKurus => expenseByCategory[LedgerCategory.mazot] ?? 0;
 
+  /// Dönem tamir gideri (kuruş).
+  int get tamirKurus => expenseByCategory[LedgerCategory.tamir] ?? 0;
+
+  /// Dönem bakkal gideri (kuruş).
+  int get bakkalKurus => expenseByCategory[LedgerCategory.bakkal] ?? 0;
+
   /// Rapor tamamen boş mu? (Hiç kayıt yok.)
   bool get isEmpty =>
       expenseKurus == 0 &&

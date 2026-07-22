@@ -31,6 +31,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
   ///
   /// [paidPayrollId]: bu gün bir hakedişte ödendiyse dolar (Faz 2). Yalnız "Öde"
   /// batch'i alan-bazlı yazar; normal yoklama kaydı bu alanı EZMEZ (kural §3).
+  ///
+  /// [fieldId]/[fieldName]: o gün çalışılan tarla (İSTEĞE BAĞLI seçim — "kim
+  /// nerede çalıştı"). Ad denormalize saklanır (kural §5): tarla sonradan
+  /// silinse/adı değişse bile geçmiş kayıt okunur kalır.
   const factory AttendanceRecord.individual({
     required String id,
     required String date,
@@ -40,11 +44,14 @@ sealed class AttendanceRecord with _$AttendanceRecord {
     required AttendanceStatus status,
     required int wageSnapshotKurus,
     String? paidPayrollId,
+    String? fieldId,
+    String? fieldName,
   }) = IndividualAttendance;
 
   /// Elebaşı: kişi sayısı + o günkü kişi-başı ücret dondurulmuş.
   /// [agreedPayKurus] doluysa günlük toplam ona eşittir (kural §10).
   /// [paidPayrollId]: bkz. [AttendanceRecord.individual].
+  /// [fieldId]/[fieldName]: bkz. [AttendanceRecord.individual].
   const factory AttendanceRecord.crew({
     required String id,
     required String date,
@@ -54,6 +61,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
     required int crewRateSnapshotKurus,
     int? agreedPayKurus,
     String? paidPayrollId,
+    String? fieldId,
+    String? fieldName,
   }) = CrewAttendance;
 
   /// Bu gün bir hakedişte ödendi mi? Ödenen günler hakediş brütüne tekrar
@@ -89,6 +98,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
           :final workerType,
           :final status,
           :final wageSnapshotKurus,
+          :final fieldId,
+          :final fieldName,
         ) =>
           {
             'date': date,
@@ -97,6 +108,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
             'workerType': workerType.name,
             'status': status.name,
             'wageSnapshotKurus': wageSnapshotKurus,
+            // Bilerek null'ken de yazılır: merge:true altında tarla seçimini
+            // kaldırmak (null) Firestore'daki eski değeri de temizlemeli.
+            'fieldId': fieldId,
+            'fieldName': fieldName,
           },
         CrewAttendance(
           :final date,
@@ -105,6 +120,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
           :final headcount,
           :final crewRateSnapshotKurus,
           :final agreedPayKurus,
+          :final fieldId,
+          :final fieldName,
         ) =>
           {
             'date': date,
@@ -114,6 +131,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
             'headcount': headcount,
             'crewRateSnapshotKurus': crewRateSnapshotKurus,
             'agreedPayKurus': agreedPayKurus,
+            'fieldId': fieldId,
+            'fieldName': fieldName,
           },
       };
 
@@ -135,6 +154,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
         crewRateSnapshotKurus: _asInt(m['crewRateSnapshotKurus']),
         agreedPayKurus: _asIntOrNull(m['agreedPayKurus']),
         paidPayrollId: m['paidPayrollId'] as String?,
+        fieldId: m['fieldId'] as String?,
+        fieldName: m['fieldName'] as String?,
       );
     }
     return AttendanceRecord.individual(
@@ -146,6 +167,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
       status: _statusFromName(m['status']),
       wageSnapshotKurus: _asInt(m['wageSnapshotKurus']),
       paidPayrollId: m['paidPayrollId'] as String?,
+      fieldId: m['fieldId'] as String?,
+      fieldName: m['fieldName'] as String?,
     );
   }
 }

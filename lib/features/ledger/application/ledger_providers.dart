@@ -2,13 +2,12 @@
 ///
 /// Dönem seçimi → o dönemin kayıtları (aralık sorgusu). Dönem özeti ekranda,
 /// veri hazır olunca saf `summarizeLedger` ile türetilir (yükleniyor/hata
-/// durumunda ₺0 boş özet gösterilmez). Mazot ekranı için tüm mazot kayıtları
-/// ayrıca sunulur.
+/// durumunda ₺0 boş özet gösterilmez). Kategori ekranları (Mazot/Tamir/Bakkal)
+/// için kategorinin tüm kayıtları ayrıca sunulur.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/categories.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/firestore/firestore_providers.dart';
 import '../data/ledger_entry.dart';
@@ -20,7 +19,7 @@ final Provider<LedgerRepository> ledgerRepositoryProvider =
   (ref) => FirestoreLedgerRepository(ref.watch(firestoreProvider)),
 );
 
-/// Tüm kayıtlar (elle + otomatik) — Mazot ekranı ve genel izleme.
+/// Tüm kayıtlar (elle + otomatik) — kategori ekranları ve genel izleme.
 final StreamProvider<List<LedgerEntry>> ledgerStreamProvider =
     StreamProvider<List<LedgerEntry>>(
   (ref) => ref.watch(ledgerRepositoryProvider).watchAll(),
@@ -82,13 +81,12 @@ final StreamProvider<List<LedgerEntry>> ledgerInPeriodProvider =
   });
 });
 
-/// Tüm mazot gider kayıtları (dönemden bağımsız), yeni→eski — Mazot ekranı.
-final Provider<List<LedgerEntry>> mazotEntriesProvider =
-    Provider<List<LedgerEntry>>((ref) {
+/// Bir kategorinin tüm gider kayıtları (dönemden bağımsız), yeni→eski —
+/// kategori ekranları (Mazot/Tamir/Bakkal).
+final categoryEntriesProvider =
+    Provider.family<List<LedgerEntry>, String>((ref, category) {
   final all = ref.watch(ledgerStreamProvider).asData?.value ?? const [];
-  final mazot = all
-      .where((e) => e.category == LedgerCategory.mazot)
-      .toList()
+  final entries = all.where((e) => e.category == category).toList()
     ..sort((a, b) => b.date.compareTo(a.date));
-  return mazot;
+  return entries;
 });

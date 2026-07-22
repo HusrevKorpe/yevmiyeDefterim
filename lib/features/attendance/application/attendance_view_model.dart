@@ -12,6 +12,7 @@ import '../../settings/data/app_settings.dart';
 import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import '../data/attendance_record.dart';
+import '../data/field.dart';
 import 'attendance_providers.dart';
 import 'wage.dart';
 
@@ -22,20 +23,16 @@ class AttendanceViewModel extends Notifier<String?> {
   // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
   // Ödenmiş (hakedişe girmiş) gün düzenlenemez — donmuş hakedişi bozmamak için
   // (kural §3, §6; plan §8 riski). UI'da tile kilitliydi; bu VM guard'ı savunma
-  // derinliğiydi. Hakedişi geri açınca aşağıdaki sabiti + `_existing()` yardımcısını
-  // ve setStatus/setHeadcount içindeki guard'ları birlikte aç.
+  // derinliğiydi. Hakedişi geri açınca aşağıdaki sabiti ve setStatus/setHeadcount
+  // içindeki guard'ları birlikte aç (mevcut kayıt okuma: [_existing]).
   // static const String _paidLockMessage = 'Bu gün ödendiği için düzenlenemez.';
-  //
-  // /// Seçili günde bu işçinin mevcut yoklama kaydı (yoksa null).
-  // AttendanceRecord? _existing(String workerId) {
-  //   final records =
-  //       ref.read(attendanceForSelectedDateProvider).asData?.value ?? const [];
-  //   for (final r in records) {
-  //     if (r.workerId == workerId) return r;
-  //   }
-  //   return null;
-  // }
   // --- /ÖDEME KİLİDİ ---
+
+  /// Seçili günde bu işçinin mevcut yoklama kaydı (yoksa null). Durum/sayı
+  /// değişiminde tarla seçimini korumak ve [setField]'de kaydı bulmak için
+  /// okunur (ekran bu haritayı zaten canlı tutar).
+  AttendanceRecord? _existing(String workerId) =>
+      ref.read(attendanceByWorkerForDateProvider)[workerId];
 
   AppSettings get _settings =>
       ref.read(settingsStreamProvider).asData?.value ?? AppSettings.empty;
@@ -56,6 +53,8 @@ class AttendanceViewModel extends Notifier<String?> {
       maleWageKurus: settings.defaultWageMaleKurus,
       femaleWageKurus: settings.defaultWageFemaleKurus,
     );
+    // Durum değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
+    final existing = _existing(worker.id);
     await _save(AttendanceRecord.individual(
       id: attendanceDocId(date, worker.id),
       date: date,
@@ -64,6 +63,8 @@ class AttendanceViewModel extends Notifier<String?> {
       workerType: worker.type,
       status: status,
       wageSnapshotKurus: wage,
+      fieldId: existing?.fieldId,
+      fieldName: existing?.fieldName,
     ));
   }
 
@@ -91,6 +92,8 @@ class AttendanceViewModel extends Notifier<String?> {
     // }
     final date = ref.read(selectedDateProvider);
     final count = headcount < 0 ? 0 : headcount;
+    // Sayı değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
+    final existing = _existing(worker.id);
     await _save(AttendanceRecord.crew(
       id: attendanceDocId(date, worker.id),
       date: date,
@@ -98,7 +101,42 @@ class AttendanceViewModel extends Notifier<String?> {
       workerName: worker.name,
       headcount: count,
       crewRateSnapshotKurus: _settings.defaultCrewRateKurus,
+      fieldId: existing?.fieldId,
+      fieldName: existing?.fieldName,
     ));
+  }
+
+  /// O günün kaydına çalışılan tarlayı yazar; `field == null` seçimi kaldırır.
+  /// Seçim İSTEĞE BAĞLIDIR ("kim nerede çalıştı" bilgisi); ad denormalize
+  /// dondurulur (kural §5) — tarla sonradan silinse de geçmiş okunur kalır.
+  ///
+  /// Bireysel işçide çipler ancak Tam/Yarım seçiliyken görünür → kayıt yoksa
+  /// sessiz no-op. Elebaşında kayıt yoksa önden dolu görünen mevcut (crewSize)
+  /// tarlayla birlikte kesinleştirilir (+/- dokunuşuyla aynı davranış).
+  Future<void> setField(Worker worker, Field? field) async {
+    final existing = _existing(worker.id);
+    if (existing == null) {
+      if (worker.type.isCrew && worker.crewSize > 0) {
+        final date = ref.read(selectedDateProvider);
+        await _save(AttendanceRecord.crew(
+          id: attendanceDocId(date, worker.id),
+          date: date,
+          workerId: worker.id,
+          workerName: worker.name,
+          headcount: worker.crewSize,
+          crewRateSnapshotKurus: _settings.defaultCrewRateKurus,
+          fieldId: field?.id,
+          fieldName: field?.name,
+        ));
+      }
+      return;
+    }
+    await _save(switch (existing) {
+      IndividualAttendance() =>
+        existing.copyWith(fieldId: field?.id, fieldName: field?.name),
+      CrewAttendance() =>
+        existing.copyWith(fieldId: field?.id, fieldName: field?.name),
+    });
   }
 
   /// "Kaydet" dokunuşunda çağrılır. Yoklamada elebaşı sayacı, işçiye kayıtlı
@@ -116,6 +154,20 @@ class AttendanceViewModel extends Notifier<String?> {
         continue;
       }
       await setHeadcount(w, w.crewSize);
+    }
+  }
+
+  /// "Kaydet" dokunuşunda günün işaret dokümanını yazar → Cloud Function
+  /// DİĞER cihazlara "yoklama alındı" push bildirimi gönderir. Bilerek
+  /// beklenmeden (unawaited) çağrılır: offline'da Firestore yazım Future'ı
+  /// sunucu onayına dek tamamlanmaz; bildirim işareti UI'ı asla bekletmemeli.
+  Future<void> markDaySaved() async {
+    try {
+      await ref
+          .read(attendanceRepositoryProvider)
+          .markDaySaved(ref.read(selectedDateProvider));
+    } catch (_) {
+      // Bildirim işareti yazılamazsa sessiz geç — yoklama verisi etkilenmez.
     }
   }
 

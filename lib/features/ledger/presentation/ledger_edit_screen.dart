@@ -12,6 +12,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/app_date_picker.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/ledger_edit_view_model.dart';
@@ -315,11 +316,6 @@ class _CategoryPicker extends StatelessWidget {
   final String selected;
   final ValueChanged<String>? onSelected;
 
-  static const Map<String, IconData> _icons = {
-    LedgerCategory.mazot: Icons.local_gas_station,
-    LedgerCategory.genel: Icons.receipt_long,
-  };
-
   @override
   Widget build(BuildContext context) {
     return Wrap(
@@ -330,7 +326,7 @@ class _CategoryPicker extends StatelessWidget {
           SelectableChip(
             selected: selected == c,
             label: LedgerCategory.label(c),
-            icon: _icons[c] ?? Icons.category_outlined,
+            icon: categoryIcon(c),
             onSelected: onSelected == null ? null : (_) => onSelected!(c),
           ),
       ],

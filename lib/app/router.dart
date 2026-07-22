@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../core/constants/routes.dart';
 import '../features/advances/presentation/advances_screen.dart';
 import '../features/attendance/presentation/attendance_screen.dart';
+import '../features/attendance/presentation/fields_screen.dart';
 import '../features/attendance/presentation/monthly_attendance_screen.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/application/user_access.dart';
@@ -53,9 +54,10 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       // main_shell gizler; bu router katmanı ikinci güvenlik hattıdır).
       // Aylık yoklama BİLEREK listede yok: erişilebilir kalır, sadece
       // içindeki tutarlar gizlenir (bkz. monthly_attendance_screen).
+      // Giderler (/kasa) da BİLEREK listede yok: kısıtlı hesap gider
+      // girebilsin/görebilsin diye açıldı (main_shell'de sekmesi de görünür).
       if (isMoneyRestricted(user.email)) {
         const blocked = <String>{
-          AppRoutes.ledger,
           AppRoutes.advances,
           AppRoutes.report,
           AppRoutes.settings,
@@ -84,6 +86,13 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.monthlyAttendance,
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const MonthlyAttendanceScreen(),
+      ),
+      // Tarlalar BİLEREK kısıtlı-hesap engel listesinde yok: para içermez,
+      // yoklama gibi herkese açıktır (bkz. redirect'teki `blocked`).
+      GoRoute(
+        path: AppRoutes.fields,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const FieldsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

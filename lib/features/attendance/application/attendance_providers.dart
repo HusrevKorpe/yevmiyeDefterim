@@ -27,6 +27,25 @@ class SelectedDateNotifier extends Notifier<String> {
 final NotifierProvider<SelectedDateNotifier, String> selectedDateProvider =
     NotifierProvider<SelectedDateNotifier, String>(SelectedDateNotifier.new);
 
+/// Geçmiş gün düzenleme onayı: onay verilen gün (`'yyyy-MM-dd'`) burada tutulur.
+///
+/// Yoklamada bugün DIŞINDAKİ bir güne ilk değişiklik dokunuşu onay
+/// diyaloğundan geçer (yanlışlıkla dokunup geçmişi bozma koruması,
+/// bkz. attendance_screen). Onaylanınca gün buraya yazılır → aynı günde tekrar
+/// sorulmaz (dünün yoklamasını topluca girerken her dokunuşta diyalog çıkmasın).
+/// Başka güne geçilince eşleşme bozulur, onay yeniden istenir.
+class PastEditUnlockNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void unlock(String isoDate) => state = isoDate;
+}
+
+final NotifierProvider<PastEditUnlockNotifier, String?>
+    pastEditUnlockedDateProvider =
+    NotifierProvider<PastEditUnlockNotifier, String?>(
+        PastEditUnlockNotifier.new);
+
 /// Seçili günün yoklama kayıtları.
 final StreamProvider<List<AttendanceRecord>> attendanceForSelectedDateProvider =
     StreamProvider<List<AttendanceRecord>>((ref) {

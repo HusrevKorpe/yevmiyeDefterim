@@ -8,29 +8,33 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/application/user_access.dart';
 import 'theme.dart';
 
-/// 5 büyük alt menü: Ana Sayfa, İşçiler, Yoklama, Avans, Kasa.
+/// 5 büyük alt menü: Ana Sayfa, İşçiler, Yoklama, Avans, Giderler.
 /// (Hakediş sekmesi şimdilik rafta — aşağıdaki işaretli bloğu ve router'daki
 /// eşi olan branch'i geri açınca dönecek.)
 ///
-/// Para/gider kısıtlı hesapta son iki sekme (Avans, Kasa) gizlenir. Bunlar
-/// listenin SONUNDA olduğu için kaldırılınca kalan sekmelerin indeksi (0,1,2)
-/// router branch'leriyle hizalı kalır — kayma olmaz.
+/// Para/gider kısıtlı hesapta yalnız Avans sekmesi gizlenir; Giderler AÇIK
+/// kalır (kısıtlı hesap gider girebilsin diye). Avans ortadan kalkınca görünür
+/// sekme sırası ile router branch indeksi kayar → `branchIndexes` eşlemesi
+/// görünür sekmeyi doğru branch'e çevirir.
 class MainShell extends ConsumerWidget {
   const MainShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
-  void _onTap(int index) {
+  void _onTap(int branchIndex) {
     navigationShell.goBranch(
-      index,
+      branchIndex,
       // Aynı sekmeye tekrar basınca kökene dön.
-      initialLocation: index == navigationShell.currentIndex,
+      initialLocation: branchIndex == navigationShell.currentIndex,
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final canSeeMoney = ref.watch(canSeeMoneyProvider);
+    // Router branch sırası: 0=Ana Sayfa, 1=İşçiler, 2=Yoklama, 3=Avans,
+    // 4=Giderler. `destinations` ile birebir aynı koşullarla kurulmalı.
+    final branchIndexes = <int>[0, 1, 2, if (canSeeMoney) 3, 4];
     final destinations = <NavigationDestination>[
       const NavigationDestination(
         icon: Icon(Icons.home_outlined),
@@ -57,13 +61,16 @@ class MainShell extends ConsumerWidget {
           selectedIcon: Icon(Icons.payments),
           label: 'Avans',
         ),
-      if (canSeeMoney)
-        const NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          selectedIcon: Icon(Icons.account_balance_wallet),
-          label: 'Kasa',
-        ),
+      const NavigationDestination(
+        icon: Icon(Icons.account_balance_wallet_outlined),
+        selectedIcon: Icon(Icons.account_balance_wallet),
+        label: 'Giderler',
+      ),
     ];
+
+    // Aktif branch görünür sekmelerden birine denk gelmiyorsa (ör. kısıtlı
+    // hesapta Avans branch'i) ilk sekmeyi işaretle.
+    final selectedIndex = branchIndexes.indexOf(navigationShell.currentIndex);
 
     return Scaffold(
       body: navigationShell,
@@ -77,11 +84,9 @@ class MainShell extends ConsumerWidget {
           // ikon+etiket içeriği de aşağı kayar (bar alta sabittir).
           height: 64,
           backgroundColor: Colors.transparent,
-          // Kısıtlı hesapta sekme sayısı düşer; güvenlik için currentIndex'i
-          // geçerli aralığa sıkıştır (assert koruması).
-          selectedIndex:
-              navigationShell.currentIndex.clamp(0, destinations.length - 1),
-          onDestinationSelected: _onTap,
+          selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+          // Görünür sekme indeksini gerçek branch indeksine çevir.
+          onDestinationSelected: (i) => _onTap(branchIndexes[i]),
           destinations: destinations,
         ),
       ),

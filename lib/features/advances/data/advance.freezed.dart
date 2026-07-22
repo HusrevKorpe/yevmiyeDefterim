@@ -19,7 +19,8 @@ mixin _$Advance {
  int get amountKurus;/// Avansın verildiği yerel iş günü (`'yyyy-MM-dd'`).
  String get date;/// Mahsup edildiği hakediş ID'si. Null => kapanmamış (bir sonraki döneme
 /// devreder). Doluysa kilitli/geçmiş (kural §6).
- String? get settledPayrollId;
+ String? get settledPayrollId;/// İsteğe bağlı kısa açıklama (ör. neden/nasıl verildiği).
+ String? get note;
 /// Create a copy of Advance
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -30,16 +31,16 @@ $AdvanceCopyWith<Advance> get copyWith => _$AdvanceCopyWithImpl<Advance>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Advance&&(identical(other.id, id) || other.id == id)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.settledPayrollId, settledPayrollId) || other.settledPayrollId == settledPayrollId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Advance&&(identical(other.id, id) || other.id == id)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.settledPayrollId, settledPayrollId) || other.settledPayrollId == settledPayrollId)&&(identical(other.note, note) || other.note == note));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,workerId,workerName,amountKurus,date,settledPayrollId);
+int get hashCode => Object.hash(runtimeType,id,workerId,workerName,amountKurus,date,settledPayrollId,note);
 
 @override
 String toString() {
-  return 'Advance(id: $id, workerId: $workerId, workerName: $workerName, amountKurus: $amountKurus, date: $date, settledPayrollId: $settledPayrollId)';
+  return 'Advance(id: $id, workerId: $workerId, workerName: $workerName, amountKurus: $amountKurus, date: $date, settledPayrollId: $settledPayrollId, note: $note)';
 }
 
 
@@ -50,7 +51,7 @@ abstract mixin class $AdvanceCopyWith<$Res>  {
   factory $AdvanceCopyWith(Advance value, $Res Function(Advance) _then) = _$AdvanceCopyWithImpl;
 @useResult
 $Res call({
- String id, String workerId, String workerName, int amountKurus, String date, String? settledPayrollId
+ String id, String workerId, String workerName, int amountKurus, String date, String? settledPayrollId, String? note
 });
 
 
@@ -67,7 +68,7 @@ class _$AdvanceCopyWithImpl<$Res>
 
 /// Create a copy of Advance
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? workerId = null,Object? workerName = null,Object? amountKurus = null,Object? date = null,Object? settledPayrollId = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? workerId = null,Object? workerName = null,Object? amountKurus = null,Object? date = null,Object? settledPayrollId = freezed,Object? note = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,workerId: null == workerId ? _self.workerId : workerId // ignore: cast_nullable_to_non_nullable
@@ -75,6 +76,7 @@ as String,workerName: null == workerName ? _self.workerName : workerName // igno
 as String,amountKurus: null == amountKurus ? _self.amountKurus : amountKurus // ignore: cast_nullable_to_non_nullable
 as int,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
 as String,settledPayrollId: freezed == settledPayrollId ? _self.settledPayrollId : settledPayrollId // ignore: cast_nullable_to_non_nullable
+as String?,note: freezed == note ? _self.note : note // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }
@@ -160,10 +162,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String workerId,  String workerName,  int amountKurus,  String date,  String? settledPayrollId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String workerId,  String workerName,  int amountKurus,  String date,  String? settledPayrollId,  String? note)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Advance() when $default != null:
-return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that.date,_that.settledPayrollId);case _:
+return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that.date,_that.settledPayrollId,_that.note);case _:
   return orElse();
 
 }
@@ -181,10 +183,10 @@ return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String workerId,  String workerName,  int amountKurus,  String date,  String? settledPayrollId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String workerId,  String workerName,  int amountKurus,  String date,  String? settledPayrollId,  String? note)  $default,) {final _that = this;
 switch (_that) {
 case _Advance():
-return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that.date,_that.settledPayrollId);case _:
+return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that.date,_that.settledPayrollId,_that.note);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +203,10 @@ return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String workerId,  String workerName,  int amountKurus,  String date,  String? settledPayrollId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String workerId,  String workerName,  int amountKurus,  String date,  String? settledPayrollId,  String? note)?  $default,) {final _that = this;
 switch (_that) {
 case _Advance() when $default != null:
-return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that.date,_that.settledPayrollId);case _:
+return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that.date,_that.settledPayrollId,_that.note);case _:
   return null;
 
 }
@@ -216,7 +218,7 @@ return $default(_that.id,_that.workerId,_that.workerName,_that.amountKurus,_that
 
 
 class _Advance extends Advance {
-  const _Advance({required this.id, required this.workerId, required this.workerName, required this.amountKurus, required this.date, this.settledPayrollId}): super._();
+  const _Advance({required this.id, required this.workerId, required this.workerName, required this.amountKurus, required this.date, this.settledPayrollId, this.note}): super._();
   
 
 @override final  String id;
@@ -230,6 +232,8 @@ class _Advance extends Advance {
 /// Mahsup edildiği hakediş ID'si. Null => kapanmamış (bir sonraki döneme
 /// devreder). Doluysa kilitli/geçmiş (kural §6).
 @override final  String? settledPayrollId;
+/// İsteğe bağlı kısa açıklama (ör. neden/nasıl verildiği).
+@override final  String? note;
 
 /// Create a copy of Advance
 /// with the given fields replaced by the non-null parameter values.
@@ -241,16 +245,16 @@ _$AdvanceCopyWith<_Advance> get copyWith => __$AdvanceCopyWithImpl<_Advance>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Advance&&(identical(other.id, id) || other.id == id)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.settledPayrollId, settledPayrollId) || other.settledPayrollId == settledPayrollId));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Advance&&(identical(other.id, id) || other.id == id)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.settledPayrollId, settledPayrollId) || other.settledPayrollId == settledPayrollId)&&(identical(other.note, note) || other.note == note));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,workerId,workerName,amountKurus,date,settledPayrollId);
+int get hashCode => Object.hash(runtimeType,id,workerId,workerName,amountKurus,date,settledPayrollId,note);
 
 @override
 String toString() {
-  return 'Advance(id: $id, workerId: $workerId, workerName: $workerName, amountKurus: $amountKurus, date: $date, settledPayrollId: $settledPayrollId)';
+  return 'Advance(id: $id, workerId: $workerId, workerName: $workerName, amountKurus: $amountKurus, date: $date, settledPayrollId: $settledPayrollId, note: $note)';
 }
 
 
@@ -261,7 +265,7 @@ abstract mixin class _$AdvanceCopyWith<$Res> implements $AdvanceCopyWith<$Res> {
   factory _$AdvanceCopyWith(_Advance value, $Res Function(_Advance) _then) = __$AdvanceCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String workerId, String workerName, int amountKurus, String date, String? settledPayrollId
+ String id, String workerId, String workerName, int amountKurus, String date, String? settledPayrollId, String? note
 });
 
 
@@ -278,7 +282,7 @@ class __$AdvanceCopyWithImpl<$Res>
 
 /// Create a copy of Advance
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? workerId = null,Object? workerName = null,Object? amountKurus = null,Object? date = null,Object? settledPayrollId = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? workerId = null,Object? workerName = null,Object? amountKurus = null,Object? date = null,Object? settledPayrollId = freezed,Object? note = freezed,}) {
   return _then(_Advance(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,workerId: null == workerId ? _self.workerId : workerId // ignore: cast_nullable_to_non_nullable
@@ -286,6 +290,7 @@ as String,workerName: null == workerName ? _self.workerName : workerName // igno
 as String,amountKurus: null == amountKurus ? _self.amountKurus : amountKurus // ignore: cast_nullable_to_non_nullable
 as int,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
 as String,settledPayrollId: freezed == settledPayrollId ? _self.settledPayrollId : settledPayrollId // ignore: cast_nullable_to_non_nullable
+as String?,note: freezed == note ? _self.note : note // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
 }

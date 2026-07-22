@@ -14,6 +14,7 @@ import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../advances/application/advance_providers.dart';
 import '../../advances/data/advance.dart';
+import '../../advances/presentation/widgets/advance_note_chip.dart';
 import '../../auth/application/user_access.dart';
 import '../../attendance/data/attendance_record.dart';
 import '../../payroll/application/payroll_providers.dart';
@@ -328,7 +329,14 @@ class _AdvanceRow extends StatelessWidget {
       dense: true,
       leading: const Icon(Icons.account_balance_wallet, size: 20),
       title: Text(formatHumanDate(advance.date)),
-      subtitle: Text(advance.isOpen ? 'Açık (devrediyor)' : 'Mahsup edildi'),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(advance.isOpen ? 'Açık (devrediyor)' : 'Mahsup edildi'),
+          if (advance.note != null && advance.note!.isNotEmpty)
+            AdvanceNoteChip(advance.note!),
+        ],
+      ),
       trailing: Text(
         formatKurus(advance.amountKurus),
         style: TextStyle(

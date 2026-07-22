@@ -7,6 +7,8 @@ import '../../../../app/theme.dart';
 import '../../../../core/money/money.dart';
 import '../../../workers/data/worker.dart';
 import '../../data/attendance_record.dart';
+import '../../data/field.dart';
+import 'field_chips.dart';
 import 'paid_lock_badge.dart';
 
 class IndividualAttendanceTile extends StatelessWidget {
@@ -19,6 +21,10 @@ class IndividualAttendanceTile extends StatelessWidget {
     required this.onCleared,
     this.locked = false,
     this.showWage = true,
+    this.fields = const [],
+    this.fieldId,
+    this.fieldName,
+    this.onFieldChanged,
   });
 
   final Worker worker;
@@ -36,6 +42,23 @@ class IndividualAttendanceTile extends StatelessWidget {
 
   /// Bu gün ödendi (hakedişe girdi) → düzenleme kapalı (kural §3, §6).
   final bool locked;
+
+  /// Aktif tarlalar + bu günün tarla seçimi (isteğe bağlı — "kim nerede
+  /// çalıştı"). Çipler yalnız Tam/Yarım seçiliyken görünür (bkz. [_showFields]).
+  final List<Field> fields;
+  final String? fieldId;
+  final String? fieldName;
+  final ValueChanged<Field?>? onFieldChanged;
+
+  /// Tarla çipleri yalnız Tam/Yarım seçiliyken görünür (Yok/boş günde "nerede
+  /// çalıştı" sorusu anlamsız). Tarla tanımlı değilse satır hiç çıkmaz; ama
+  /// silinmiş tarlaya bağlı eski kayıt adıyla gösterilebilsin diye [fieldId]
+  /// doluysa açık kalır.
+  bool get _showFields =>
+      onFieldChanged != null &&
+      !locked &&
+      (status == AttendanceStatus.full || status == AttendanceStatus.half) &&
+      (fields.isNotEmpty || fieldId != null);
 
   /// Durum rengi; seçili değilse (null) null döner → nötr içi boş nokta.
   Color? get _statusColor => switch (status) {
@@ -153,6 +176,15 @@ class IndividualAttendanceTile extends StatelessWidget {
               ),
             ),
           ),
+          if (_showFields) ...[
+            const SizedBox(height: 8),
+            FieldChips(
+              fields: fields,
+              selectedFieldId: fieldId,
+              selectedFieldName: fieldName,
+              onChanged: onFieldChanged!,
+            ),
+          ],
           const Divider(height: 14),
         ],
       ),

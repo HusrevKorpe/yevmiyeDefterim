@@ -41,5 +41,17 @@ void main() {
       expect(s.expenseByCategory[LedgerCategory.maas], 400000);
       expect(s.expenseKurus, 700000);
     });
+
+    test('categoryKurus: tamir/bakkal ayrı toplanır, olmayan kategori 0', () {
+      final s = summarizeLedger([
+        expense(50000, cat: LedgerCategory.tamir),
+        expense(30000, cat: LedgerCategory.tamir),
+        expense(20000, cat: LedgerCategory.bakkal),
+      ]);
+      expect(s.categoryKurus(LedgerCategory.tamir), 80000);
+      expect(s.categoryKurus(LedgerCategory.bakkal), 20000);
+      expect(s.categoryKurus(LedgerCategory.mazot), 0);
+      expect(s.expenseKurus, 100000);
+    });
   });
 }

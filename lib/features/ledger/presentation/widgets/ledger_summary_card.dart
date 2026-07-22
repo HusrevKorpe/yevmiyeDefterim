@@ -1,30 +1,29 @@
 /// Kasa özet kartı — sanatsal degrade "hero" toplam gider kartı (kural §8).
 ///
-/// Dönemin toplam gideri büyük ve öne çıkar. Mazot varsa dokunulabilir şerit
-/// olarak Mazot ekranına götürür. Uygulama gelir takip etmez.
+/// Dönemin toplam gideri büyük ve öne çıkar. Kendi ekranı olan kategoriler
+/// (Mazot/Tamir/Bakkal) > 0 ise şerit olarak listelenir. Gelir takip edilmez.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../../app/theme.dart';
+import '../../../../core/constants/categories.dart';
 import '../../../../core/money/money.dart';
+import '../../../../core/widgets/category_icon.dart';
 import '../../application/ledger_summary.dart';
 
 class LedgerSummaryCard extends StatelessWidget {
   const LedgerSummaryCard({
     super.key,
     required this.summary,
-    this.onMazotTap,
     this.showBreakdown = true,
   });
 
   final LedgerSummary summary;
 
-  /// Mazot şeridine dokununca (yalnız mazot > 0 iken görünür).
-  final VoidCallback? onMazotTap;
-
-  /// Toplam giderin altında Mazot şeridini gösterir. Kasa sayfasında `false`
-  /// verilerek yalnız toplam gider gösterilir (mazota app bar'dan gidilir).
+  /// Toplam giderin altında kategori şeritlerini (Mazot/Tamir/Bakkal) gösterir.
+  /// Kasa sayfasında `false` verilerek yalnız toplam gider gösterilir
+  /// (kategori ekranlarına app bar'dan gidilir).
   final bool showBreakdown;
 
   @override
@@ -95,10 +94,15 @@ class LedgerSummaryCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (showBreakdown && summary.mazotKurus > 0) ...[
-                const SizedBox(height: 16),
-                _MazotStrip(kurus: summary.mazotKurus, onTap: onMazotTap),
-              ],
+              if (showBreakdown)
+                for (final c in LedgerCategory.screened)
+                  if (summary.categoryKurus(c) > 0) ...[
+                    const SizedBox(height: 12),
+                    _CategoryStrip(
+                      category: c,
+                      kurus: summary.categoryKurus(c),
+                    ),
+                  ],
             ],
           ),
         ],
@@ -116,59 +120,50 @@ class LedgerSummaryCard extends StatelessWidget {
       );
 }
 
-/// Mazot toplamını gösteren, dokununca Mazot ekranını açan şerit.
-class _MazotStrip extends StatelessWidget {
-  const _MazotStrip({required this.kurus, this.onTap});
+/// Bir kategorinin (Mazot/Tamir/Bakkal) toplamını gösteren şerit.
+class _CategoryStrip extends StatelessWidget {
+  const _CategoryStrip({required this.category, required this.kurus});
 
+  final String category;
   final int kurus;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          child: Row(
-            children: [
-              const Icon(Icons.local_gas_station, color: Colors.white, size: 18),
-              const SizedBox(width: 10),
-              Text(
-                'Mazot',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    formatKurus(kurus),
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              if (onTap != null) ...[
-                const SizedBox(width: 4),
-                Icon(Icons.chevron_right,
-                    color: Colors.white.withValues(alpha: 0.7), size: 18),
-              ],
-            ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      child: Row(
+        children: [
+          Icon(categoryIcon(category), color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Text(
+            LedgerCategory.label(category),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.92),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-        ),
+          const Spacer(),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                formatKurus(kurus),
+                maxLines: 1,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

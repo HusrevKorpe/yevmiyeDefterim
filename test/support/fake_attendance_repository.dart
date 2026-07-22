@@ -11,14 +11,31 @@ class FakeAttendanceRepository implements AttendanceRepository {
   final Map<String, AttendanceRecord> _store = {};
   final StreamController<void> _tick = StreamController<void>.broadcast();
 
+  /// Abone olunca mevcut durumu verir, her yazımda yeniden yayınlar.
+  ///
+  /// `async*` + `yield* _tick.stream` DEĞİL: async* gövdesi ilk `yield`'de
+  /// askıya alınır ve `_tick`'e ancak SONRAKİ mikrotask'ta abone olur; o aralığa
+  /// denk gelen yazım (broadcast tamponlamaz) sonsuza dek kaybolurdu → emisyon
+  /// hiç gelmez, `waitUntil` zaman aşımına uğrardı. Burada `_tick` aboneliği
+  /// dinleme anında SENKRON kurulur (yazım düşmez); ilk değer ise bilerek
+  /// mikrotask'a ertelenir ki aynı olay turunda dinlemeden hemen sonra yapılan
+  /// yazımlar da ilk emisyona girsin (anlık görüntü erken sabitlenmesin).
+  Stream<List<AttendanceRecord>> _watch(
+          List<AttendanceRecord> Function() snapshot) =>
+      Stream.multi((c) {
+        final sub = _tick.stream.listen((_) => c.add(snapshot()));
+        c.onCancel = sub.cancel;
+        scheduleMicrotask(() {
+          if (!c.isClosed) c.add(snapshot());
+        });
+      });
+
   List<AttendanceRecord> _forDate(String date) =>
       _store.values.where((r) => r.date == date).toList();
 
   @override
-  Stream<List<AttendanceRecord>> watchByDate(String date) async* {
-    yield _forDate(date);
-    yield* _tick.stream.map((_) => _forDate(date));
-  }
+  Stream<List<AttendanceRecord>> watchByDate(String date) =>
+      _watch(() => _forDate(date));
 
   List<AttendanceRecord> _forRange(String start, String end) => _store.values
       .where((r) =>
@@ -26,19 +43,15 @@ class FakeAttendanceRepository implements AttendanceRepository {
       .toList();
 
   @override
-  Stream<List<AttendanceRecord>> watchByRange(String startDate, String endDate) async* {
-    yield _forRange(startDate, endDate);
-    yield* _tick.stream.map((_) => _forRange(startDate, endDate));
-  }
+  Stream<List<AttendanceRecord>> watchByRange(String startDate, String endDate) =>
+      _watch(() => _forRange(startDate, endDate));
 
   List<AttendanceRecord> _forWorker(String workerId) =>
       _store.values.where((r) => r.workerId == workerId).toList();
 
   @override
-  Stream<List<AttendanceRecord>> watchByWorker(String workerId) async* {
-    yield _forWorker(workerId);
-    yield* _tick.stream.map((_) => _forWorker(workerId));
-  }
+  Stream<List<AttendanceRecord>> watchByWorker(String workerId) =>
+      _watch(() => _forWorker(workerId));
 
   @override
   Future<void> save(AttendanceRecord record) async {
@@ -51,6 +64,14 @@ class FakeAttendanceRepository implements AttendanceRepository {
     _store.remove(id);
     _tick.add(null);
   }
+
+  @override
+  Future<void> markDaySaved(String date) async {
+    markedDays.add(date);
+  }
+
+  /// "Kaydet" ile işaretlenen günler (push bildirim tetiği testleri için).
+  final List<String> markedDays = [];
 
   /// Depodaki toplam kayıt sayısı (çift kayıt kontrolü için).
   int get count => _store.length;

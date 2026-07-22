@@ -27,6 +27,12 @@ abstract class AttendanceRepository {
   /// Kaydı siler (deterministik ID). Yoklama alınmayan/geri alınan gün için:
   /// kayıt hiç tutulmaz → gün "Yok" sayılmaz, hiçbir hesaba girmez.
   Future<void> delete(String id);
+
+  /// "Kaydet" dokunuşunda günün işaret dokümanını yazar
+  /// (`attendanceDays/{date}`, deterministik ID → günde tek doküman).
+  /// Cloud Function bu yazımı dinleyip DİĞER cihazlara "yoklama alındı"
+  /// push bildirimi gönderir; yoklama verisinin kendisine dokunmaz.
+  Future<void> markDaySaved(String date);
 }
 
 class FirestoreAttendanceRepository implements AttendanceRepository {
@@ -74,4 +80,11 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<void> delete(String id) => attendanceCol(_db).doc(id).delete();
+
+  @override
+  Future<void> markDaySaved(String date) =>
+      attendanceDaysCol(_db).doc(date).set({
+        'date': date,
+        ...writeStamp(),
+      }, SetOptions(merge: true));
 }

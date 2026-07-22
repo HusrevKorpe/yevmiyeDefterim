@@ -1,4 +1,4 @@
-/// Kasa — dönem gider listesi + toplam + Mazot ekranı (plan §5, kural §8).
+/// Kasa — dönem gider listesi + toplam + kategori ekranları (plan §5, kural §8).
 ///
 /// Otomatik hakediş kayıtları salt-okunur; elle kayıtlar dokununca düzenlenir.
 /// Avanslar Kasa'da YOK (ayrı akış, kural §6) → çifte sayım olmaz.
@@ -11,11 +11,13 @@ import '../application/ledger_providers.dart';
 import '../application/ledger_summary.dart';
 import '../data/ledger_entry.dart';
 import '../../../app/theme.dart';
+import '../../../core/constants/categories.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/period_range_selector.dart';
+import 'category_screen.dart';
 import 'ledger_edit_screen.dart';
-import 'mazot_screen.dart';
 import 'widgets/ledger_entry_tile.dart';
 import 'widgets/ledger_summary_card.dart';
 
@@ -35,9 +37,11 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
     );
   }
 
-  void _openMazot(BuildContext context) {
+  void _openCategory(BuildContext context, String category) {
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute<void>(builder: (_) => const MazotScreen()),
+      MaterialPageRoute<void>(
+        builder: (_) => CategoryScreen(category: category),
+      ),
     );
   }
 
@@ -50,12 +54,14 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
     return Scaffold(
       appBar: GradientAppBar(
         actions: [
-          IconButton(
-            onPressed: () => _openMazot(context),
-            color: Colors.white,
-            tooltip: 'Mazot',
-            icon: const Icon(Icons.local_gas_station),
-          ),
+          // Kendi ekranı olan kategoriler (Mazot/Tamir/Bakkal) kısayolları.
+          for (final c in LedgerCategory.screened)
+            IconButton(
+              onPressed: () => _openCategory(context, c),
+              color: Colors.white,
+              tooltip: LedgerCategory.label(c),
+              icon: Icon(categoryIcon(c)),
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 10, left: 2),
             child: _AddButton(onPressed: () => _openEdit(context)),
@@ -74,7 +80,7 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
             child: AsyncRetry(
               value: async,
               onRetry: () => ref.invalidate(ledgerInPeriodProvider),
-              message: 'Kasa yüklenemedi. İnternet bağlantınızı kontrol edin.',
+              message: 'Giderler yüklenemedi. İnternet bağlantınızı kontrol edin.',
               // Özet kartı da yalnız veri hazır olunca (data closure) türetilir.
               // Yükleniyor/hata durumunda ₺0'lık "boş özet" GÖSTERİLMEZ; bunun
               // yerine spinner ya da "Yeniden Dene" çıkar (kural §8 — rapor ve

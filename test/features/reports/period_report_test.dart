@@ -96,13 +96,17 @@ void main() {
     expect(r.workerEarnings, isEmpty);
   });
 
-  test('kasa: toplam gider + kategori kırılımı + mazot', () {
+  test('kasa: toplam gider + kategori kırılımı + mazot/tamir/bakkal', () {
     final r = build(ledgerEntries: [
       ledger(LedgerCategory.mazot, 120000, '2026-07-06'),
+      ledger(LedgerCategory.tamir, 50000, '2026-07-06'),
+      ledger(LedgerCategory.bakkal, 30000, '2026-07-07'),
       ledger(LedgerCategory.genel, 80000, '2026-07-07'),
     ]);
-    expect(r.expenseKurus, 200000);
+    expect(r.expenseKurus, 280000);
     expect(r.mazotKurus, 120000);
+    expect(r.tamirKurus, 50000);
+    expect(r.bakkalKurus, 30000);
     expect(r.expenseByCategory[LedgerCategory.genel], 80000);
   });
 

@@ -45,8 +45,10 @@ abstract class Worker with _$Worker {
     required WorkerType type,
     required Gender gender,
 
-    /// İşçiye özel günlük ücret (kuruş). Null => varsayılan ücret kullanılır.
-    /// Elebaşı için anlamsız (kişi başı ücret ayarlardan gelir).
+    /// İşçinin günlük ücreti (kuruş). Sabit/varsayılan yevmiye kaldırıldı →
+    /// bireysel işçide bu alan TEK ücret kaynağıdır (ekle/düzenlede zorunlu).
+    /// Null yalnız eski ya da kısıtlı-hesap kayıtlarında olur → yoklamada 0 sayılır.
+    /// Elebaşı için anlamsız (ödeme toplu, kişi bazlı ücret yok).
     int? dailyWageOverrideKurus,
 
     /// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.

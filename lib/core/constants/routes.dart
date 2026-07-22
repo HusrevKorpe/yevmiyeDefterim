@@ -9,6 +9,7 @@ class AppRoutes {
   static const String home = '/';
   static const String attendance = '/yoklama';
   static const String monthlyAttendance = '/yoklama/aylik';
+  static const String fields = '/yoklama/tarlalar';
   static const String workers = '/isciler';
   static const String payroll = '/hakedis';
   static const String ledger = '/kasa';

@@ -10,16 +10,23 @@ class LedgerCategory {
   LedgerCategory._();
 
   static const String mazot = 'mazot';
+  static const String tamir = 'tamir';
+  static const String bakkal = 'bakkal';
   static const String maas = 'maas';
   static const String elebasi = 'elebasi';
   static const String genel = 'genel';
 
   /// Elle eklenebilen GİDER kategorileri (maas/elebasi otomatik → hariç).
-  static const List<String> manualExpense = [mazot, genel];
+  static const List<String> manualExpense = [mazot, tamir, bakkal, genel];
+
+  /// Kendi ekranı olan kategoriler (Kasa app bar kısayolları, kural §8).
+  static const List<String> screened = [mazot, tamir, bakkal];
 
   /// Türkçe gösterim etiketleri.
   static const Map<String, String> _labels = {
     mazot: 'Mazot',
+    tamir: 'Tamir',
+    bakkal: 'Bakkal',
     maas: 'Maaş',
     elebasi: 'Elebaşı',
     genel: 'Genel',

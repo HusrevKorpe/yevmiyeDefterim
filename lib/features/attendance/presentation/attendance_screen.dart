@@ -1,6 +1,8 @@
 /// Yoklama ekranı (plan §5, kural §8) — tarih seç + Tam/Yarım/Yok + elebaşı sayacı.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../advances/presentation/advance_edit_screen.dart';
 import '../../auth/application/user_access.dart';
 import '../../settings/application/settings_providers.dart';
 import '../../settings/data/app_settings.dart';
@@ -19,6 +22,7 @@ import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import '../application/attendance_providers.dart';
 import '../application/attendance_view_model.dart';
+import '../application/fields_providers.dart';
 import '../application/wage.dart';
 import '../data/attendance_record.dart';
 import 'widgets/crew_attendance_tile.dart';
@@ -38,6 +42,7 @@ class AttendanceScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const GradientAppBar(
+        leading: _FieldsButton(),
         actions: [_MonthlyButton(), _SaveButton()],
       ),
       body: const Column(
@@ -46,6 +51,66 @@ class AttendanceScreen extends ConsumerWidget {
           Expanded(child: _AttendanceBody()),
         ],
       ),
+    );
+  }
+}
+
+/// Geçmiş güne (bugün dışındaki tarihe) ait yoklamadaki İLK değişiklikten önce
+/// onay diyaloğu gösterir — yanlışlıkla dokunup geçmiş kaydı bozmayı önler
+/// (bugüne dokunuş hiç sormaz). Onaylanınca o günün kilidi açılır
+/// ([pastEditUnlockedDateProvider]) → aynı günde tekrar sorulmaz; vazgeçilirse
+/// [action] hiç çalışmaz (satırlar stream'den çizildiği için görünüm bozulmaz).
+Future<void> _confirmPastEdit(
+  BuildContext context,
+  WidgetRef ref,
+  Future<void> Function() action,
+) async {
+  final date = ref.read(selectedDateProvider);
+  if (date == todayIso() || ref.read(pastEditUnlockedDateProvider) == date) {
+    await action();
+    return;
+  }
+  // Diyalog beklenirken widget ağacı değişebilir → notifier'ı önden al
+  // (await sonrası `ref` kullanmamak için).
+  final unlock = ref.read(pastEditUnlockedDateProvider.notifier);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Geçmiş günü değiştir'),
+      content: Text(
+        '${formatHumanDate(date)} gününe ait yoklamayı değiştirmek '
+        'üzeresiniz. Devam edilsin mi?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Vazgeç'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Değiştir'),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) {
+    unlock.unlock(date);
+    await action();
+  }
+}
+
+/// Sol üstteki "Tarlalar" düğmesi → tarla yönetim ekranı. Orada tanımlanan
+/// tarlalar, yoklamada Tam/Yarım (elebaşında kişi sayısı) girilince satırın
+/// altında çip olarak çıkar → "kim nerede çalıştı" kayıt altına alınır.
+class _FieldsButton extends StatelessWidget {
+  const _FieldsButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.grass),
+      tooltip: 'Tarlalar',
+      onPressed: () => context.push(AppRoutes.fields),
     );
   }
 }
@@ -85,9 +150,19 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
 
   Future<void> _confirm() async {
     HapticFeedback.mediumImpact();
+    // Geçmiş günde "Kaydet" de onaydan geçer — yanlış dokunuşla geçmiş güne
+    // elebaşı öntanımlıları yazılmasın / diğer cihazlara bildirim gitmesin.
+    await _confirmPastEdit(context, ref, _doSave);
+  }
+
+  Future<void> _doSave() async {
+    final vm = ref.read(attendanceViewModelProvider.notifier);
+    // Günün "yoklama alındı" işaretini yaz → diğer cihazlara push bildirimi
+    // gider (Cloud Function). Bilerek await'siz: offline'da UI'ı bekletmesin.
+    unawaited(vm.markDaySaved());
     // Önden dolu (henüz kaydı olmayan) elebaşı mevcutlarını şimdi kalıcı yaz —
-    // bu ekranda gerçekten Firestore'a yazan tek nokta budur.
-    await ref.read(attendanceViewModelProvider.notifier).commitCrewDefaults();
+    // bu ekranda yoklama verisine gerçekten yazan tek nokta budur.
+    await vm.commitCrewDefaults();
     if (!mounted) return;
     final date = ref.read(selectedDateProvider);
     ScaffoldMessenger.of(context)
@@ -318,7 +393,6 @@ class _List extends StatelessWidget {
       length: tabTitles.length,
       child: Column(
         children: [
-          if (settings == AppSettings.empty) const _WagesUnsetBanner(),
           TabBar(
             tabs: [for (final t in tabTitles) Tab(text: t)],
           ),
@@ -374,20 +448,19 @@ class _IndividualTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(
-      attendanceByWorkerForDateProvider.select((byWorker) {
-        // Kaydı olmayan işçi → null (hiçbir segment seçili değil). Yoklama
-        // alınmayan gün otomatik "Yok" işaretlenmez, hiç sayılmaz.
-        return switch (byWorker[worker.id]) {
-          IndividualAttendance(:final status) => status,
-          _ => null,
-        };
-      }),
+    // Kaydı olmayan işçi → null (hiçbir segment seçili değil). Yoklama
+    // alınmayan gün otomatik "Yok" işaretlenmez, hiç sayılmaz. Kayıt bütün
+    // olarak izlenir (durum + tarla) ama `.select` sayesinde yalnız BU işçinin
+    // kaydı değişince yeniden çizilir.
+    final saved = ref.watch(
+      attendanceByWorkerForDateProvider
+          .select((byWorker) => byWorker[worker.id]),
     );
+    final record = saved is IndividualAttendance ? saved : null;
     final vm = ref.read(attendanceViewModelProvider.notifier);
     return IndividualAttendanceTile(
       worker: worker,
-      status: status,
+      status: record?.status,
       resolvedWageKurus: resolveWageKurus(
         gender: worker.gender,
         overrideKurus: worker.dailyWageOverrideKurus,
@@ -399,8 +472,17 @@ class _IndividualTile extends ConsumerWidget {
       // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
       // Hakedişi geri açınca: `locked: byWorker[worker.id]?.isPaid ?? false`.
       locked: false,
-      onChanged: (s) => vm.setStatus(worker, s),
-      onCleared: () => vm.clearStatus(worker),
+      // Geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla değişiklik koruması).
+      onChanged: (s) =>
+          _confirmPastEdit(context, ref, () => vm.setStatus(worker, s)),
+      onCleared: () =>
+          _confirmPastEdit(context, ref, () => vm.clearStatus(worker)),
+      // Tarla seçimi (isteğe bağlı): Tam/Yarım seçilince çipler görünür.
+      fields: ref.watch(activeFieldsProvider),
+      fieldId: record?.fieldId,
+      fieldName: record?.fieldName,
+      onFieldChanged: (f) =>
+          _confirmPastEdit(context, ref, () => vm.setField(worker, f)),
     );
   }
 }
@@ -432,42 +514,25 @@ class _CrewTile extends ConsumerWidget {
       // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
       // Hakedişi geri açınca: `locked: crew?.isPaid ?? false`.
       locked: false,
-      onChanged: (c) => vm.setHeadcount(worker, c),
-    );
-  }
-}
-
-class _WagesUnsetBanner extends ConsumerWidget {
-  const _WagesUnsetBanner();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Ücret/ayar uyarısı para bilgisidir ve engelli Ayarlar'a gider →
-    // kısıtlı hesapta hiç gösterilmez.
-    if (!ref.watch(canSeeMoneyProvider)) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.all(12),
-      color: theme.colorScheme.errorContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, color: theme.colorScheme.onErrorContainer),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Yevmiyeler henüz girilmemiş. Doğru hesap için Ayarlardan girin.',
-                style: TextStyle(color: theme.colorScheme.onErrorContainer),
-              ),
-            ),
-            TextButton(
-              onPressed: () => context.push(AppRoutes.settings),
-              child: const Text('Ayarlar'),
-            ),
-          ],
-        ),
-      ),
+      // Geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla değişiklik koruması).
+      onChanged: (c) =>
+          _confirmPastEdit(context, ref, () => vm.setHeadcount(worker, c)),
+      // Tarla seçimi (isteğe bağlı): kişi sayısı girilince çipler görünür.
+      fields: ref.watch(activeFieldsProvider),
+      fieldId: crew?.fieldId,
+      fieldName: crew?.fieldName,
+      onFieldChanged: (f) =>
+          _confirmPastEdit(context, ref, () => vm.setField(worker, f)),
+      // Karta (ad alanına) dokun → bu elebaşı ön-seçili "Avans Ver" ekranı.
+      // Avans para → para-kısıtlı hesapta kapalı (ipucu ikonu da görünmez).
+      onTap: ref.watch(canSeeMoneyProvider)
+          ? () => Navigator.of(context, rootNavigator: true).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      AdvanceEditScreen(initialWorkerId: worker.id),
+                ),
+              )
+          : null,
     );
   }
 }

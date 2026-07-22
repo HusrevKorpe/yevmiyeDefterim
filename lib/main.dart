@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'app/theme_mode.dart';
+import 'core/notifications/push_notifications.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -33,6 +35,10 @@ Future<void> main() async {
     persistenceEnabled: true,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
+
+  // Push bildirimi (yoklama alındı): cihaz token kaydı + ön plan gösterimi.
+  // Await'siz — kurulum açılışı asla geciktirmesin/düşürmesin.
+  unawaited(initPushNotifications());
 
   // TR tarih/para formatları için yerel veriyi yükle.
   await initializeDateFormatting('tr_TR', null);
