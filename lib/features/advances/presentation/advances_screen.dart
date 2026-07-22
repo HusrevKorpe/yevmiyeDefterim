@@ -13,6 +13,7 @@ import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/advance_providers.dart';
+import '../application/advance_view_model.dart';
 import '../data/advance.dart';
 import 'advance_edit_screen.dart';
 import 'widgets/advance_note_chip.dart';
@@ -53,7 +54,7 @@ class AdvancesScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: 96),
             children: [
               ..._openSection(context, open),
-              if (settled.isNotEmpty) _settledSection(context, settled),
+              if (settled.isNotEmpty) _settledSection(context, ref, settled),
             ],
           );
         },
@@ -93,19 +94,40 @@ class AdvancesScreen extends ConsumerWidget {
     ];
   }
 
-  Widget _settledSection(BuildContext context, List<Advance> settled) {
-    settled.sort((a, b) => b.date.compareTo(a.date));
+  /// Hesabı görülen (kapatılan) işçiler — işçi + kapanış tarihine göre gruplu.
+  /// Hakediş rafta olduğundan pratikte tüm kapanmışlar "hesap görüldü" yoluyla
+  /// gelir; eski hakediş mahsupları (varsa) salt-okunur satır olarak gösterilir.
+  Widget _settledSection(
+      BuildContext context, WidgetRef ref, List<Advance> settled) {
+    final manual = settled.where((a) => a.isManuallySettled).toList();
+    final legacy = settled.where((a) => !a.isManuallySettled).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    // İşçi + kapanış tarihine göre grupla (her grup = tek "hesap görüldü").
+    final groups = <String, List<Advance>>{};
+    for (final a in manual) {
+      (groups['${a.workerId}|${a.settledDate}'] ??= []).add(a);
+    }
+    final keys = groups.keys.toList()
+      ..sort((x, y) => (groups[y]!.first.settledDate ?? '')
+          .compareTo(groups[x]!.first.settledDate ?? ''));
+
     return ExpansionTile(
       leading: const Icon(Icons.check_circle_outline),
-      title: Text('Kapanmış Avanslar (${settled.length})'),
+      title: Text('Hesabı Görülenler (${keys.length})'),
       children: [
-        for (final a in settled)
+        for (final k in keys)
+          _SettledWorkerCard(
+            advances: groups[k]!,
+            onReopen: () => _reopen(context, ref, groups[k]!),
+          ),
+        for (final a in legacy)
           ListTile(
             title: Text(a.workerName),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(formatHumanDate(a.date)),
+                Text('Mahsup edildi • ${formatHumanDate(a.date)}'),
                 if (a.note != null && a.note!.isNotEmpty)
                   AdvanceNoteChip(a.note!),
               ],
@@ -116,6 +138,106 @@ class AdvancesScreen extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+
+  /// "Hesap görüldü"yü geri alır — grubun avansları yeniden açık olur.
+  Future<void> _reopen(
+      BuildContext context, WidgetRef ref, List<Advance> group) async {
+    final name = group.first.workerName;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Geri al'),
+        content: Text(
+          '$name için “hesap görüldü” geri alınsın mı? Avansları yeniden '
+          'açık (devrediyor) olarak görünecek.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Geri Al'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref
+        .read(accountSettlementViewModelProvider.notifier)
+        .reopen(group.map((a) => a.id).toList());
+  }
+}
+
+/// Hesabı görülen bir işçinin kartı — "alacak kalmadı" + kapatılan avanslar +
+/// Geri Al. Grup, tek bir "hesap görüldü" olayıdır (aynı işçi + aynı tarih).
+class _SettledWorkerCard extends StatelessWidget {
+  const _SettledWorkerCard({required this.advances, required this.onReopen});
+
+  final List<Advance> advances;
+  final VoidCallback onReopen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final green = incomeColor(context);
+    final sorted = [...advances]..sort((a, b) => b.date.compareTo(a.date));
+    final total = sorted.fold<int>(0, (s, a) => s + a.amountKurus);
+    final settledDate = sorted.first.settledDate;
+    final settledText = settledDate == null
+        ? 'Hesap görüldü · alacak kalmadı'
+        : 'Hesap görüldü • ${formatHumanDateNoWeekday(settledDate)} · alacak kalmadı';
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Column(
+        children: [
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: green.withValues(alpha: 0.14),
+              child: Icon(Icons.check, color: green),
+            ),
+            title: Text(sorted.first.workerName,
+                style: theme.textTheme.titleMedium),
+            subtitle: Text(
+              settledText,
+              style: theme.textTheme.bodySmall?.copyWith(color: green),
+            ),
+            trailing: Text(
+              formatKurus(total),
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
+          const Divider(height: 1),
+          for (final a in sorted)
+            ListTile(
+              dense: true,
+              title: Text(formatHumanDate(a.date)),
+              subtitle: a.note == null || a.note!.isEmpty
+                  ? null
+                  : Align(
+                      alignment: Alignment.centerLeft,
+                      child: AdvanceNoteChip(a.note!),
+                    ),
+              trailing: Text(formatKurus(a.amountKurus)),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6, bottom: 4),
+              child: TextButton.icon(
+                onPressed: onReopen,
+                icon: const Icon(Icons.undo, size: 18),
+                label: const Text('Geri Al'),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

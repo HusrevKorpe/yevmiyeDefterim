@@ -34,8 +34,27 @@ abstract class Advance with _$Advance {
     String? note,
   }) = _Advance;
 
-  /// Kapanmamış (henüz bir hakedişte mahsup edilmemiş) avans mı?
+  /// Kapanmamış (henüz mahsup/hesap görülmemiş) avans mı?
   bool get isOpen => settledPayrollId == null;
+
+  /// Elle "Hesap görüldü" ile kapatılan avanslarda [settledPayrollId] bu önekle
+  /// başlar, ardından kapanış (hesap görüldü) tarihi gelir: `'hesap-goruldu:2026-07-22'`.
+  /// Hakediş (rafta) gerçek UUID yazar → önek çakışmaz; ayrımı [isManuallySettled]
+  /// yapar. Böylece yeni alan/şema (freezed regen) gerekmeden kapanış tarihi saklanır.
+  static const String manualSettlementPrefix = 'hesap-goruldu:';
+
+  /// Verilen [date] için "hesap görüldü" işaret değeri.
+  static String manualSettlementId(String date) => '$manualSettlementPrefix$date';
+
+  /// Bu avans elle "Hesap görüldü" ile mi kapatıldı (hakediş mahsubu değil)?
+  bool get isManuallySettled =>
+      settledPayrollId != null &&
+      settledPayrollId!.startsWith(manualSettlementPrefix);
+
+  /// "Hesap görüldü" kapanış tarihi (`'yyyy-MM-dd'`) — elle kapatılmadıysa null.
+  String? get settledDate => isManuallySettled
+      ? settledPayrollId!.substring(manualSettlementPrefix.length)
+      : null;
 
   /// Firestore dokümanından okur. Eksik/bozuk alanlar güvenli varsayılana düşer
   /// (offline'da kısmi doküman gelebilir — çökme yerine güvenli varsayılan).

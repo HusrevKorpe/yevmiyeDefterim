@@ -66,3 +66,50 @@ final NotifierProvider<AdvanceEditViewModel, AdvanceEditState>
     NotifierProvider<AdvanceEditViewModel, AdvanceEditState>(
   AdvanceEditViewModel.new,
 );
+
+/// "Hesap görüldü" — bir işçinin açık avanslarını topluca kapatır / geri açar.
+///
+/// Durum = meşgul mü (tek uçuşta çift tetiklemeyi engeller). Avans düzenleme
+/// akışından ayrıdır: kapatma işçinin TÜM açık avanslarını tek batch'te kapatır,
+/// "geri al" ise aynı avansları yeniden açar. Notifier uygulama kapsamlı olduğu
+/// için düzenleme ekranı kapansa da "Geri Al" güvenle çalışır.
+class AccountSettlementViewModel extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  /// [ids] avanslarını [settledDate] ile kapatır. Başarılıysa true.
+  Future<bool> settle(Iterable<String> ids, String settledDate) async {
+    if (state) return false;
+    state = true;
+    try {
+      await ref
+          .read(advanceRepositoryProvider)
+          .settleAdvances(ids, settledDate);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      state = false;
+    }
+  }
+
+  /// [ids] avanslarını yeniden açar (geri al). Başarılıysa true.
+  Future<bool> reopen(Iterable<String> ids) async {
+    if (state) return false;
+    state = true;
+    try {
+      await ref.read(advanceRepositoryProvider).reopenAdvances(ids);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      state = false;
+    }
+  }
+}
+
+final NotifierProvider<AccountSettlementViewModel, bool>
+    accountSettlementViewModelProvider =
+    NotifierProvider<AccountSettlementViewModel, bool>(
+  AccountSettlementViewModel.new,
+);

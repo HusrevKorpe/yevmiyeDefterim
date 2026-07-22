@@ -25,6 +25,13 @@ abstract class AdvanceRepository {
   /// Avansı siler (yalnız kapanmamış avans için — çağıran doğrular).
   Future<void> delete(String id);
 
+  /// Verilen avansları "Hesap görüldü" ile kapatır (tek batch). Her birine
+  /// [settledDate] tarihli işaret yazılır → açık listeden düşer, alacak kalmaz.
+  Future<void> settleAdvances(Iterable<String> ids, String settledDate);
+
+  /// "Hesap görüldü" ile kapatılan avansları yeniden açar (geri al, tek batch).
+  Future<void> reopenAdvances(Iterable<String> ids);
+
   /// Dokümanın güncel sürüm numarası (`rev`) — düzenleme çakışması tespiti için.
   /// Doküman yoksa null. Online'da sunucu değerini, offline'da önbelleği getirir.
   Future<int?> currentRev(String id);
@@ -57,6 +64,33 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
 
   @override
   Future<void> delete(String id) => advancesCol(_db).doc(id).delete();
+
+  @override
+  Future<void> settleAdvances(Iterable<String> ids, String settledDate) {
+    final batch = _db.batch();
+    final marker = Advance.manualSettlementId(settledDate);
+    for (final id in ids) {
+      batch.set(
+        advancesCol(_db).doc(id),
+        {'settledPayrollId': marker, ...writeStamp()},
+        SetOptions(merge: true),
+      );
+    }
+    return batch.commit();
+  }
+
+  @override
+  Future<void> reopenAdvances(Iterable<String> ids) {
+    final batch = _db.batch();
+    for (final id in ids) {
+      batch.set(
+        advancesCol(_db).doc(id),
+        {'settledPayrollId': null, ...writeStamp()},
+        SetOptions(merge: true),
+      );
+    }
+    return batch.commit();
+  }
 
   @override
   Future<int?> currentRev(String id) async {

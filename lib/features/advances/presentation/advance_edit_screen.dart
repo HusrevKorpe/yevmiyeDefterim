@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
@@ -172,6 +173,72 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     }
   }
 
+  /// "Hesap görüldü" — işçinin TÜM açık avanslarını (bu avans dahil) bugünkü
+  /// tarihle kapatır → alacağı kalmadı. Onay ister, geri al (SnackBar) sunar.
+  Future<void> _markAccountSeen(Advance existing) async {
+    // İşçinin bütün açık avansları — hepsi tek seferde kapanır.
+    final all =
+        ref.read(advancesStreamProvider).asData?.value ?? const <Advance>[];
+    final open = all
+        .where((a) => a.workerId == existing.workerId && a.isOpen)
+        .toList();
+    if (open.isEmpty) return;
+    final ids = open.map((a) => a.id).toList();
+    final total = open.fold<int>(0, (s, a) => s + a.amountKurus);
+    final countText = open.length > 1 ? ' · ${open.length} kayıt' : '';
+
+    // Kök ScaffoldMessenger'ı async gap'ten önce yakala: ekran kapansa da
+    // SnackBar (Geri Al) avanslar ekranında güvenle görünür.
+    final messenger = ScaffoldMessenger.of(context);
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Hesap görüldü'),
+        content: Text(
+          '${existing.workerName} için hesap görüldü olarak işaretlensin mi?\n\n'
+          'Açık avansları (${formatKurus(total)}$countText) kapanacak ve '
+          '“alacağı kalmadı” olarak görünecek. Geri alınabilir.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context, true),
+            icon: const Icon(Icons.check_circle),
+            label: const Text('Hesap Görüldü'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    // Notifier'ı önden yakala: ekran kapansa da "Geri Al" güvenle çalışsın.
+    final vm = ref.read(accountSettlementViewModelProvider.notifier);
+    final success = await vm.settle(ids, todayIso());
+    if (!mounted) return;
+    if (success) {
+      Navigator.of(context).pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${existing.workerName} için hesap görüldü.'),
+          action: SnackBarAction(
+            label: 'Geri Al',
+            onPressed: () => vm.reopen(ids),
+          ),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('İşaretlenemedi. İnternet bağlantınızı kontrol edin.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen<AdvanceEditState>(advanceEditViewModelProvider, (prev, next) {
@@ -185,6 +252,9 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     });
 
     final saving = ref.watch(advanceEditViewModelProvider).saving;
+    // "Hesap görüldü" işlemi sürerken de butonlar kilitlenir.
+    final settling = ref.watch(accountSettlementViewModelProvider);
+    final busy = saving || settling;
     // Tüm aktif işçiler — elebaşı dahil (elebaşı da avans alabilir).
     final workers = ref.watch(activeWorkersProvider);
     final existing = widget.advance;
@@ -257,7 +327,7 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
               ),
               const SizedBox(height: 32),
               FilledButton.icon(
-                onPressed: saving ? null : () => _save(workers),
+                onPressed: busy ? null : () => _save(workers),
                 icon: saving
                     ? const SizedBox(
                         width: 20,
@@ -269,8 +339,20 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
               ),
               if (!_isNew && existing!.isOpen) ...[
                 const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _markAccountSeen(existing),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: incomeColor(context),
+                    side: BorderSide(
+                        color: incomeColor(context).withValues(alpha: 0.6)),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Hesap Görüldü (alacağı kalmadı)'),
+                ),
+                const SizedBox(height: 8),
                 TextButton.icon(
-                  onPressed: saving ? null : _delete,
+                  onPressed: busy ? null : _delete,
                   style: TextButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,
                     minimumSize: const Size.fromHeight(48),

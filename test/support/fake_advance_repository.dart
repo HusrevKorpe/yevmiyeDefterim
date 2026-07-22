@@ -49,6 +49,31 @@ class FakeAdvanceRepository implements AdvanceRepository {
   }
 
   @override
+  Future<void> settleAdvances(Iterable<String> ids, String settledDate) async {
+    final marker = Advance.manualSettlementId(settledDate);
+    for (final id in ids) {
+      final a = _store[id];
+      if (a != null) {
+        _store[id] = a.copyWith(settledPayrollId: marker);
+        bumpRev(id);
+      }
+    }
+    _tick.add(null);
+  }
+
+  @override
+  Future<void> reopenAdvances(Iterable<String> ids) async {
+    for (final id in ids) {
+      final a = _store[id];
+      if (a != null) {
+        _store[id] = a.copyWith(settledPayrollId: null);
+        bumpRev(id);
+      }
+    }
+    _tick.add(null);
+  }
+
+  @override
   Future<int?> currentRev(String id) async =>
       _store.containsKey(id) ? (_rev[id] ?? 0) : null;
 }

@@ -322,6 +322,18 @@ class _AdvanceRow extends StatelessWidget {
   const _AdvanceRow({required this.advance});
   final Advance advance;
 
+  /// Avansın durum etiketi: açık / hesap görüldü (tarihli) / (eski) mahsup.
+  static String _advanceStatus(Advance a) {
+    if (a.isOpen) return 'Açık (devrediyor)';
+    if (a.isManuallySettled) {
+      final d = a.settledDate;
+      return d == null
+          ? 'Hesap görüldü'
+          : 'Hesap görüldü • ${formatHumanDateNoWeekday(d)}';
+    }
+    return 'Mahsup edildi';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -332,7 +344,7 @@ class _AdvanceRow extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(advance.isOpen ? 'Açık (devrediyor)' : 'Mahsup edildi'),
+          Text(_advanceStatus(advance)),
           if (advance.note != null && advance.note!.isNotEmpty)
             AdvanceNoteChip(advance.note!),
         ],
