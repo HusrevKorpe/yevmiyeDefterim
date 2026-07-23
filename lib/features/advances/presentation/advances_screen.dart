@@ -11,6 +11,7 @@ import '../../../app/theme.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/advance_providers.dart';
 import '../application/advance_view_model.dart';
@@ -54,7 +55,8 @@ class AdvancesScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: 96),
             children: [
               ..._openSection(context, open),
-              if (settled.isNotEmpty) _settledSection(context, ref, settled),
+              if (settled.isNotEmpty)
+                _settledSection(context, ref, open: open, settled: settled),
             ],
           );
         },
@@ -98,7 +100,11 @@ class AdvancesScreen extends ConsumerWidget {
   /// Hakediş rafta olduğundan pratikte tüm kapanmışlar "hesap görüldü" yoluyla
   /// gelir; eski hakediş mahsupları (varsa) salt-okunur satır olarak gösterilir.
   Widget _settledSection(
-      BuildContext context, WidgetRef ref, List<Advance> settled) {
+    BuildContext context,
+    WidgetRef ref, {
+    required List<Advance> open,
+    required List<Advance> settled,
+  }) {
     final manual = settled.where((a) => a.isManuallySettled).toList();
     final legacy = settled.where((a) => !a.isManuallySettled).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
@@ -119,7 +125,12 @@ class AdvancesScreen extends ConsumerWidget {
         for (final k in keys)
           _SettledWorkerCard(
             advances: groups[k]!,
-            onReopen: () => _reopen(context, ref, groups[k]!),
+            onReopen: () => _reopen(
+              context,
+              ref,
+              groups[k]!,
+              carryoverIds: _carryoverIdsFor(groups[k]!, open),
+            ),
           ),
         for (final a in legacy)
           ListTile(
@@ -141,34 +152,43 @@ class AdvancesScreen extends ConsumerWidget {
     );
   }
 
-  /// "Hesap görüldü"yü geri alır — grubun avansları yeniden açık olur.
+  /// Grubun kapanışında oluşan ve hâlâ açık duran devir kayıtları — geri
+  /// almada birlikte silinir ki aynı alacak iki kez sayılmasın.
+  List<String> _carryoverIdsFor(List<Advance> group, List<Advance> open) {
+    final d = group.first.settledDate;
+    if (d == null) return const [];
+    final workerId = group.first.workerId;
+    return [
+      for (final a in open)
+        if (a.workerId == workerId && a.isCarryoverOf(d)) a.id,
+    ];
+  }
+
+  /// "Hesap görüldü"yü geri alır — grubun avansları yeniden açık olur;
+  /// kapanışta oluşan devir kaydı (varsa) silinir.
   Future<void> _reopen(
-      BuildContext context, WidgetRef ref, List<Advance> group) async {
+    BuildContext context,
+    WidgetRef ref,
+    List<Advance> group, {
+    List<String> carryoverIds = const [],
+  }) async {
     final name = group.first.workerName;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Geri al'),
-        content: Text(
-          '$name için “hesap görüldü” geri alınsın mı? Avansları yeniden '
-          'açık (devrediyor) olarak görünecek.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Geri Al'),
-          ),
-        ],
-      ),
+    final devirText = carryoverIds.isEmpty
+        ? ''
+        : ' Kapanışta oluşan devir kaydı da silinecek.';
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Geri al',
+      message: '$name için “hesap görüldü” geri alınsın mı? Avansları yeniden '
+          'açık (devrediyor) olarak görünecek.$devirText',
+      confirmLabel: 'Geri Al',
+      icon: Icons.undo,
+      accent: Theme.of(context).colorScheme.primary,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await ref
         .read(accountSettlementViewModelProvider.notifier)
-        .reopen(group.map((a) => a.id).toList());
+        .reopen(group.map((a) => a.id).toList(), deleteIds: carryoverIds);
   }
 }
 

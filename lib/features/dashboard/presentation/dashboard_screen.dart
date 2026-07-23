@@ -10,6 +10,7 @@ import '../../../app/theme.dart';
 import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/application/user_access.dart';
@@ -20,24 +21,14 @@ class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Çıkış'),
-        content: const Text('Oturumu kapatmak istediğinize emin misiniz?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Çıkış Yap'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Çıkış',
+      message: 'Oturumu kapatmak istediğinize emin misiniz?',
+      confirmLabel: 'Çıkış Yap',
+      icon: Icons.logout,
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(authRepositoryProvider).signOut();
     }
   }

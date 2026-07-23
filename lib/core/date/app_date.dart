@@ -22,21 +22,44 @@ String toIsoDate(DateTime date) =>
 String todayIso([DateTime? now]) => toIsoDate(now ?? DateTime.now());
 
 /// `'yyyy-MM-dd'` string'ini yerel [DateTime]'a çevirir (gün başı 00:00).
+/// Mantık/sorgu tarafı katıdır: bozuk girişte [FormatException] fırlatır.
 DateTime parseIsoDate(String iso) => _isoDate.parseStrict(iso);
 
+/// `'yyyy-MM-dd'` biçiminde geçerli bir tarih mi? Bozuk/eksik dokümandan gelen
+/// tarih string'lerini gösterim öncesi elemek için.
+bool isValidIsoDate(String iso) {
+  try {
+    _isoDate.parseStrict(iso);
+    return true;
+  } on FormatException {
+    return false;
+  }
+}
+
+/// Gösterim formatlayıcılarının ortak güvenlik ağı: bozuk/eksik tarih string'i
+/// (kısmi senkron, elle bozulmuş doküman) ekranı ÇÖKERTMEZ — ham değer aynen
+/// gösterilir. Mantık tarafı [parseIsoDate] ile katı kalır.
+String _safeFormat(DateFormat fmt, String iso) {
+  try {
+    return fmt.format(_isoDate.parseStrict(iso));
+  } on FormatException {
+    return iso;
+  }
+}
+
 /// Gösterim için TR insancıl tarih: "18 Temmuz 2026, Cuma".
-String formatHumanDate(String iso) => _humanDate.format(parseIsoDate(iso));
+String formatHumanDate(String iso) => _safeFormat(_humanDate, iso);
 
 /// Gün adı olmadan insancıl tarih: "18 Temmuz 2026". Dar/iki satırlı başlıklar
 /// için — uzun gün adı ("Cumartesi") ayrı satıra alınır ki tarih taşmasın.
 String formatHumanDateNoWeekday(String iso) =>
-    _humanDateNoWeekday.format(parseIsoDate(iso));
+    _safeFormat(_humanDateNoWeekday, iso);
 
 /// Yalnız gün adı: "Cuma" / "Cumartesi".
-String formatWeekday(String iso) => _weekday.format(parseIsoDate(iso));
+String formatWeekday(String iso) => _safeFormat(_weekday, iso);
 
 /// Kompakt TR tarih (dönem pili için): "18 Temmuz".
-String formatShortDate(String iso) => _shortDate.format(parseIsoDate(iso));
+String formatShortDate(String iso) => _safeFormat(_shortDate, iso);
 
 /// [iso] tarihine [days] gün ekler/çıkarır, yeni `'yyyy-MM-dd'` döner.
 String shiftIsoDate(String iso, int days) =>

@@ -67,6 +67,8 @@ class FirestoreLedgerRepository implements LedgerRepository {
   /// Kasa'da görünmemesi gereken dokümanları okurken eler. İki kural:
   ///
   /// 1. **Gelir** (`type == 'income'`) — gelir kavramı kaldırıldı, KALICI elenir.
+  ///    (`type == 'tahsilat'` GÖRÜNÜR — esnafa önden verilen para; toplamlardan
+  ///    dışlanması [summarizeLedger]'da yapılır, burada değil.)
   /// 2. **Otomatik maaş/elebaşı** (`source: payroll/elebasi`) — hakediş "Öde"
   ///    akışının yazdığı salt-okunur kayıtlar. Hakediş rafa kalkınca bunları
   ///    silecek arayüz kalmadığından Kasa'da asılı kalıyorlardı → eleniyorlar.

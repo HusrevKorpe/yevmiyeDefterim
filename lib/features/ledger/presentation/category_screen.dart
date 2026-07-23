@@ -3,6 +3,10 @@
 /// Kasa'dan açılır (Mazot/Tamir/Bakkal — [LedgerCategory.screened]). Tüm
 /// dönemlerin kayıtlarını gösterir (bu giderler sürekli takip edilir). Kayıt
 /// eklemek/düzenlemek Kasa kayıt ekranını kullanır (kategori ön seçili).
+///
+/// Tahsilat (esnafa önden verilen para) varsa üst kart bakiye görünümüne
+/// geçer: verilen − harcanan = kalan. Tahsilat gider toplamlarına GİRMEZ
+/// (kural §6 — harcama, alım kayıtlarıyla sayılır).
 library;
 
 import 'package:flutter/material.dart';
@@ -41,7 +45,16 @@ class CategoryScreen extends ConsumerWidget {
     final label = LedgerCategory.label(category);
     final async = ref.watch(ledgerStreamProvider);
     final entries = ref.watch(categoryEntriesProvider(category));
-    final total = entries.fold<int>(0, (s, e) => s + e.amountKurus);
+    // Tahsilat = esnafa önden verilen para; gider = alımlar. Kalan bakiye
+    // kartta gösterilir (tahsilat gider toplamına GİRMEZ — kural §6).
+    var verilen = 0, harcanan = 0;
+    for (final e in entries) {
+      if (e.isTahsilat) {
+        verilen += e.amountKurus;
+      } else {
+        harcanan += e.amountKurus;
+      }
+    }
 
     return Scaffold(
       appBar: GradientAppBar(
@@ -65,7 +78,8 @@ class CategoryScreen extends ConsumerWidget {
             children: [
               _TotalCard(
                 category: category,
-                total: total,
+                verilenKurus: verilen,
+                harcananKurus: harcanan,
                 count: entries.length,
               ),
               const SizedBox(height: 4),
@@ -94,43 +108,131 @@ class CategoryScreen extends ConsumerWidget {
 class _TotalCard extends StatelessWidget {
   const _TotalCard({
     required this.category,
-    required this.total,
+    required this.verilenKurus,
+    required this.harcananKurus,
     required this.count,
   });
 
   final String category;
-  final int total;
+
+  /// Tahsilat toplamı (esnafa önden verilen para).
+  final int verilenKurus;
+
+  /// Gider (alım) toplamı.
+  final int harcananKurus;
+
   final int count;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final label = LedgerCategory.label(category).toLowerCase();
+
+    // Hiç tahsilat yoksa eski sade görünüm: tek satır toplam gider.
+    if (verilenKurus == 0) {
+      final label = LedgerCategory.label(category).toLowerCase();
+      return Card(
+        margin: const EdgeInsets.all(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(categoryIcon(category), color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Toplam $label ($count kayıt)',
+                    style: theme.textTheme.titleMedium),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                formatKurus(harcananKurus),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Tahsilat varsa bakiye görünümü: verilen − harcanan = kalan.
+    final kalan = verilenKurus - harcananKurus;
+    final green = incomeColor(context);
+    final red = theme.colorScheme.error;
     return Card(
       margin: const EdgeInsets.all(12),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(categoryIcon(category), color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text('Toplam $label ($count kayıt)',
-                  style: theme.textTheme.titleMedium),
+            Row(
+              children: [
+                Icon(categoryIcon(category), color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${LedgerCategory.label(category)} ($count kayıt)',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              formatKurus(total),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.error,
-              ),
+            const SizedBox(height: 10),
+            _row(theme, 'Verilen para', '+${formatKurus(verilenKurus)}', green),
+            const SizedBox(height: 4),
+            _row(theme, 'Harcanan', '−${formatKurus(harcananKurus)}', red),
+            const Divider(height: 16),
+            _row(
+              theme,
+              'Kalan',
+              formatKurus(kalan),
+              kalan >= 0 ? green : red,
+              bold: true,
             ),
           ],
         ),
       ),
     );
   }
+
+  // Tutar büyük sistem fontunda taşmasın diye sığmazsa küçülerek tek satırda
+  // kalır (tarih başlıklarıyla aynı FittedBox scaleDown deseni).
+  Widget _row(
+    ThemeData theme,
+    String label,
+    String value,
+    Color color, {
+    bool bold = false,
+  }) =>
+      Row(
+        children: [
+          Text(
+            label,
+            style: bold
+                ? theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)
+                : theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const Spacer(),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: (bold
+                        ? theme.textTheme.titleLarge
+                        : theme.textTheme.titleSmall)
+                    ?.copyWith(fontWeight: FontWeight.bold, color: color),
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _EmptyCategory extends StatelessWidget {

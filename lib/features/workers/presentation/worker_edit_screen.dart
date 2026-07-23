@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
@@ -101,7 +102,8 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
   Future<void> _toggleActive() async {
     final w = widget.worker!;
     if (w.active) {
-      final ok = await _confirm(
+      final ok = await showConfirmDialog(
+        context,
         title: 'İşçiyi pasif yap',
         message:
             '${w.name} pasif yapılsın mı? Yoklama ve seçim listelerinde görünmez, '
@@ -109,114 +111,11 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
         confirmLabel: 'Pasif Yap',
         icon: Icons.person_off_outlined,
       );
-      if (ok != true) return;
+      if (!ok) return;
     }
     await ref
         .read(workerEditViewModelProvider.notifier)
         .setActive(id: w.id, active: !w.active);
-  }
-
-  Future<bool?> _confirm({
-    required String title,
-    required String message,
-    required String confirmLabel,
-    required IconData icon,
-    Color? accent,
-  }) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final accentColor = accent ?? cs.error;
-    return showDialog<bool>(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Degrade tonlu ikon rozeti — sanatsal başlık dokunuşu.
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      accentColor.withValues(alpha: 0.22),
-                      accentColor.withValues(alpha: 0.06),
-                    ],
-                  ),
-                ),
-                child: Icon(icon, size: 30, color: accentColor),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: cs.onSurfaceVariant, height: 1.35),
-              ),
-              const SizedBox(height: 24),
-              // Eşit genişlikte iki buton; renkle ayrılır (nötr / aksan).
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        style: TextButton.styleFrom(
-                          foregroundColor: cs.onSurfaceVariant,
-                          backgroundColor: cs.surfaceContainerHighest,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text('Vazgeç'),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: cs.onError,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(confirmLabel),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   @override

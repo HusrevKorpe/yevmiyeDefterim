@@ -13,6 +13,7 @@ import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../advances/presentation/advance_edit_screen.dart';
 import '../../auth/application/user_access.dart';
@@ -73,27 +74,16 @@ Future<void> _confirmPastEdit(
   // Diyalog beklenirken widget ağacı değişebilir → notifier'ı önden al
   // (await sonrası `ref` kullanmamak için).
   final unlock = ref.read(pastEditUnlockedDateProvider.notifier);
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Geçmiş günü değiştir'),
-      content: Text(
-        '${formatHumanDate(date)} gününe ait yoklamayı değiştirmek '
+  final ok = await showConfirmDialog(
+    context,
+    title: 'Geçmiş günü değiştir',
+    message: '${formatHumanDate(date)} gününe ait yoklamayı değiştirmek '
         'üzeresiniz. Devam edilsin mi?',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Vazgeç'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Değiştir'),
-        ),
-      ],
-    ),
+    confirmLabel: 'Değiştir',
+    icon: Icons.edit_calendar_outlined,
+    accent: StatusColors.half,
   );
-  if (ok == true) {
+  if (ok) {
     unlock.unlock(date);
     await action();
   }

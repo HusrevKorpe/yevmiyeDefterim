@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ids/ids.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/fields_providers.dart';
 import '../data/field.dart';
@@ -97,30 +98,15 @@ class FieldsScreen extends ConsumerWidget {
 
   /// Onaylı soft-delete: geçmiş yoklama kayıtlarındaki tarla bilgisi silinmez.
   Future<void> _delete(BuildContext context, WidgetRef ref, Field field) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Tarlayı Sil'),
-        content: Text(
-          '"${field.name}" listeden kaldırılacak. Geçmiş yoklama '
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Tarlayı Sil',
+      message: '"${field.name}" listeden kaldırılacak. Geçmiş yoklama '
           'kayıtlarındaki tarla bilgisi silinmez.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sil'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Sil',
+      icon: Icons.delete_outline,
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(fieldRepositoryProvider).setActive(field.id, active: false);
     }
   }

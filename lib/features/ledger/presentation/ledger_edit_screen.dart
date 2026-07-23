@@ -11,8 +11,10 @@ import '../../../core/constants/categories.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
+import '../../../app/theme.dart';
 import '../../../core/widgets/app_date_picker.dart';
 import '../../../core/widgets/category_icon.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/ledger_edit_view_model.dart';
@@ -41,6 +43,7 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
   late final TextEditingController _amountCtrl;
   late final TextEditingController _noteCtrl;
   late String _category;
+  late String _kind;
   late String _date;
 
   /// Düzenlemeye başlarken kaydın sürümü — kaydederken değişti mi diye karşılaştırılır
@@ -52,6 +55,10 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
 
   List<String> get _categories => LedgerCategory.manualExpense;
 
+  /// Seçili kategoride tahsilat girilebilir mi? (Mazot/Tamir/Bakkal — esnafa
+  /// önden para verilen kategoriler; Genel'de tür seçici görünmez.)
+  bool get _canTahsilat => LedgerKind.tahsilatCategories.contains(_category);
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +69,7 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
     _noteCtrl = TextEditingController(text: e?.note ?? '');
     _category =
         e?.category ?? widget.initialCategory ?? LedgerCategory.genel;
+    _kind = e?.kind ?? LedgerKind.gider;
     _date = e?.date ?? todayIso();
     if (e != null) _loadBaseRev(e.id);
   }
@@ -101,6 +109,8 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
       amountKurus: amount,
       date: _date,
       source: LedgerSource.manual,
+      // Tahsilat yalnız kendi ekranı olan kategorilerde girilebilir.
+      kind: _canTahsilat ? _kind : LedgerKind.gider,
       note: note.isEmpty ? null : note,
     );
 
@@ -122,33 +132,23 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
         e.id != entry.id &&
         e.isManual &&
         e.category == entry.category &&
+        e.kind == entry.kind &&
         e.amountKurus == entry.amountKurus &&
         e.date == entry.date);
     if (!duplicate) return true;
     if (!mounted) return false;
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Aynı kayıt var'),
-        content: Text(
-          '${formatHumanDate(entry.date)} tarihinde '
+    return showConfirmDialog(
+      context,
+      title: 'Aynı kayıt var',
+      message: '${formatHumanDate(entry.date)} tarihinde '
           '${LedgerCategory.label(entry.category)} için '
-          '${formatKurus(entry.amountKurus)} tutarında kayıt zaten var. '
+          '${formatKurus(entry.amountKurus)} tutarında '
+          '${entry.isTahsilat ? 'tahsilat' : 'kayıt'} zaten var. '
           'Yine de eklensin mi?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Yine de Ekle'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Yine de Ekle',
+      icon: Icons.warning_amber_rounded,
+      accent: StatusColors.half,
     );
-    return proceed == true;
   }
 
   /// Kayıt düzenleme başladığından beri (başka cihazda) değiştiyse onay ister.
@@ -164,52 +164,29 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
     }
     if (now == null || now == base) return true;
     if (!mounted) return false;
-    final overwrite = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Kayıt değişmiş'),
-        content: const Text(
-          'Bu kayıt siz düzenlerken başka bir cihazda değiştirildi. '
+    return showConfirmDialog(
+      context,
+      title: 'Kayıt değişmiş',
+      message: 'Bu kayıt siz düzenlerken başka bir cihazda değiştirildi. '
           'Kaydederseniz onların değişikliği kaybolur. Yine de kaydedilsin mi?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Üzerine Yaz'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Üzerine Yaz',
+      icon: Icons.sync_problem,
+      accent: StatusColors.half,
     );
-    return overwrite == true;
   }
 
   Future<void> _delete() async {
     final e = widget.entry!;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Kaydı sil'),
-        content: Text(
-          '${LedgerCategory.label(e.category)} '
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Kaydı sil',
+      message:
+          '${LedgerCategory.label(e.category)}${e.isTahsilat ? ' tahsilatı' : ''} '
           '${formatKurus(e.amountKurus)} kaydı silinsin mi?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Sil',
+      icon: Icons.delete_outline,
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(ledgerEditViewModelProvider.notifier).delete(e);
     }
   }
@@ -249,8 +226,51 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
                 selected: _category,
                 onSelected: saving
                     ? null
-                    : (c) => setState(() => _category = c),
+                    : (c) => setState(() {
+                          _category = c;
+                          // Tahsilat girilemeyen kategoriye geçince tür sıfırlanır.
+                          if (!_canTahsilat) _kind = LedgerKind.gider;
+                        }),
               ),
+              // Tür seçici — yalnız esnafa önden para verilen kategorilerde
+              // (Mazot/Tamir/Bakkal). Tahsilat gider toplamına girmez.
+              if (_canTahsilat) ...[
+                const SizedBox(height: 24),
+                const FieldLabel('Tür'),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    SelectableChip(
+                      selected: _kind == LedgerKind.gider,
+                      label: 'Gider',
+                      icon: Icons.arrow_downward,
+                      onSelected: saving
+                          ? null
+                          : (_) => setState(() => _kind = LedgerKind.gider),
+                    ),
+                    SelectableChip(
+                      selected: _kind == LedgerKind.tahsilat,
+                      label: 'Tahsilat',
+                      icon: Icons.savings_outlined,
+                      onSelected: saving
+                          ? null
+                          : (_) => setState(() => _kind = LedgerKind.tahsilat),
+                    ),
+                  ],
+                ),
+                if (_kind == LedgerKind.tahsilat) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Esnafa önden verilen para. Gider toplamına eklenmez; '
+                    '${LedgerCategory.label(_category)} ekranında '
+                    '"kalan" olarak izlenir.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ],
               const SizedBox(height: 24),
               const FieldLabel('Tarih'),
               PickerTile(

@@ -28,10 +28,15 @@ class LedgerSummary {
 }
 
 /// Kayıt listesini toplam gider ve kategori kırılımına göre özetler.
+///
+/// Tahsilat kayıtları (esnafa önden verilen para) TOPLANMAZ: harcama, alım
+/// (gider) kayıtlarıyla sayılır; tahsilat da eklense aynı para iki kez
+/// sayılırdı (kural §6). Tahsilat yalnız kategori ekranında bakiye gösterir.
 LedgerSummary summarizeLedger(List<LedgerEntry> entries) {
   var expense = 0;
   final byCategory = <String, int>{};
   for (final e in entries) {
+    if (e.isTahsilat) continue;
     expense += e.amountKurus;
     byCategory.update(
       e.category,

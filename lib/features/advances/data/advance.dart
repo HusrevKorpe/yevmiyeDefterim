@@ -7,6 +7,8 @@ library;
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../../core/date/app_date.dart';
+
 part 'advance.freezed.dart';
 
 @freezed
@@ -51,10 +53,28 @@ abstract class Advance with _$Advance {
       settledPayrollId != null &&
       settledPayrollId!.startsWith(manualSettlementPrefix);
 
-  /// "Hesap görüldü" kapanış tarihi (`'yyyy-MM-dd'`) — elle kapatılmadıysa null.
-  String? get settledDate => isManuallySettled
-      ? settledPayrollId!.substring(manualSettlementPrefix.length)
-      : null;
+  /// "Hesap görüldü" kapanış tarihi (`'yyyy-MM-dd'`) — elle kapatılmadıysa ya da
+  /// işaretteki tarih bozuksa null. Bozuk veri UI'da tarihsiz "Hesap görüldü"
+  /// olarak gösterilir; tarih formatlama asla çökmez.
+  String? get settledDate {
+    if (!isManuallySettled) return null;
+    final d = settledPayrollId!.substring(manualSettlementPrefix.length);
+    return isValidIsoDate(d) ? d : null;
+  }
+
+  /// "Hesap görüldü"de girilen devreden alacak, bu önekle başlayan ID'li YENİ
+  /// açık avans olarak yazılır: `'devir-<kapanış-tarihi>-<uuid>'`. Geri almada
+  /// ilgili devir kaydı ID'den bulunup silinir (yeni alan/freezed regen
+  /// gerekmez; kullanıcı notu/tarihi değiştirse de bağ kopmaz).
+  static const String carryoverIdPrefix = 'devir-';
+
+  /// Verilen kapanış tarihi için devir avansı ID'si üretir.
+  static String carryoverId(String settledDate, String uuid) =>
+      '$carryoverIdPrefix$settledDate-$uuid';
+
+  /// Bu avans, [settledDate] tarihli "hesap görüldü"nün devir kaydı mı?
+  bool isCarryoverOf(String settledDate) =>
+      id.startsWith('$carryoverIdPrefix$settledDate-');
 
   /// Firestore dokümanından okur. Eksik/bozuk alanlar güvenli varsayılana düşer
   /// (offline'da kısmi doküman gelebilir — çökme yerine güvenli varsayılan).
@@ -62,12 +82,12 @@ abstract class Advance with _$Advance {
     final m = data ?? const {};
     return Advance(
       id: id,
-      workerId: (m['workerId'] as String?) ?? '',
-      workerName: (m['workerName'] as String?)?.trim() ?? '',
+      workerId: _asString(m['workerId']) ?? '',
+      workerName: _asString(m['workerName'])?.trim() ?? '',
       amountKurus: _asInt(m['amountKurus']),
-      date: (m['date'] as String?) ?? '',
-      settledPayrollId: m['settledPayrollId'] as String?,
-      note: (m['note'] as String?)?.trim(),
+      date: _asString(m['date']) ?? '',
+      settledPayrollId: _asString(m['settledPayrollId']),
+      note: _asString(m['note'])?.trim(),
     );
   }
 
@@ -87,3 +107,7 @@ int _asInt(Object? v) {
   if (v is num) return v.toInt();
   return 0;
 }
+
+/// Bozuk tipte (`as String?` cast hatası yerine) null'a düşer — fromDoc'un
+/// "güvenli varsayılan" vaadi tip bozulmasında da geçerli olsun.
+String? _asString(Object? v) => v is String ? v : null;

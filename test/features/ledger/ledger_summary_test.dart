@@ -42,6 +42,26 @@ void main() {
       expect(s.expenseKurus, 700000);
     });
 
+    test('tahsilat gider toplamına GİRMEZ (çifte sayım olmaz)', () {
+      final s = summarizeLedger([
+        expense(200000, cat: LedgerCategory.mazot),
+        // 50.000 TL önden verilen para — toplamlar dışı, bakiye amaçlı.
+        expense(5000000, cat: LedgerCategory.mazot)
+            .copyWith(kind: LedgerKind.tahsilat),
+      ]);
+      expect(s.expenseKurus, 200000);
+      expect(s.mazotKurus, 200000);
+    });
+
+    test('yalnız tahsilat varsa özet sıfır kalır', () {
+      final s = summarizeLedger([
+        expense(5000000, cat: LedgerCategory.bakkal)
+            .copyWith(kind: LedgerKind.tahsilat),
+      ]);
+      expect(s.expenseKurus, 0);
+      expect(s.expenseByCategory, isEmpty);
+    });
+
     test('categoryKurus: tamir/bakkal ayrı toplanır, olmayan kategori 0', () {
       final s = summarizeLedger([
         expense(50000, cat: LedgerCategory.tamir),

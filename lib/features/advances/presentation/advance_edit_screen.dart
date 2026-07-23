@@ -13,6 +13,7 @@ import '../../../core/date/app_date.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/app_date_picker.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../workers/application/workers_providers.dart';
@@ -20,6 +21,7 @@ import '../../workers/data/worker.dart';
 import '../application/advance_providers.dart';
 import '../application/advance_view_model.dart';
 import '../data/advance.dart';
+import 'widgets/settle_account_dialog.dart';
 
 class AdvanceEditScreen extends ConsumerStatefulWidget {
   const AdvanceEditScreen({super.key, this.advance, this.initialWorkerId});
@@ -83,27 +85,15 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     }
     if (now == null || now == base) return true;
     if (!mounted) return false;
-    final overwrite = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Avans değişmiş'),
-        content: const Text(
-          'Bu avans siz düzenlerken başka bir cihazda değiştirildi. '
+    return showConfirmDialog(
+      context,
+      title: 'Avans değişmiş',
+      message: 'Bu avans siz düzenlerken başka bir cihazda değiştirildi. '
           'Kaydederseniz onların değişikliği kaybolur. Yine de kaydedilsin mi?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Üzerine Yaz'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Üzerine Yaz',
+      icon: Icons.sync_problem,
+      accent: StatusColors.half,
     );
-    return overwrite == true;
   }
 
   @override
@@ -149,84 +139,90 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
 
   Future<void> _delete() async {
     final a = widget.advance!;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Avansı sil'),
-        content: Text(
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Avansı sil',
+      message:
           '${a.workerName} için ${formatKurus(a.amountKurus)} avans silinsin mi?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Sil',
+      icon: Icons.delete_outline,
     );
-    if (ok == true) {
+    if (ok) {
       await ref.read(advanceEditViewModelProvider.notifier).delete(a);
     }
   }
 
-  /// "Hesap görüldü" — işçinin TÜM açık avanslarını (bu avans dahil) bugünkü
-  /// tarihle kapatır → alacağı kalmadı. Onay ister, geri al (SnackBar) sunar.
-  Future<void> _markAccountSeen(Advance existing) async {
-    // İşçinin bütün açık avansları — hepsi tek seferde kapanır.
-    final all =
-        ref.read(advancesStreamProvider).asData?.value ?? const <Advance>[];
-    final open = all
-        .where((a) => a.workerId == existing.workerId && a.isOpen)
-        .toList();
-    if (open.isEmpty) return;
-    final ids = open.map((a) => a.id).toList();
-    final total = open.fold<int>(0, (s, a) => s + a.amountKurus);
-    final countText = open.length > 1 ? ' · ${open.length} kayıt' : '';
+  /// "Hesap görüldü" — işçinin TÜM açık avanslarını bugünkü tarihle kapatır →
+  /// alacağı kalmadı. Onay ister, geri al (SnackBar) sunar. Hem düzenlemeden
+  /// (eldeki avans [fallback]) hem yeni "Avans Ver" ekranından çağrılır.
+  Future<void> _markAccountSeen({
+    required String workerId,
+    required String workerName,
+    Advance? fallback,
+  }) async {
+    // İşçinin bütün açık avansları — hepsi tek seferde kapanır. Liste akışı
+    // henüz veri vermediyse (ekran akış dışı açıldı) sessiz kalmak yerine en
+    // azından eldeki avans kapatılır.
+    final all = ref.read(advancesStreamProvider).asData?.value;
+    final open = all == null
+        ? <Advance>[?fallback]
+        : all.where((a) => a.workerId == workerId && a.isOpen).toList();
 
     // Kök ScaffoldMessenger'ı async gap'ten önce yakala: ekran kapansa da
     // SnackBar (Geri Al) avanslar ekranında güvenle görünür.
     final messenger = ScaffoldMessenger.of(context);
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Hesap görüldü'),
-        content: Text(
-          '${existing.workerName} için hesap görüldü olarak işaretlensin mi?\n\n'
-          'Açık avansları (${formatKurus(total)}$countText) kapanacak ve '
-          '“alacağı kalmadı” olarak görünecek. Geri alınabilir.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.check_circle),
-            label: const Text('Hesap Görüldü'),
-          ),
-        ],
-      ),
+    if (open.isEmpty) {
+      // Bu arada başka cihazda kapatılmış/silinmiş — sessiz kalma, bildir.
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Kapatılacak açık avans kalmamış.')),
+      );
+      return;
+    }
+    final ids = open.map((a) => a.id).toList();
+    final total = open.fold<int>(0, (s, a) => s + a.amountKurus);
+
+    // Onay + isteğe bağlı "devreden alacağımız" (null = vazgeçti, 0 = devirsiz).
+    final devirKurus = await showSettleAccountDialog(
+      context,
+      workerName: workerName,
+      openTotalKurus: total,
+      openCount: open.length,
     );
-    if (ok != true) return;
+    if (devirKurus == null) return;
+
+    final today = todayIso();
+    // Devreden alacağımız: kapanışla AYNI batch'te yeni açık avans yazılır →
+    // sonraki hesapta/yoklamada devam eder. Geri almada birlikte silinir.
+    final carryover = devirKurus <= 0
+        ? null
+        : Advance(
+            id: Advance.carryoverId(today, newId()),
+            workerId: workerId,
+            workerName: workerName,
+            amountKurus: devirKurus,
+            date: today,
+            note: 'Önceki hesaptan devir',
+          );
 
     // Notifier'ı önden yakala: ekran kapansa da "Geri Al" güvenle çalışsın.
     final vm = ref.read(accountSettlementViewModelProvider.notifier);
-    final success = await vm.settle(ids, todayIso());
+    final success = await vm.settle(ids, today, carryover: carryover);
     if (!mounted) return;
     if (success) {
       Navigator.of(context).pop();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('${existing.workerName} için hesap görüldü.'),
+          content: Text(carryover == null
+              ? '$workerName için hesap görüldü.'
+              : '$workerName için hesap görüldü · '
+                  '${formatKurus(carryover.amountKurus)} devretti.'),
           action: SnackBarAction(
             label: 'Geri Al',
-            onPressed: () => vm.reopen(ids),
+            onPressed: () => vm.reopen(
+              ids,
+              deleteIds: [if (carryover != null) carryover.id],
+            ),
           ),
         ),
       );
@@ -259,9 +255,17 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     final workers = ref.watch(activeWorkersProvider);
     final existing = widget.advance;
     // Ön-seçili işçi listede yoksa (ör. bu arada pasife alındı) seçimi düşür —
-    // dropdown initialValue listede olmayan değerle assert atar.
+    // listede olmayan değer alanda hayalet seçim olarak görünmesin.
     final selectedId =
         workers.any((w) => w.id == _workerId) ? _workerId : null;
+    // Yeni avansta seçili işçinin açık avansları — varsa "Hesap Görüldü"
+    // butonu doğrudan bu ekranda çıkar (mevcut avansa girmeye gerek yok).
+    final openForSelected = _isNew && selectedId != null
+        ? ref
+            .watch(openAdvancesProvider)
+            .where((a) => a.workerId == selectedId)
+            .toList()
+        : const <Advance>[];
 
     return Scaffold(
       appBar: GradientAppBar(title: _isNew ? 'Avans Ver' : 'Avansı Düzenle'),
@@ -274,25 +278,34 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
             children: [
               const FieldLabel('İşçi'),
               if (_isNew)
-                DropdownButtonFormField<String>(
-                  initialValue: selectedId,
-                  isExpanded: true,
-                  decoration: entryFieldDecoration(
-                    context,
-                    hint: 'İşçi seçin',
-                    icon: Icons.person_outline,
+                // DropdownMenu menüyü HER ZAMAN alanın altına açar (eski
+                // DropdownButtonFormField seçili öğeyi alanın üstüne getirmek
+                // için bir yukarı bir aşağı açılıyordu). Uzun liste menü
+                // içinde kayar (menuHeight).
+                DropdownMenuFormField<String>(
+                  initialSelection: selectedId,
+                  enabled: !saving,
+                  requestFocusOnTap: false,
+                  expandedInsets: EdgeInsets.zero,
+                  menuHeight: 320,
+                  hintText: 'İşçi seçin',
+                  leadingIcon: const Icon(Icons.person_outline),
+                  inputDecorationTheme: entryFieldDecorationTheme(context),
+                  menuStyle: MenuStyle(
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                   ),
-                  items: [
+                  dropdownMenuEntries: [
                     for (final w in workers)
-                      DropdownMenuItem(
+                      DropdownMenuEntry(
                         value: w.id,
-                        child: Text(
-                          w.type.isCrew ? '${w.name} (Elebaşı)' : w.name,
-                        ),
+                        label: w.type.isCrew ? '${w.name} (Elebaşı)' : w.name,
                       ),
                   ],
-                  onChanged:
-                      saving ? null : (v) => setState(() => _workerId = v),
+                  onSelected: (v) => setState(() => _workerId = v),
                   validator: (v) => v == null ? 'İşçi seçin.' : null,
                 )
               else
@@ -337,10 +350,44 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
                     : const Icon(Icons.check),
                 label: Text(saving ? 'Kaydediliyor…' : 'Kaydet'),
               ),
+              if (_isNew && openForSelected.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => _markAccountSeen(
+                            workerId: selectedId!,
+                            workerName: workers
+                                .firstWhere((w) => w.id == selectedId)
+                                .name,
+                          ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: incomeColor(context),
+                    side: BorderSide(
+                        color: incomeColor(context).withValues(alpha: 0.6)),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: const Icon(Icons.check_circle_outline),
+                  // Uzun tutar + büyük sistem yazısında taşmasın — tek satıra sığdır.
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'Hesap Görüldü '
+                      '(${formatKurus(openForSelected.fold<int>(0, (s, a) => s + a.amountKurus))} açık)',
+                    ),
+                  ),
+                ),
+              ],
               if (!_isNew && existing!.isOpen) ...[
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: busy ? null : () => _markAccountSeen(existing),
+                  onPressed: busy
+                      ? null
+                      : () => _markAccountSeen(
+                            workerId: existing.workerId,
+                            workerName: existing.workerName,
+                            fallback: existing,
+                          ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: incomeColor(context),
                     side: BorderSide(

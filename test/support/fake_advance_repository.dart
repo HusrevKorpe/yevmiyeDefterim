@@ -49,7 +49,11 @@ class FakeAdvanceRepository implements AdvanceRepository {
   }
 
   @override
-  Future<void> settleAdvances(Iterable<String> ids, String settledDate) async {
+  Future<void> settleAdvances(
+    Iterable<String> ids,
+    String settledDate, {
+    Advance? carryover,
+  }) async {
     final marker = Advance.manualSettlementId(settledDate);
     for (final id in ids) {
       final a = _store[id];
@@ -58,17 +62,27 @@ class FakeAdvanceRepository implements AdvanceRepository {
         bumpRev(id);
       }
     }
+    if (carryover != null) {
+      _store[carryover.id] = carryover;
+      bumpRev(carryover.id);
+    }
     _tick.add(null);
   }
 
   @override
-  Future<void> reopenAdvances(Iterable<String> ids) async {
+  Future<void> reopenAdvances(
+    Iterable<String> ids, {
+    Iterable<String> deleteIds = const [],
+  }) async {
     for (final id in ids) {
       final a = _store[id];
       if (a != null) {
         _store[id] = a.copyWith(settledPayrollId: null);
         bumpRev(id);
       }
+    }
+    for (final id in deleteIds) {
+      _store.remove(id);
     }
     _tick.add(null);
   }

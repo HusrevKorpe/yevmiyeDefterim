@@ -8,6 +8,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../app/theme.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../auth/application/user_access.dart';
 import '../application/workers_providers.dart';
@@ -179,27 +180,15 @@ class _WorkerTile extends ConsumerWidget {
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final repo = ref.read(workerRepositoryProvider);
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('İşçiyi kaldır'),
-        content: Text(
-          '${worker.name} listeden kaldırılsın mı? Kaydı ve geçmişi korunur, '
-          '“Pasif İşçiler”e taşınır.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Kaldır'),
-          ),
-        ],
-      ),
+    final ok = await showConfirmDialog(
+      context,
+      title: 'İşçiyi kaldır',
+      message: '${worker.name} listeden kaldırılsın mı? Kaydı ve geçmişi '
+          'korunur, “Pasif İşçiler”e taşınır.',
+      confirmLabel: 'Kaldır',
+      icon: Icons.person_off_outlined,
     );
-    if (ok != true) return;
+    if (!ok) return;
     await repo.setActive(worker.id, active: false);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(

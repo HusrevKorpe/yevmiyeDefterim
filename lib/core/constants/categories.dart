@@ -44,3 +44,21 @@ class LedgerSource {
   static const String payroll = 'payroll';
   static const String elebasi = 'elebasi';
 }
+
+/// Kayıt türü — gider mi, tahsilat mı.
+///
+/// Tahsilat: esnafa (mazotçu/tamirci/bakkal) ÖNDEN verilen para; sonradan
+/// alım yapıldıkça bu paradan düşülür. Gider TOPLAMLARINA GİRMEZ — harcama,
+/// alım (gider) kayıtlarıyla sayılır; tahsilat da toplansa aynı para iki kez
+/// sayılırdı (kural §6). Kategori ekranında "verilen / harcanan / kalan"
+/// bakiyesini besler. Firestore'da tarihsel `type` alanında saklanır
+/// (`'income'` eski gelirdi ve okurken kalıcı elenir).
+class LedgerKind {
+  LedgerKind._();
+
+  static const String gider = 'gider';
+  static const String tahsilat = 'tahsilat';
+
+  /// Tahsilat girilebilen kategoriler (kendi ekranı olanlar).
+  static const List<String> tahsilatCategories = LedgerCategory.screened;
+}

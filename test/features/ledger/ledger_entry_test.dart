@@ -39,6 +39,34 @@ void main() {
       );
       expect(LedgerEntry.fromDoc(e.id, e.toMap()), e);
     });
+
+    test('tahsilat round-trip (tarihsel `type` alanında saklanır)', () {
+      final e = LedgerEntry(
+        id: 't1',
+        category: LedgerCategory.mazot,
+        amountKurus: 5000000,
+        date: '2026-07-22',
+        source: LedgerSource.manual,
+        kind: LedgerKind.tahsilat,
+      );
+      final map = e.toMap();
+      expect(map['type'], LedgerKind.tahsilat);
+      expect(LedgerEntry.fromDoc(e.id, map), e);
+    });
+
+    test('gider kaydında `type` null yazılır (eski biçimle aynı)', () {
+      final e = make();
+      expect(e.toMap()['type'], isNull);
+      expect(e.kind, LedgerKind.gider);
+    });
+
+    test('bilinmeyen/eksik `type` → gider', () {
+      expect(LedgerEntry.fromDoc('x', const {}).isTahsilat, isFalse);
+      expect(
+        LedgerEntry.fromDoc('y', const {'type': 'baska'}).kind,
+        LedgerKind.gider,
+      );
+    });
   });
 
   group('getter', () {

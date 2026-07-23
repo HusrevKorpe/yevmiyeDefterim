@@ -317,3 +317,26 @@ InputDecoration entryFieldDecoration(
     ),
   );
 }
+
+/// [entryFieldDecoration]'ın [DropdownMenu] için tema karşılığı — DropdownMenu
+/// süslemeyi tek tek değil tema olarak aldığından aynı "dolgulu yuvarlak"
+/// görünüm buradan verilir.
+InputDecorationThemeData entryFieldDecorationTheme(BuildContext context) {
+  final theme = Theme.of(context);
+  return InputDecorationThemeData(
+    filled: true,
+    fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+    ),
+  );
+}

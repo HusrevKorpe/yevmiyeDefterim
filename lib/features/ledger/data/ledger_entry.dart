@@ -25,6 +25,11 @@ abstract class LedgerEntry with _$LedgerEntry {
 
     /// Kayıt kaynağı — [LedgerSource] (manual/payroll/elebasi), çifte sayım izi.
     required String source,
+
+    /// Kayıt türü — [LedgerKind] (gider/tahsilat). Tahsilat: esnafa önden
+    /// verilen para; gider toplamlarına GİRMEZ, kategori ekranında
+    /// "verilen / kalan" bakiyesi olarak izlenir.
+    @Default(LedgerKind.gider) String kind,
     String? note,
 
     /// Kaynağı hakedişse ilgili payroll ID'si (izlenebilirlik).
@@ -39,6 +44,9 @@ abstract class LedgerEntry with _$LedgerEntry {
   /// akışının yazdığı (payroll/elebasi) kayıtlar dondurulur (kural §6).
   bool get isManual => source == LedgerSource.manual;
 
+  /// Tahsilat (esnafa önden verilen para) mı? Gider toplamlarına girmez.
+  bool get isTahsilat => kind == LedgerKind.tahsilat;
+
   factory LedgerEntry.fromDoc(String id, Map<String, dynamic>? data) {
     final m = data ?? const {};
     return LedgerEntry(
@@ -47,6 +55,11 @@ abstract class LedgerEntry with _$LedgerEntry {
       amountKurus: _asInt(m['amountKurus']),
       date: (m['date'] as String?) ?? '',
       source: (m['source'] as String?) ?? LedgerSource.manual,
+      // Tarihsel `type` alanı: 'tahsilat' → tahsilat; diğer her şey gider
+      // ('income' zaten repository'de elenir, buraya ulaşmaz).
+      kind: (m['type'] as String?) == LedgerKind.tahsilat
+          ? LedgerKind.tahsilat
+          : LedgerKind.gider,
       note: m['note'] as String?,
       payrollId: m['payrollId'] as String?,
       workerId: m['workerId'] as String?,
@@ -60,6 +73,10 @@ abstract class LedgerEntry with _$LedgerEntry {
         'amountKurus': amountKurus,
         'date': date,
         'source': source,
+        // Tarihsel `type` alanı; gider = null (eski kayıtlarla aynı biçim).
+        // Her zaman yazılır ki düzenlemede tahsilat→gider geçişi (merge)
+        // eski 'tahsilat' değerini silsin.
+        'type': isTahsilat ? LedgerKind.tahsilat : null,
         'note': note,
         'payrollId': payrollId,
         'workerId': workerId,

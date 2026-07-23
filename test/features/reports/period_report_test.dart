@@ -110,6 +110,17 @@ void main() {
     expect(r.expenseByCategory[LedgerCategory.genel], 80000);
   });
 
+  test('kasa: tahsilat rapor toplamlarına girmez (çifte sayım olmaz)', () {
+    final r = build(ledgerEntries: [
+      ledger(LedgerCategory.mazot, 120000, '2026-07-06'),
+      // 50.000 TL önden verilen para — yalnız kategori ekranı bakiyesi.
+      ledger(LedgerCategory.mazot, 5000000, '2026-07-05')
+          .copyWith(kind: LedgerKind.tahsilat),
+    ]);
+    expect(r.expenseKurus, 120000);
+    expect(r.mazotKurus, 120000);
+  });
+
   test('işçilik brütü = dönemdeki tüm yoklama kazançları (tam+yarım+elebaşı)',
       () {
     final r = build(attendance: [

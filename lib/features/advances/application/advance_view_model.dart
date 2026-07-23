@@ -2,10 +2,13 @@
 ///
 /// Ekran form durumunu tutar; bu ViewModel yalnız yazma işlemini ve
 /// yükleniyor/hata/bitti durumunu yönetir. Kapanmış avans düzenlenmez/silinmez.
+/// Yazmalar [awaitWriteAck] ile sarılır: offline'da sunucu onayı gelmese de
+/// UI süresiz kilitlenmez (yazma yerel kuyruğa girer, sonradan senkronlanır).
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/firestore/write_ack.dart';
 import '../data/advance.dart';
 import 'advance_providers.dart';
 
@@ -28,9 +31,9 @@ class AdvanceEditViewModel extends Notifier<AdvanceEditState> {
     try {
       final repo = ref.read(advanceRepositoryProvider);
       if (isNew) {
-        await repo.add(advance);
+        await awaitWriteAck(repo.add(advance));
       } else {
-        await repo.update(advance);
+        await awaitWriteAck(repo.update(advance));
       }
       state = const AdvanceEditState(done: true);
     } catch (_) {
@@ -51,7 +54,7 @@ class AdvanceEditViewModel extends Notifier<AdvanceEditState> {
     }
     state = const AdvanceEditState(saving: true);
     try {
-      await ref.read(advanceRepositoryProvider).delete(advance.id);
+      await awaitWriteAck(ref.read(advanceRepositoryProvider).delete(advance.id));
       state = const AdvanceEditState(done: true);
     } catch (_) {
       state = const AdvanceEditState(
@@ -77,14 +80,19 @@ class AccountSettlementViewModel extends Notifier<bool> {
   @override
   bool build() => false;
 
-  /// [ids] avanslarını [settledDate] ile kapatır. Başarılıysa true.
-  Future<bool> settle(Iterable<String> ids, String settledDate) async {
+  /// [ids] avanslarını [settledDate] ile kapatır. [carryover] verilirse
+  /// (devreden alacağımız) aynı batch'te yeni açık avans yazılır. Başarılıysa true.
+  Future<bool> settle(
+    Iterable<String> ids,
+    String settledDate, {
+    Advance? carryover,
+  }) async {
     if (state) return false;
     state = true;
     try {
-      await ref
+      await awaitWriteAck(ref
           .read(advanceRepositoryProvider)
-          .settleAdvances(ids, settledDate);
+          .settleAdvances(ids, settledDate, carryover: carryover));
       return true;
     } catch (_) {
       return false;
@@ -93,12 +101,18 @@ class AccountSettlementViewModel extends Notifier<bool> {
     }
   }
 
-  /// [ids] avanslarını yeniden açar (geri al). Başarılıysa true.
-  Future<bool> reopen(Iterable<String> ids) async {
+  /// [ids] avanslarını yeniden açar (geri al); [deleteIds] (kapanışın devir
+  /// kayıtları) aynı batch'te silinir. Başarılıysa true.
+  Future<bool> reopen(
+    Iterable<String> ids, {
+    Iterable<String> deleteIds = const [],
+  }) async {
     if (state) return false;
     state = true;
     try {
-      await ref.read(advanceRepositoryProvider).reopenAdvances(ids);
+      await awaitWriteAck(ref
+          .read(advanceRepositoryProvider)
+          .reopenAdvances(ids, deleteIds: deleteIds));
       return true;
     } catch (_) {
       return false;

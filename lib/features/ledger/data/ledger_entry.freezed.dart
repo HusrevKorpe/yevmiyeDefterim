@@ -16,7 +16,10 @@ mixin _$LedgerEntry {
 
  String get id;/// Kategori — [LedgerCategory] (mazot/maas/elebasi/genel).
  String get category; int get amountKurus; String get date;/// Kayıt kaynağı — [LedgerSource] (manual/payroll/elebasi), çifte sayım izi.
- String get source; String? get note;/// Kaynağı hakedişse ilgili payroll ID'si (izlenebilirlik).
+ String get source;/// Kayıt türü — [LedgerKind] (gider/tahsilat). Tahsilat: esnafa önden
+/// verilen para; gider toplamlarına GİRMEZ, kategori ekranında
+/// "verilen / kalan" bakiyesi olarak izlenir.
+ String get kind; String? get note;/// Kaynağı hakedişse ilgili payroll ID'si (izlenebilirlik).
  String? get payrollId;/// İlişkili işçi/elebaşı (denormalize isim — kural §5).
  String? get workerId; String? get workerName;
 /// Create a copy of LedgerEntry
@@ -29,16 +32,16 @@ $LedgerEntryCopyWith<LedgerEntry> get copyWith => _$LedgerEntryCopyWithImpl<Ledg
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is LedgerEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.category, category) || other.category == category)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.source, source) || other.source == source)&&(identical(other.note, note) || other.note == note)&&(identical(other.payrollId, payrollId) || other.payrollId == payrollId)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is LedgerEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.category, category) || other.category == category)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.source, source) || other.source == source)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.note, note) || other.note == note)&&(identical(other.payrollId, payrollId) || other.payrollId == payrollId)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,category,amountKurus,date,source,note,payrollId,workerId,workerName);
+int get hashCode => Object.hash(runtimeType,id,category,amountKurus,date,source,kind,note,payrollId,workerId,workerName);
 
 @override
 String toString() {
-  return 'LedgerEntry(id: $id, category: $category, amountKurus: $amountKurus, date: $date, source: $source, note: $note, payrollId: $payrollId, workerId: $workerId, workerName: $workerName)';
+  return 'LedgerEntry(id: $id, category: $category, amountKurus: $amountKurus, date: $date, source: $source, kind: $kind, note: $note, payrollId: $payrollId, workerId: $workerId, workerName: $workerName)';
 }
 
 
@@ -49,7 +52,7 @@ abstract mixin class $LedgerEntryCopyWith<$Res>  {
   factory $LedgerEntryCopyWith(LedgerEntry value, $Res Function(LedgerEntry) _then) = _$LedgerEntryCopyWithImpl;
 @useResult
 $Res call({
- String id, String category, int amountKurus, String date, String source, String? note, String? payrollId, String? workerId, String? workerName
+ String id, String category, int amountKurus, String date, String source, String kind, String? note, String? payrollId, String? workerId, String? workerName
 });
 
 
@@ -66,13 +69,14 @@ class _$LedgerEntryCopyWithImpl<$Res>
 
 /// Create a copy of LedgerEntry
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? category = null,Object? amountKurus = null,Object? date = null,Object? source = null,Object? note = freezed,Object? payrollId = freezed,Object? workerId = freezed,Object? workerName = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? category = null,Object? amountKurus = null,Object? date = null,Object? source = null,Object? kind = null,Object? note = freezed,Object? payrollId = freezed,Object? workerId = freezed,Object? workerName = freezed,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
 as String,amountKurus: null == amountKurus ? _self.amountKurus : amountKurus // ignore: cast_nullable_to_non_nullable
 as int,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
 as String,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as String,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as String,note: freezed == note ? _self.note : note // ignore: cast_nullable_to_non_nullable
 as String?,payrollId: freezed == payrollId ? _self.payrollId : payrollId // ignore: cast_nullable_to_non_nullable
 as String?,workerId: freezed == workerId ? _self.workerId : workerId // ignore: cast_nullable_to_non_nullable
@@ -162,10 +166,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String category,  int amountKurus,  String date,  String source,  String? note,  String? payrollId,  String? workerId,  String? workerName)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String category,  int amountKurus,  String date,  String source,  String kind,  String? note,  String? payrollId,  String? workerId,  String? workerName)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _LedgerEntry() when $default != null:
-return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.source,_that.note,_that.payrollId,_that.workerId,_that.workerName);case _:
+return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.source,_that.kind,_that.note,_that.payrollId,_that.workerId,_that.workerName);case _:
   return orElse();
 
 }
@@ -183,10 +187,10 @@ return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.sourc
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String category,  int amountKurus,  String date,  String source,  String? note,  String? payrollId,  String? workerId,  String? workerName)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String category,  int amountKurus,  String date,  String source,  String kind,  String? note,  String? payrollId,  String? workerId,  String? workerName)  $default,) {final _that = this;
 switch (_that) {
 case _LedgerEntry():
-return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.source,_that.note,_that.payrollId,_that.workerId,_that.workerName);case _:
+return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.source,_that.kind,_that.note,_that.payrollId,_that.workerId,_that.workerName);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -203,10 +207,10 @@ return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.sourc
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String category,  int amountKurus,  String date,  String source,  String? note,  String? payrollId,  String? workerId,  String? workerName)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String category,  int amountKurus,  String date,  String source,  String kind,  String? note,  String? payrollId,  String? workerId,  String? workerName)?  $default,) {final _that = this;
 switch (_that) {
 case _LedgerEntry() when $default != null:
-return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.source,_that.note,_that.payrollId,_that.workerId,_that.workerName);case _:
+return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.source,_that.kind,_that.note,_that.payrollId,_that.workerId,_that.workerName);case _:
   return null;
 
 }
@@ -218,7 +222,7 @@ return $default(_that.id,_that.category,_that.amountKurus,_that.date,_that.sourc
 
 
 class _LedgerEntry extends LedgerEntry {
-  const _LedgerEntry({required this.id, required this.category, required this.amountKurus, required this.date, required this.source, this.note, this.payrollId, this.workerId, this.workerName}): super._();
+  const _LedgerEntry({required this.id, required this.category, required this.amountKurus, required this.date, required this.source, this.kind = LedgerKind.gider, this.note, this.payrollId, this.workerId, this.workerName}): super._();
   
 
 @override final  String id;
@@ -228,6 +232,10 @@ class _LedgerEntry extends LedgerEntry {
 @override final  String date;
 /// Kayıt kaynağı — [LedgerSource] (manual/payroll/elebasi), çifte sayım izi.
 @override final  String source;
+/// Kayıt türü — [LedgerKind] (gider/tahsilat). Tahsilat: esnafa önden
+/// verilen para; gider toplamlarına GİRMEZ, kategori ekranında
+/// "verilen / kalan" bakiyesi olarak izlenir.
+@override@JsonKey() final  String kind;
 @override final  String? note;
 /// Kaynağı hakedişse ilgili payroll ID'si (izlenebilirlik).
 @override final  String? payrollId;
@@ -245,16 +253,16 @@ _$LedgerEntryCopyWith<_LedgerEntry> get copyWith => __$LedgerEntryCopyWithImpl<_
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _LedgerEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.category, category) || other.category == category)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.source, source) || other.source == source)&&(identical(other.note, note) || other.note == note)&&(identical(other.payrollId, payrollId) || other.payrollId == payrollId)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _LedgerEntry&&(identical(other.id, id) || other.id == id)&&(identical(other.category, category) || other.category == category)&&(identical(other.amountKurus, amountKurus) || other.amountKurus == amountKurus)&&(identical(other.date, date) || other.date == date)&&(identical(other.source, source) || other.source == source)&&(identical(other.kind, kind) || other.kind == kind)&&(identical(other.note, note) || other.note == note)&&(identical(other.payrollId, payrollId) || other.payrollId == payrollId)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,category,amountKurus,date,source,note,payrollId,workerId,workerName);
+int get hashCode => Object.hash(runtimeType,id,category,amountKurus,date,source,kind,note,payrollId,workerId,workerName);
 
 @override
 String toString() {
-  return 'LedgerEntry(id: $id, category: $category, amountKurus: $amountKurus, date: $date, source: $source, note: $note, payrollId: $payrollId, workerId: $workerId, workerName: $workerName)';
+  return 'LedgerEntry(id: $id, category: $category, amountKurus: $amountKurus, date: $date, source: $source, kind: $kind, note: $note, payrollId: $payrollId, workerId: $workerId, workerName: $workerName)';
 }
 
 
@@ -265,7 +273,7 @@ abstract mixin class _$LedgerEntryCopyWith<$Res> implements $LedgerEntryCopyWith
   factory _$LedgerEntryCopyWith(_LedgerEntry value, $Res Function(_LedgerEntry) _then) = __$LedgerEntryCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String category, int amountKurus, String date, String source, String? note, String? payrollId, String? workerId, String? workerName
+ String id, String category, int amountKurus, String date, String source, String kind, String? note, String? payrollId, String? workerId, String? workerName
 });
 
 
@@ -282,13 +290,14 @@ class __$LedgerEntryCopyWithImpl<$Res>
 
 /// Create a copy of LedgerEntry
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? category = null,Object? amountKurus = null,Object? date = null,Object? source = null,Object? note = freezed,Object? payrollId = freezed,Object? workerId = freezed,Object? workerName = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? category = null,Object? amountKurus = null,Object? date = null,Object? source = null,Object? kind = null,Object? note = freezed,Object? payrollId = freezed,Object? workerId = freezed,Object? workerName = freezed,}) {
   return _then(_LedgerEntry(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,category: null == category ? _self.category : category // ignore: cast_nullable_to_non_nullable
 as String,amountKurus: null == amountKurus ? _self.amountKurus : amountKurus // ignore: cast_nullable_to_non_nullable
 as int,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
 as String,source: null == source ? _self.source : source // ignore: cast_nullable_to_non_nullable
+as String,kind: null == kind ? _self.kind : kind // ignore: cast_nullable_to_non_nullable
 as String,note: freezed == note ? _self.note : note // ignore: cast_nullable_to_non_nullable
 as String?,payrollId: freezed == payrollId ? _self.payrollId : payrollId // ignore: cast_nullable_to_non_nullable
 as String?,workerId: freezed == workerId ? _self.workerId : workerId // ignore: cast_nullable_to_non_nullable

@@ -1,11 +1,14 @@
-/// Kasa liste satırı — gider kaydı (kural §8: ikon+yazı, büyük/kontrast).
+/// Kasa liste satırı — gider/tahsilat kaydı (kural §8: ikon+yazı, kontrast).
 ///
-/// Gider kırmızı ↓ (mazot/tamir/bakkal kendi ikonuyla). Otomatik (maaş/elebaşı)
-/// kayıtlar kilit ikonuyla salt-okunur; elle kayıtlar dokununca düzenlenir.
+/// Gider kırmızı ↓ (mazot/tamir/bakkal kendi ikonuyla). Tahsilat (esnafa
+/// önden verilen para) yeşil `+` ile ayrışır ("Mazot Tahsilatı"). Otomatik
+/// (maaş/elebaşı) kayıtlar kilit ikonuyla salt-okunur; elle kayıtlar
+/// dokununca düzenlenir.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/theme.dart';
 import '../../../../core/constants/categories.dart';
 import '../../../../core/date/app_date.dart';
 import '../../../../core/widgets/category_icon.dart';
@@ -23,10 +26,13 @@ class LedgerEntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = theme.colorScheme.error;
+    final tahsilat = entry.isTahsilat;
+    final color = tahsilat ? incomeColor(context) : theme.colorScheme.error;
 
-    // Başlık: kategori etiketi; not varsa alt satırda tarih ile birlikte.
-    final title = LedgerCategory.label(entry.category);
+    // Başlık: kategori etiketi (tahsilatta "Mazot Tahsilatı" gibi ayrışır);
+    // not varsa alt satırda tarih ile birlikte.
+    final label = LedgerCategory.label(entry.category);
+    final title = tahsilat ? '$label Tahsilatı' : label;
     final subtitleParts = <String>[formatHumanDate(entry.date)];
     if (entry.note != null && entry.note!.trim().isNotEmpty) {
       subtitleParts.add(entry.note!.trim());
@@ -44,7 +50,7 @@ class LedgerEntryTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            '−${formatKurus(entry.amountKurus)}',
+            '${tahsilat ? '+' : '−'}${formatKurus(entry.amountKurus)}',
             style: theme.textTheme.titleMedium
                 ?.copyWith(color: color, fontWeight: FontWeight.bold),
           ),
