@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/categories.dart';
 import '../../../core/date/app_date.dart';
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/ids/ids.dart';
 import '../../ledger/data/ledger_entry.dart';
 import '../data/payroll.dart';
@@ -97,10 +98,12 @@ class PayrollViewModel extends Notifier<PayrollPayState> {
             paidAttendanceIds: paidAttendanceIds,
           );
       state = PayrollPayState(paidWorkerId: line.workerId);
-    } catch (_) {
+    } catch (e, s) {
       state = const PayrollPayState(
         error: 'Ödeme yapılamadı. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s,
+          reason: 'hakedis-ode', info: {'workerId': line.workerId});
     }
   }
 }

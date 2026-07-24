@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/ids/ids.dart';
 import '../../settings/application/settings_providers.dart';
 import '../../settings/data/app_settings.dart';
@@ -36,6 +37,13 @@ class AttendanceViewModel extends Notifier<String?> {
 
   AppSettings get _settings =>
       ref.read(settingsStreamProvider).asData?.value ?? AppSettings.empty;
+
+  /// Elebaşının o günkü kişi başı ücretini (kuruş) çözer → yoklama anında
+  /// dondurulur (kural §4). Artık kaynak işçinin kendi kişi-başı yevmiyesidir
+  /// (dailyWageOverrideKurus); girilmemişse eski ayar varsayılanına düşer
+  /// (defaultCrewRate rafta → pratikte 0).
+  int _crewRate(Worker worker) =>
+      worker.dailyWageOverrideKurus ?? _settings.defaultCrewRateKurus;
 
   /// Bireysel işçinin durumunu yazar; o günkü ücreti dondurur (kural §4).
   Future<void> setStatus(Worker worker, AttendanceStatus status) async {
@@ -77,8 +85,10 @@ class AttendanceViewModel extends Notifier<String?> {
       await ref
           .read(attendanceRepositoryProvider)
           .delete(attendanceDocId(date, worker.id));
-    } catch (_) {
+    } catch (e, s) {
       state = 'Kaydedilemedi. Tekrar deneyin.';
+      await logHandledError(e, s,
+          reason: 'yoklama-sil', info: {'workerId': worker.id, 'tarih': date});
     }
   }
 
@@ -100,7 +110,7 @@ class AttendanceViewModel extends Notifier<String?> {
       workerId: worker.id,
       workerName: worker.name,
       headcount: count,
-      crewRateSnapshotKurus: _settings.defaultCrewRateKurus,
+      crewRateSnapshotKurus: _crewRate(worker),
       fieldId: existing?.fieldId,
       fieldName: existing?.fieldName,
     ));
@@ -124,7 +134,7 @@ class AttendanceViewModel extends Notifier<String?> {
           workerId: worker.id,
           workerName: worker.name,
           headcount: worker.crewSize,
-          crewRateSnapshotKurus: _settings.defaultCrewRateKurus,
+          crewRateSnapshotKurus: _crewRate(worker),
           fieldId: field?.id,
           fieldName: field?.name,
         ));
@@ -166,16 +176,21 @@ class AttendanceViewModel extends Notifier<String?> {
       await ref
           .read(attendanceRepositoryProvider)
           .markDaySaved(ref.read(selectedDateProvider));
-    } catch (_) {
-      // Bildirim işareti yazılamazsa sessiz geç — yoklama verisi etkilenmez.
+    } catch (e, s) {
+      // Bildirim işareti yazılamazsa yoklama verisi etkilenmez; yalnız diğer
+      // cihazlara push gitmez → teşhis için sessizce Crashlytics'e düşer.
+      await logHandledError(e, s, reason: 'yoklama-push-isareti');
     }
   }
 
   Future<void> _save(AttendanceRecord record) async {
     try {
       await ref.read(attendanceRepositoryProvider).save(record);
-    } catch (_) {
+    } catch (e, s) {
       state = 'Kaydedilemedi. Tekrar deneyin.';
+      await logHandledError(e, s,
+          reason: 'yoklama-kaydet',
+          info: {'workerId': record.workerId, 'tarih': record.date});
     }
   }
 }

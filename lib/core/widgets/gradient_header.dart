@@ -18,6 +18,7 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.title,
     this.actions,
     this.leading,
+    this.leadingWidth,
     this.automaticallyImplyLeading = true,
   });
 
@@ -26,6 +27,9 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? title;
   final List<Widget>? actions;
   final Widget? leading;
+
+  /// Birden fazla ikon barındıran [leading] için genişlik (varsayılan 56 dar).
+  final double? leadingWidth;
   final bool automaticallyImplyLeading;
 
   @override
@@ -46,6 +50,7 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: title == null ? null : Text(title!),
       actions: actions,
       leading: leading,
+      leadingWidth: leadingWidth,
       automaticallyImplyLeading: automaticallyImplyLeading,
       centerTitle: true,
       backgroundColor: Colors.transparent,

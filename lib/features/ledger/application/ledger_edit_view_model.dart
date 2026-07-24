@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import '../data/ledger_entry.dart';
 import 'ledger_providers.dart';
 
@@ -40,10 +41,13 @@ class LedgerEditViewModel extends Notifier<LedgerEditState> {
         await repo.update(entry);
       }
       state = const LedgerEditState(done: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const LedgerEditState(
         error: 'Kaydedilemedi. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s,
+          reason: isNew ? 'gider-ekle' : 'gider-guncelle',
+          info: {'id': entry.id, 'kategori': entry.category});
     }
   }
 
@@ -60,10 +64,11 @@ class LedgerEditViewModel extends Notifier<LedgerEditState> {
     try {
       await ref.read(ledgerRepositoryProvider).delete(entry.id);
       state = const LedgerEditState(done: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const LedgerEditState(
         error: 'Silinemedi. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s, reason: 'gider-sil', info: {'id': entry.id});
     }
   }
 }

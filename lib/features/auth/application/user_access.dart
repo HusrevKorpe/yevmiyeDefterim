@@ -1,10 +1,12 @@
 /// Rol/erişim — hangi hesap para bilgisi GÖREMEZ (arayüzde gizleme).
 ///
 /// Uygulama e-posta/şifre ile giriş yapar. Belirli e-posta(lar) ile giriş
-/// yapılınca uygulama "para göremez" moduna geçer: Avans, Rapor, Ayarlar sekme
+/// yapılınca uygulama "para göremez" moduna geçer: Rapor ve Ayarlar sekme
 /// ve ekranları gizlenir; yevmiye/özel ücret tutarları hiçbir ekranda görünmez.
 /// Yoklama açık kalır (kimin geldiği işaretlenir) ama tutarları gizlidir.
-/// Giderler (Kasa) ise BİLEREK AÇIK: kısıtlı hesap gider girip görebilir.
+/// Giderler (Kasa) BİLEREK AÇIK: kısıtlı hesap gider girip görebilir.
+/// Avans da BİLEREK AÇIK (2026-07-23): kısıtlı hesap avans verebilir/silebilir,
+/// avans tutarlarını ve işçi detayındaki avans geçmişini görebilir.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,7 +18,7 @@ import 'auth_providers.dart';
 ///
 /// Buraya kısıtlı kullanıcının Gmail adresini KÜÇÜK HARF ile yaz. Birden fazla
 /// hesap kısıtlamak istersen virgülle ekle. Bu e-posta(lar) ile giriş yapan
-/// kişi Avans/Rapor/yevmiye tutarlarını göremez; Giderler ekranı ise açıktır.
+/// kişi Rapor/yevmiye tutarlarını göremez; Giderler ve Avans ekranları açıktır.
 /// ─────────────────────────────────────────────────────────────────────────
 const Set<String> kMoneyRestrictedEmails = <String>{
   'user@gmail.com', // Para göremeyen kısıtlı hesap.
@@ -30,8 +32,8 @@ bool isMoneyRestricted(String? email) {
 
 /// Oturumdaki kullanıcı para bilgisini görebilir mi?
 ///
-/// `false` → Avans/Rapor gizlenir, yevmiye tutarları maskelenir (Giderler
-/// ekranı açık kalır — bkz. main_shell/router). Tek gerçek
+/// `false` → Rapor/Ayarlar gizlenir, yevmiye tutarları maskelenir (Giderler
+/// ve Avans ekranları açık kalır — bkz. main_shell/router). Tek gerçek
 /// kaynak burasıdır; ekranlar ve router bunu izler. Akış henüz değeri
 /// vermeden (ilk kare) senkron `currentUser`'a düşer → kısıtlı hesabın para
 /// sekmeleri bir an bile parlamaz.

@@ -48,7 +48,10 @@ abstract class Worker with _$Worker {
     /// İşçinin günlük ücreti (kuruş). Sabit/varsayılan yevmiye kaldırıldı →
     /// bireysel işçide bu alan TEK ücret kaynağıdır (ekle/düzenlede zorunlu).
     /// Null yalnız eski ya da kısıtlı-hesap kayıtlarında olur → yoklamada 0 sayılır.
-    /// Elebaşı için anlamsız (ödeme toplu, kişi bazlı ücret yok).
+    ///
+    /// Elebaşıda bu alan KİŞİ BAŞI günlük yevmiyedir (isteğe bağlı): yoklamada
+    /// gelen kişi sayısıyla çarpılıp o günün kazancı olur (örn. 20 kişi × ₺1.000
+    /// = ₺20.000). Girilmemişse (null) elebaşı yalnız kişi sayısı takip edilir.
     int? dailyWageOverrideKurus,
 
     /// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/money/money.dart';
+import '../../../../core/widgets/app_dialog.dart';
 import '../../application/payroll_calculator.dart';
 import '../../application/payroll_view_model.dart';
 
@@ -27,10 +28,13 @@ class PayrollLineTile extends ConsumerWidget {
     final comp = line.computation;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('${line.workerName} — Öde'),
+      builder: (context) => AppDialog(
+        icon: Icons.payments_outlined,
+        title: '${line.workerName} — Öde',
+        confirmLabel: 'Öde',
+        confirmIcon: Icons.check,
+        onConfirm: () => Navigator.pop(context, true),
         content: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _row('Brüt hakediş', formatKurus(comp.grossKurus)),
@@ -48,17 +52,6 @@ class PayrollLineTile extends ConsumerWidget {
             ],
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.pop(context, true),
-            icon: const Icon(Icons.check),
-            label: const Text('Öde'),
-          ),
-        ],
       ),
     );
     if (ok == true) {

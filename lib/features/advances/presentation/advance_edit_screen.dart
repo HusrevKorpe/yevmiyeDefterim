@@ -341,13 +341,19 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
               const SizedBox(height: 32),
               FilledButton.icon(
                 onPressed: busy ? null : () => _save(workers),
+                // Tema varsayılanı 56px — burada daha derli toplu dursun.
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  textStyle: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
+                ),
                 icon: saving
                     ? const SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.check),
+                    : const Icon(Icons.check, size: 20),
                 label: Text(saving ? 'Kaydediliyor…' : 'Kaydet'),
               ),
               if (_isNew && openForSelected.isNotEmpty) ...[
@@ -379,33 +385,61 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
                 ),
               ],
               if (!_isNew && existing!.isOpen) ...[
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => _markAccountSeen(
-                            workerId: existing.workerId,
-                            workerName: existing.workerName,
-                            fallback: existing,
-                          ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: incomeColor(context),
-                    side: BorderSide(
-                        color: incomeColor(context).withValues(alpha: 0.6)),
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Hesap Görüldü (alacağı kalmadı)'),
-                ),
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: busy ? null : _delete,
-                  style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Avansı Sil'),
+                const SizedBox(height: 12),
+                // "Hesap Görüldü" + "Sil" tek satırda: yeşil işlem geniş yeri
+                // alır, sil ise yanlışlıkla basılmasın diye ayrı çerçeveli
+                // kompakt bir ikon-buton olarak durur.
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: busy
+                            ? null
+                            : () => _markAccountSeen(
+                                  workerId: existing.workerId,
+                                  workerName: existing.workerName,
+                                  fallback: existing,
+                                ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: incomeColor(context),
+                          side: BorderSide(
+                              color:
+                                  incomeColor(context).withValues(alpha: 0.5)),
+                          minimumSize: const Size.fromHeight(46),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text('Hesap Görüldü'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      onPressed: busy ? null : _delete,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .error
+                            .withValues(alpha: 0.04),
+                        side: BorderSide(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .error
+                                .withValues(alpha: 0.4)),
+                        // DİKKAT: Size.fromHeight(46) = Size(∞, 46) → min GENİŞLİK
+                        // sonsuz. Bu buton Row'da flex olmayan çocuk olduğundan
+                        // üst sınırı yok → "sonsuz genişlik" çökmesi (ekran
+                        // açılmaz). Kompakt kalsın diye min genişlik 0 veriyoruz.
+                        minimumSize: const Size(0, 46),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      label: const Text('Sil'),
+                    ),
+                  ],
                 ),
               ],
             ],

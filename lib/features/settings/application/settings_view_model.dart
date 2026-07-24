@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import '../data/app_settings.dart';
 import 'settings_providers.dart';
 
@@ -38,10 +39,11 @@ class SettingsViewModel extends Notifier<SettingsFormState> {
             ),
           );
       state = const SettingsFormState(saved: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const SettingsFormState(
         error: 'Kaydedilemedi. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s, reason: 'ayarlar-kaydet');
     }
   }
 }

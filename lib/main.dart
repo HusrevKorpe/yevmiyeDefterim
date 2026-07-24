@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
 import 'app/theme_mode.dart';
+import 'core/diagnostics/app_log.dart';
 import 'core/notifications/push_notifications.dart';
 import 'firebase_options.dart';
 
@@ -29,6 +30,11 @@ Future<void> main() async {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
+
+  // Tanılama: çökmeyen (yakalanmış) hataları + ekran izini + kim/hangi cihaz
+  // bilgisini Crashlytics'e taşır (bkz. core/diagnostics/app_log.dart). Giriş
+  // oldukça kullanıcı kimliğini tazeler; await'siz — açılışı geciktirmez.
+  initDiagnostics();
 
   // Offline zorunlu (kural §3): kalıcı önbellek açık, sınırsız.
   FirebaseFirestore.instance.settings = const Settings(

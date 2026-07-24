@@ -129,7 +129,8 @@ void main() {
     expect(r.wageSnapshotKurus, 250000);
   });
 
-  test('elebaşı kişi sayısı → kişi ücreti snapshot + kazanç', () async {
+  test('elebaşı kişi sayısı → ayar kişi ücreti snapshot + kazanç (override yok)',
+      () async {
     await boot(settings);
     const boss = Worker(
       id: 'e1',
@@ -142,6 +143,28 @@ void main() {
     expect(r.crewRateSnapshotKurus, 150000);
     expect(r.headcount, 4);
     expect(r.earningKurus, 600000);
+  });
+
+  test('elebaşı kişi başı yevmiyesi (override) kişi sayısıyla çarpılır', () async {
+    // Ayar kişi ücreti rafta (0) olsa da işçinin kendi kişi-başı yevmiyesi kullanılır.
+    await boot(const AppSettings(
+      defaultWageMaleKurus: 200000,
+      defaultWageFemaleKurus: 180000,
+      defaultCrewRateKurus: 0,
+    ));
+    const boss = Worker(
+      id: 'e1',
+      name: 'Hüsrev',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      defaultHeadcount: 20,
+      dailyWageOverrideKurus: 100000, // ₺1.000 kişi başı
+    );
+    await vm().setHeadcount(boss, 20);
+    final r = attendance.all.single as CrewAttendance;
+    expect(r.crewRateSnapshotKurus, 100000); // işçinin yevmiyesi donduruldu
+    expect(r.headcount, 20);
+    expect(r.earningKurus, 2000000); // 20 × ₺1.000 = ₺20.000
   });
 
   // "Kaydet" → önden dolu (henüz kaydı olmayan) elebaşı öntanımlı mevcutları

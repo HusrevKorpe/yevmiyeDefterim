@@ -59,16 +59,15 @@ final workerHistorySummaryProvider =
 /// İşçi geçmişi kaynak akışlarının birleşik durumu (kural §8: sonsuz spinner /
 /// yutulan hata yerine yükleniyor→veri / hata→"Yeniden Dene").
 ///
-/// Yoklama her zaman izlenir; avans/hakediş yalnız para görebilen hesapta
-/// (kısıtlı hesap bu akışların hata/gecikmesinden etkilenmez). Herhangi biri
+/// Yoklama ve avans her zaman izlenir (avans 2026-07-23'te kısıtlı hesaba da
+/// açıldı); hakediş yalnız para görebilen hesapta (kısıtlı hesap o akışın
+/// hata/gecikmesinden etkilenmez). Herhangi biri
 /// hata verirse → [AsyncError]; hepsi hazır → [AsyncData]; aksi → [AsyncLoading].
 final workerHistoryStateProvider =
     Provider.family<AsyncValue<void>, String>((ref, workerId) {
   final attendance = ref.watch(attendanceByWorkerProvider(workerId));
   final canSeeMoney = ref.watch(canSeeMoneyProvider);
-  final advances = canSeeMoney
-      ? ref.watch(advancesStreamProvider)
-      : const AsyncData<List<Advance>>(<Advance>[]);
+  final advances = ref.watch(advancesStreamProvider);
   final payrolls = canSeeMoney
       ? ref.watch(payrollsStreamProvider)
       : const AsyncData<List<Payroll>>(<Payroll>[]);

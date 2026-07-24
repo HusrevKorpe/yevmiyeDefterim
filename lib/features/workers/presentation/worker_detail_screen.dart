@@ -49,10 +49,8 @@ class WorkerDetailScreen extends ConsumerWidget {
     final summary = ref.watch(workerHistorySummaryProvider(id));
     final attendance =
         ref.watch(attendanceByWorkerProvider(id)).asData?.value ?? const [];
-    // Avanslar para → kısıtlı hesapta hiç izlenmez/gösterilmez.
-    final advances = canSeeMoney
-        ? ref.watch(advancesByWorkerProvider(id))
-        : const <Advance>[];
+    // Avans kısıtlı hesaba da açık (2026-07-23) → her hesapta izlenir.
+    final advances = ref.watch(advancesByWorkerProvider(id));
     // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
     // final payrolls = ref.watch(payrollsByWorkerProvider(id));
     // --- /HAKEDİŞ ---
@@ -78,8 +76,8 @@ class WorkerDetailScreen extends ConsumerWidget {
               message: 'Geçmiş yüklenemedi. İnternet bağlantınızı kontrol edin.',
               onRetry: () {
                 ref.invalidate(attendanceByWorkerProvider(id));
+                ref.invalidate(advancesStreamProvider);
                 if (canSeeMoney) {
-                  ref.invalidate(advancesStreamProvider);
                   ref.invalidate(payrollsStreamProvider);
                 }
               },
@@ -95,16 +93,23 @@ class WorkerDetailScreen extends ConsumerWidget {
                   if (attendance.isEmpty)
                     const _EmptyLine('Bu işçi için yoklama kaydı yok.')
                   else
-                    for (final r in attendance)
-                      _AttendanceRow(record: r, canSeeMoney: canSeeMoney),
-                  // Avanslar bölümü tamamen para → kısıtlı hesapta gizli.
-                  if (canSeeMoney) ...[
-                    _Section('Avanslar (${advances.length})'),
-                    if (advances.isEmpty)
-                      const _EmptyLine('Avans kaydı yok.')
-                    else
-                      for (final a in advances) _AdvanceRow(advance: a),
-                  ],
+                    // Satırlar arasına ince ayırıcı — birbirinden ayrılsınlar.
+                    for (var i = 0; i < attendance.length; i++) ...[
+                      if (i > 0) const _RowDivider(),
+                      _AttendanceRow(
+                        record: attendance[i],
+                        canSeeMoney: canSeeMoney,
+                      ),
+                    ],
+                  // Avans kısıtlı hesaba da açık (2026-07-23) → herkes görür.
+                  _Section('Avanslar (${advances.length})'),
+                  if (advances.isEmpty)
+                    const _EmptyLine('Avans kaydı yok.')
+                  else
+                    for (var i = 0; i < advances.length; i++) ...[
+                      if (i > 0) const _RowDivider(),
+                      _AdvanceRow(advance: advances[i]),
+                    ],
                   // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
                   // Geri açmak için bu bloğu, yukarıdaki `payrolls` izlemesini,
                   // `_PayrollRow` sınıfını ve payroll import'unu birlikte aç.
@@ -131,15 +136,21 @@ class _HeaderCard extends StatelessWidget {
 
   String get _subtitle {
     if (worker.type.isCrew) {
-      return worker.crewSize > 0
+      final crewText = worker.crewSize > 0
           ? '${worker.crewSize} kişilik ekip'
           : 'Kişi sayısı belirtilmemiş';
+      // Para görebilen hesapta kişi başı yevmiye de gösterilir.
+      final rate = worker.dailyWageOverrideKurus;
+      if (canSeeMoney && rate != null && rate > 0) {
+        return '$crewText • ${formatKurus(rate)}/kişi';
+      }
+      return crewText;
     }
     // Kısıtlı hesap ücret göremez → yalnız cinsiyet.
     if (!canSeeMoney) return worker.gender.label;
     final wage = worker.dailyWageOverrideKurus;
     final wageText =
-        wage == null ? 'Varsayılan ücret' : '${formatKurus(wage)} özel ücret';
+        wage == null ? 'Yevmiye girilmemiş' : '${formatKurus(wage)} yevmiye';
     return '${worker.gender.label} • $wageText';
   }
 
@@ -179,7 +190,8 @@ class _SummaryCard extends StatelessWidget {
   final Worker worker;
   final WorkerHistorySummary summary;
 
-  /// false → yalnız "Çalışılan gün" gösterilir; brüt/ödenen/avans gizlenir.
+  /// false → yevmiye paraları (brüt/ödenen) gizlenir; çalışılan gün ve açık
+  /// avans herkese görünür (avans kısıtlı hesaba da açık).
   final bool canSeeMoney;
 
   @override
@@ -192,40 +204,129 @@ class _SummaryCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Stat(
-              icon: Icons.event_available,
-              label: 'Çalışılan',
-              value: daysText,
-              color: theme.colorScheme.primary,
-            ),
-            // Para istatistikleri yalnız yetkili hesapta.
-            if (canSeeMoney) ...[
-              _Stat(
-                icon: Icons.receipt_long,
-                label: 'Brüt kazanç',
-                value: formatKurus(summary.grossEarnedKurus),
-                color: theme.colorScheme.primary,
-              ),
-              _Stat(
-                icon: Icons.payments,
-                label: 'Ödenen',
-                value: formatKurus(summary.netPaidKurus),
-                color: incomeColor(context),
-              ),
-              if (summary.openAdvancesKurus > 0)
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
                 _Stat(
-                  icon: Icons.account_balance_wallet,
-                  label: 'Açık avans',
-                  value: formatKurus(summary.openAdvancesKurus),
-                  color: theme.colorScheme.error,
+                  icon: Icons.event_available,
+                  label: 'Çalışılan',
+                  value: daysText,
+                  color: theme.colorScheme.primary,
                 ),
+                // Yevmiye para istatistikleri yalnız yetkili hesapta.
+                if (canSeeMoney) ...[
+                  _Stat(
+                    icon: Icons.receipt_long,
+                    label: 'Brüt kazanç',
+                    value: formatKurus(summary.grossEarnedKurus),
+                    color: theme.colorScheme.primary,
+                  ),
+                  _Stat(
+                    icon: Icons.payments,
+                    label: 'Verilen avans',
+                    value: formatKurus(summary.advancesTotalKurus),
+                    color: theme.colorScheme.secondary,
+                  ),
+                ],
+                // Açık avans herkese görünür (avans kısıtlı hesaba da açık).
+                if (summary.openAdvancesKurus > 0)
+                  _Stat(
+                    icon: Icons.account_balance_wallet,
+                    label: 'Açık avans',
+                    value: formatKurus(summary.openAdvancesKurus),
+                    color: theme.colorScheme.error,
+                  ),
+              ],
+            ),
+            // Kalan bakiye şeridi (alacağı/vereceği) — yalnız para görebilen
+            // hesapta. Brüt kazanç − verilen avans (− ödenen hakediş, rafta).
+            if (canSeeMoney) ...[
+              const SizedBox(height: 12),
+              _BalanceBanner(netKurus: summary.netBalanceKurus),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// İşçinin kalan hesabını tek bakışta gösteren geniş şerit.
+///
+/// Pozitif → işçinin bizden ALACAĞI (yeşil); negatif → işçinin bize BORCU /
+/// vereceği (kırmızı); sıfır → hesap denk (nötr).
+class _BalanceBanner extends StatelessWidget {
+  const _BalanceBanner({required this.netKurus});
+  final int netKurus;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (Color color, IconData icon, String label, int amount) = switch (
+        netKurus.compareTo(0)) {
+      > 0 => (
+          incomeColor(context),
+          Icons.trending_up,
+          'İşçinin alacağı',
+          netKurus,
+        ),
+      < 0 => (
+          theme.colorScheme.error,
+          Icons.trending_down,
+          'İşçinin borcu (vereceği)',
+          -netKurus,
+        ),
+      _ => (
+          theme.colorScheme.onSurfaceVariant,
+          Icons.check_circle_outline,
+          'Hesap denk',
+          0,
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  formatKurus(amount),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -398,6 +499,22 @@ class _Section extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
       child: SectionTitle(text),
+    );
+  }
+}
+
+/// Geçmiş satırları arasındaki ince ayırıcı çizgi (kenarlardan içeri girintili).
+class _RowDivider extends StatelessWidget {
+  const _RowDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 0.5,
+      indent: 16,
+      endIndent: 16,
+      color: Theme.of(context).colorScheme.outlineVariant,
     );
   }
 }

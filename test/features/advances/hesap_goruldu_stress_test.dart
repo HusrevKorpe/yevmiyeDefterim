@@ -303,7 +303,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Finder settleButton() => find.text('Hesap Görüldü (alacağı kalmadı)');
+  // Ekrandaki "Hesap Görüldü" butonu (OutlinedButton içindeki metin). Diyalog
+  // onayı da 'Hesap Görüldü' der ama o FilledButton'dur → OutlinedButton altına
+  // sınırlamak ikisini ayırır (diyalog kapanış animasyonunda bile).
+  Finder settleButton() => find.descendant(
+        of: find.byType(OutlinedButton),
+        matching: find.text('Hesap Görüldü'),
+      );
 
   /// Butonu görünür yapıp dokunur (test viewport'u 800x600 — buton kaydırmada).
   Future<void> tapSettleButton(WidgetTester tester) async {
@@ -327,7 +333,7 @@ void main() {
 
     await openEdit(tester, 'a2'); // kapalı avans
     expect(settleButton(), findsNothing);
-    expect(find.text('Avansı Sil'), findsNothing);
+    expect(find.text('Sil'), findsNothing);
   });
 
   testWidgets('Avans Ver: seçili işçinin açık avansı varsa buton açık '

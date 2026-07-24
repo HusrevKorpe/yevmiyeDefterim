@@ -49,4 +49,10 @@ void main() {
     await vm().setActive(id: 'w1', active: true);
     expect(repo.all.single.active, true);
   });
+
+  test('kalıcı silme: pasif işçiyi depodan tamamen kaldırır', () async {
+    await vm().submit(worker: worker.copyWith(active: false), isNew: true);
+    await repo.delete('w1');
+    expect(repo.all, isEmpty);
+  });
 }

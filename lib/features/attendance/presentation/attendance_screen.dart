@@ -43,8 +43,12 @@ class AttendanceScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const GradientAppBar(
-        leading: _FieldsButton(),
-        actions: [_MonthlyButton(), _SaveButton()],
+        leadingWidth: 96,
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [_FieldsButton(), _MonthlyButton()],
+        ),
+        actions: [_SaveButton()],
       ),
       body: const Column(
         children: [
@@ -500,7 +504,11 @@ class _CrewTile extends ConsumerWidget {
       name: worker.name,
       headcount: headcount,
       pending: crew == null && headcount > 0,
-      crewRateKurus: settings.defaultCrewRateKurus,
+      // Kişi başı ücret artık işçinin kendi yevmiyesinden (girilmemişse ayar).
+      crewRateKurus:
+          worker.dailyWageOverrideKurus ?? settings.defaultCrewRateKurus,
+      // Para/gider kısıtlı hesap tutarı görmez (kişi sayısı açık kalır).
+      showWage: ref.watch(canSeeMoneyProvider),
       // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
       // Hakedişi geri açınca: `locked: crew?.isPaid ?? false`.
       locked: false,
@@ -514,15 +522,12 @@ class _CrewTile extends ConsumerWidget {
       onFieldChanged: (f) =>
           _confirmPastEdit(context, ref, () => vm.setField(worker, f)),
       // Karta (ad alanına) dokun → bu elebaşı ön-seçili "Avans Ver" ekranı.
-      // Avans para → para-kısıtlı hesapta kapalı (ipucu ikonu da görünmez).
-      onTap: ref.watch(canSeeMoneyProvider)
-          ? () => Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      AdvanceEditScreen(initialWorkerId: worker.id),
-                ),
-              )
-          : null,
+      // Avans kısıtlı hesaba da açık (2026-07-23) → herkes kullanabilir.
+      onTap: () => Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AdvanceEditScreen(initialWorkerId: worker.id),
+        ),
+      ),
     );
   }
 }

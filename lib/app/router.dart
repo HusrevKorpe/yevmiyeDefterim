@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/constants/routes.dart';
+import '../core/diagnostics/app_log.dart';
 import '../features/advances/presentation/advances_screen.dart';
 import '../features/attendance/presentation/attendance_screen.dart';
 import '../features/attendance/presentation/fields_screen.dart';
@@ -39,14 +40,25 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
     authNotifier.value = next.asData?.value;
   });
 
+  // Tanılama ekran izi: kullanıcı hangi ekrandaydı bilgisi çökme/hata raporunda
+  // görünsün diye her (yeni) konum Crashlytics breadcrumb'ına yazılır. Aynı
+  // konum arka arkaya tekrarlanırsa (redirect birden çok kez değerlenebilir)
+  // yinelenmez.
+  String? lastCrumbLocation;
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: AppRoutes.home,
     refreshListenable: authNotifier,
     redirect: (context, state) {
+      final location = state.matchedLocation;
+      if (location != lastCrumbLocation) {
+        lastCrumbLocation = location;
+        logBreadcrumb('ekran: $location');
+      }
       final user = authNotifier.value;
       final loggedIn = user != null;
-      final atLogin = state.matchedLocation == AppRoutes.login;
+      final atLogin = location == AppRoutes.login;
       if (!loggedIn) return atLogin ? null : AppRoutes.login;
       if (atLogin) return AppRoutes.home;
       // Para/gider kısıtlı hesap para ekranlarına giremez — derin link ya da
@@ -56,9 +68,10 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       // içindeki tutarlar gizlenir (bkz. monthly_attendance_screen).
       // Giderler (/kasa) da BİLEREK listede yok: kısıtlı hesap gider
       // girebilsin/görebilsin diye açıldı (main_shell'de sekmesi de görünür).
+      // Avans (/avans) da BİLEREK listede yok (2026-07-23): kısıtlı hesap
+      // avans verebilsin/silebilsin diye tamamen açıldı.
       if (isMoneyRestricted(user.email)) {
         const blocked = <String>{
-          AppRoutes.advances,
           AppRoutes.report,
           AppRoutes.settings,
           AppRoutes.payroll,

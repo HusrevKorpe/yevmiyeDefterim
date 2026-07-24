@@ -8,6 +8,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/firestore/write_ack.dart';
 import '../data/advance.dart';
 import 'advance_providers.dart';
@@ -36,10 +37,13 @@ class AdvanceEditViewModel extends Notifier<AdvanceEditState> {
         await awaitWriteAck(repo.update(advance));
       }
       state = const AdvanceEditState(done: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const AdvanceEditState(
         error: 'Kaydedilemedi. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s,
+          reason: isNew ? 'avans-ekle' : 'avans-guncelle',
+          info: {'id': advance.id});
     }
   }
 
@@ -56,10 +60,11 @@ class AdvanceEditViewModel extends Notifier<AdvanceEditState> {
     try {
       await awaitWriteAck(ref.read(advanceRepositoryProvider).delete(advance.id));
       state = const AdvanceEditState(done: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const AdvanceEditState(
         error: 'Silinemedi. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s, reason: 'avans-sil', info: {'id': advance.id});
     }
   }
 }
@@ -94,7 +99,9 @@ class AccountSettlementViewModel extends Notifier<bool> {
           .read(advanceRepositoryProvider)
           .settleAdvances(ids, settledDate, carryover: carryover));
       return true;
-    } catch (_) {
+    } catch (e, s) {
+      await logHandledError(e, s,
+          reason: 'hesap-goruldu', info: {'adet': ids.length});
       return false;
     } finally {
       state = false;
@@ -114,7 +121,9 @@ class AccountSettlementViewModel extends Notifier<bool> {
           .read(advanceRepositoryProvider)
           .reopenAdvances(ids, deleteIds: deleteIds));
       return true;
-    } catch (_) {
+    } catch (e, s) {
+      await logHandledError(e, s,
+          reason: 'hesap-goruldu-geri-al', info: {'adet': ids.length});
       return false;
     } finally {
       state = false;

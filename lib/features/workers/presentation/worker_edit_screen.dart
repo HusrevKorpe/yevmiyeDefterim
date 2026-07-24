@@ -11,7 +11,6 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
-import '../../auth/application/user_access.dart';
 import '../application/worker_edit_view_model.dart';
 import '../data/worker.dart';
 
@@ -86,10 +85,10 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
       id: widget.worker?.id ?? newId(),
       name: _nameCtrl.text.trim(),
       type: _type,
-      // Elebaşı için cinsiyet/ücret override anlamsız (kural §10).
+      // Elebaşıda cinsiyet anlamsız; ücret ise KİŞİ BAŞI günlük yevmiyedir
+      // (isteğe bağlı → boşsa null, yoklamada yalnız kişi sayısı tutulur).
       gender: _type.isCrew ? Gender.male : _gender!,
-      dailyWageOverrideKurus:
-          _type.isCrew ? null : parseTlToKurus(_overrideCtrl.text.trim()),
+      dailyWageOverrideKurus: parseTlToKurus(_overrideCtrl.text.trim()),
       // Kişi sayısı yalnız elebaşıda saklanır; bireysele geçilirse temizlenir.
       defaultHeadcount: _type.isCrew ? _parseHeadcount() : null,
       active: widget.worker?.active ?? true,
@@ -131,7 +130,6 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
     });
 
     final saving = ref.watch(workerEditViewModelProvider).saving;
-    final canSeeMoney = ref.watch(canSeeMoneyProvider);
     final w = widget.worker;
 
     final cs = Theme.of(context).colorScheme;
@@ -212,23 +210,23 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                     ),
                   ),
                 ],
-                // Yevmiye para bilgisidir → kısıtlı hesapta gizli. Artık sabit/
-                // varsayılan yevmiye yok: her işçinin günlük ücreti burada elle
-                // girilir (zorunlu) ve yoklamada o işçinin kendi ücreti kullanılır.
-                if (canSeeMoney) ...[
-                  const SizedBox(height: 24),
-                  const FieldLabel('Yevmiye'),
-                  MoneyField(
-                    controller: _overrideCtrl,
-                    label: 'Günlük ücret',
-                    helperText: 'Bu işçinin günlük yevmiyesi.',
-                    enabled: !saving,
-                    allowEmpty: false,
-                    filled: true,
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: _save,
-                  ),
-                ],
+                // Artık sabit/varsayılan yevmiye yok: her işçinin günlük ücreti
+                // burada elle girilir (zorunlu) ve yoklamada o işçinin kendi
+                // ücreti kullanılır. Kısıtlı hesap da yevmiye girebilir — böylece
+                // yevmiyesiz (₺0) işçi hiç oluşmaz. (Yevmiye tutarı diğer
+                // ekranlarda kısıtlı hesaptan yine gizlidir; yalnız giriş açık.)
+                const SizedBox(height: 24),
+                const FieldLabel('Yevmiye'),
+                MoneyField(
+                  controller: _overrideCtrl,
+                  label: 'Günlük ücret',
+                  helperText: 'Bu işçinin günlük yevmiyesi.',
+                  enabled: !saving,
+                  allowEmpty: false,
+                  filled: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: _save,
+                ),
               ] else ...[
                 const SizedBox(height: 24),
                 const FieldLabel('Kaç kişi getiriyor? (isteğe bağlı)'),
@@ -244,7 +242,7 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                     icon: Icons.groups_outlined,
                   ).copyWith(
                     helperText:
-                        'Yalnızca bilgi için — listede görünür, para hesabına girmez.',
+                        'Yoklamada önden dolu gelir; kişi başı yevmiye ile çarpılır.',
                     helperMaxLines: 2,
                   ),
                   validator: (v) {
@@ -256,10 +254,27 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                     return null;
                   },
                 ),
+                // Kişi başı yevmiye — yoklamada gelen kişi sayısıyla çarpılır
+                // (örn. 20 × ₺1.000). Kısıtlı hesap da girebilir (tutar diğer
+                // ekranlarda yine gizli).
+                const SizedBox(height: 24),
+                const FieldLabel('Kişi başı yevmiye (isteğe bağlı)'),
+                MoneyField(
+                  controller: _overrideCtrl,
+                  label: 'Kişi başı günlük ücret',
+                  helperText: 'Getirdiği her kişiye ödenecek günlük yevmiye. '
+                      'Yoklamada kişi sayısıyla çarpılır.',
+                  enabled: !saving,
+                  allowEmpty: true,
+                  filled: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: _save,
+                ),
                 const SizedBox(height: 12),
                 _InfoNote(
                   'Elebaşı bireysel takip edilmez; yoklamada kişi sayısı '
-                  'girilir, ödeme toplu yapılır.',
+                  'girilir. Kişi başı yevmiye girilirse günlük kazanç kişi '
+                  'sayısıyla çarpılır.',
                 ),
               ],
               const SizedBox(height: 32),

@@ -7,6 +7,7 @@ library;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import 'auth_providers.dart';
 
 class LoginState {
@@ -33,11 +34,15 @@ class LoginViewModel extends Notifier<LoginState> {
           );
       state = const LoginState();
     } on FirebaseAuthException catch (e) {
+      // Beklenen giriş hataları (şifre/e-posta/ağ) — kullanıcıya mesaj yeter,
+      // Crashlytics'e taşınmaz (gürültü olur). Yalnız kod breadcrumb'a düşer.
+      logBreadcrumb('giris-hata: ${e.code}');
       state = LoginState(error: _messageFor(e.code));
-    } catch (_) {
+    } catch (e, s) {
       state = const LoginState(
         error: 'Giriş yapılamadı. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s, reason: 'giris-beklenmedik');
     }
   }
 

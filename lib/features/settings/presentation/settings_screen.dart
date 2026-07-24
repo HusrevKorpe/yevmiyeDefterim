@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme_mode.dart';
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/firestore/firestore_providers.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/backup_service.dart';
@@ -29,12 +30,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await shareBackup(ref.read(firestoreProvider));
-    } catch (_) {
+    } catch (e, s) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('Yedek alınamadı. İnternet bağlantınızı kontrol edin.'),
         ),
       );
+      await logHandledError(e, s, reason: 'yedek-al');
     } finally {
       if (mounted) setState(() => _backingUp = false);
     }

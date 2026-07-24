@@ -42,12 +42,22 @@ class YevmiyeApp extends ConsumerWidget {
       // yeniden clamp'leyince min==max çakışıp `assert(maxScale > minScale)`
       // atıyor, takvim düzeni yarım kalıp RenderFlex ~99k px taşıyordu.
       builder: (context, child) {
-        final data = MediaQuery.of(context);
-        if (data.textScaler.scale(100) >= 110) return child!;
-        return MediaQuery(
-          data: data.copyWith(textScaler: const TextScaler.linear(1.10)),
-          child: child!,
+        // Klavye açıkken ekranın boş bir yerine dokununca klavye kapansın
+        // (uygulama geneli). Buton/liste gibi kendi dokunuşunu tüketen
+        // widget'lar dokunuşu kazanır; yalnız boşluğa dokunuşta odak kalkar.
+        Widget content = GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: child,
         );
+        final data = MediaQuery.of(context);
+        if (data.textScaler.scale(100) < 110) {
+          content = MediaQuery(
+            data: data.copyWith(textScaler: const TextScaler.linear(1.10)),
+            child: content,
+          );
+        }
+        return content;
       },
       routerConfig: router,
     );

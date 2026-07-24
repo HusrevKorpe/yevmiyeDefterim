@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/money/money.dart';
 import '../../data/field.dart';
 import 'field_chips.dart';
 import 'paid_lock_badge.dart';
@@ -17,6 +18,7 @@ class CrewAttendanceTile extends StatelessWidget {
     this.pending = false,
     this.maxHeadcount = 99,
     this.locked = false,
+    this.showWage = true,
     this.fields = const [],
     this.fieldId,
     this.fieldName,
@@ -36,9 +38,12 @@ class CrewAttendanceTile extends StatelessWidget {
   /// ile kesinleşir. Alt yazıda kullanıcıyı uyarmak için kullanılır.
   final bool pending;
 
-  /// Kişi başı ücret — para satırı şu an rafta (bkz. build). Değer hâlâ
-  /// ayarlardan geçiliyor ki para hesabı geri açılınca çağrı yeri değişmesin.
+  /// Kişi başı günlük ücret (kuruş). >0 ise alt yazıda "N kişi × ₺X = ₺toplam"
+  /// gösterilir; 0 ise (yevmiye girilmemiş) yalnız kişi sayısı yazılır.
   final int crewRateKurus;
+
+  /// Para tutarı (kişi başı ücret/toplam) gösterilsin mi? Kısıtlı hesapta false.
+  final bool showWage;
   final ValueChanged<int> onChanged;
   final int maxHeadcount;
 
@@ -65,17 +70,27 @@ class CrewAttendanceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // --- ELEBAŞI PARA SATIRI ŞİMDİLİK RAFTA ---
-    // Elebaşıya sabit/kişi-başı ücret girilmiyor; ödeme elden toplu yapılıyor.
-    // Yoklamada yalnız gelen kişi sayısı tutulur (para hesabı yok). Geri açmak
-    // için: `import '../../../../core/money/money.dart';` ekle ve subtitle'ı
-    // crewRateKurus==0 iken 'Kişi başı ücret girilmemiş', aksi halde
-    // '$headcount kişi × ${formatKurus(crewRateKurus)} = ${formatKurus(headcount*crewRateKurus)}' yap.
-    final subtitle = headcount == 0
-        ? 'Bugün gelen kişi sayısını girin'
-        : pending
-            ? '$headcount kişi · Kaydet ile onayla'
-            : '$headcount kişi geldi';
+    // Alt yazı: kişi sayısı + (para görebilen hesapta) kişi başı yevmiye çarpımı.
+    // Kişi başı yevmiye işçinin kartında girilir; girilmemişse (0) yalnız sayı.
+    // Para görebilen hesapta yevmiye çarpımı ("N × ₺X = ₺toplam"), aksi halde
+    // sade sayı. Kişi başı yevmiye işçinin kartında girilir.
+    final withMath = showWage && crewRateKurus > 0;
+    final mathText = '$headcount kişi × ${formatKurus(crewRateKurus)} = '
+        '${formatKurus(headcount * crewRateKurus)}';
+    final String subtitle;
+    if (headcount == 0) {
+      subtitle = 'Bugün gelen kişi sayısını girin';
+    } else if (pending) {
+      // Önden dolu (henüz kaydedilmemiş) → onay ipucu.
+      subtitle = '${withMath ? mathText : '$headcount kişi'} · Kaydet ile onayla';
+    } else if (withMath) {
+      subtitle = mathText;
+    } else if (showWage) {
+      // Para görebilen hesap ama yevmiye girilmemiş → kartından girmeye teşvik.
+      subtitle = '$headcount kişi · Kişi başı yevmiye girilmemiş';
+    } else {
+      subtitle = '$headcount kişi geldi';
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),

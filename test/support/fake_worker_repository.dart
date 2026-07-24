@@ -38,5 +38,11 @@ class FakeWorkerRepository implements WorkerRepository {
     _tick.add(null);
   }
 
+  @override
+  Future<void> delete(String id) async {
+    _store.remove(id);
+    _tick.add(null);
+  }
+
   List<Worker> get all => _sorted();
 }

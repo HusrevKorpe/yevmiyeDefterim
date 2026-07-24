@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/period_range_selector.dart';
@@ -57,10 +58,11 @@ class ReportScreen extends ConsumerWidget {
       } else {
         await shareReportPdf(report);
       }
-    } catch (_) {
+    } catch (e, s) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Paylaşım başarısız. Tekrar deneyin.')),
       );
+      await logHandledError(e, s, reason: 'rapor-paylas', info: {'format': format});
     }
   }
 

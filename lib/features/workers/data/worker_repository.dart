@@ -22,6 +22,12 @@ abstract class WorkerRepository {
 
   /// Soft-delete / geri alma (kural §5): `active` bayrağını değiştirir.
   Future<void> setActive(String id, {required bool active});
+
+  /// Kalıcı silme: işçi dokümanını Firestore'dan tamamen kaldırır (geri
+  /// alınamaz). Yalnız zaten pasif (soft-delete edilmiş) işçiler için kullanılır.
+  /// Geçmiş yoklama/avans kayıtları işçinin adını denormalize sakladığından
+  /// raporlarda görünmeye devam eder; yalnız işçi listesinden kaybolur.
+  Future<void> delete(String id);
 }
 
 class FirestoreWorkerRepository implements WorkerRepository {
@@ -57,4 +63,7 @@ class FirestoreWorkerRepository implements WorkerRepository {
         'active': active,
         ...writeStamp(),
       }, SetOptions(merge: true));
+
+  @override
+  Future<void> delete(String id) => workersCol(_db).doc(id).delete();
 }

@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ids/ids.dart';
+import '../../../core/widgets/app_dialog.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
@@ -44,10 +45,19 @@ class FieldsScreen extends ConsumerWidget {
             itemBuilder: (context, i) {
               if (i == 0) return const _HintRow();
               final field = active[i - 1];
-              return _FieldTile(
+              final tile = _FieldTile(
                 field: field,
                 onEdit: () => _edit(context, ref, field),
                 onDelete: () => _delete(context, ref, field),
+              );
+              // Satırları birbirinden ayıran ince çizgi (son satırdan sonra yok).
+              if (i - 1 == active.length - 1) return tile;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  tile,
+                  const Divider(height: 1, thickness: 0.5, indent: 68, endIndent: 16),
+                ],
               );
             },
           );
@@ -56,35 +66,17 @@ class FieldsScreen extends ConsumerWidget {
     );
   }
 
-  /// Ekle (existing null) / ad düzenle diyaloğu.
+  /// Ekle (existing null) / ad düzenle diyaloğu — ortak sanatsal [showInputDialog].
   Future<void> _edit(BuildContext context, WidgetRef ref,
       [Field? existing]) async {
-    final controller = TextEditingController(text: existing?.name ?? '');
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(existing == null ? 'Tarla Ekle' : 'Tarlayı Düzenle'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Tarla adı',
-            hintText: 'Örn. Aşağı Tarla',
-          ),
-          onSubmitted: (v) => Navigator.of(context).pop(v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Kaydet'),
-          ),
-        ],
-      ),
+    final name = await showInputDialog(
+      context,
+      title: existing == null ? 'Tarla Ekle' : 'Tarlayı Düzenle',
+      icon: Icons.grass,
+      initialValue: existing?.name ?? '',
+      label: 'Tarla adı',
+      hint: 'Örn. Aşağı Tarla',
+      textCapitalization: TextCapitalization.words,
     );
     final trimmed = name?.trim() ?? '';
     if (trimmed.isEmpty) return;

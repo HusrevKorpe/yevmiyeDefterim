@@ -103,6 +103,7 @@ class WorkersScreen extends ConsumerWidget {
           _WorkerTile(
             worker: w,
             onTap: () => _openDetail(context, w),
+            canDelete: true,
           ),
       ],
     );
@@ -173,11 +174,16 @@ class _WorkerTile extends ConsumerWidget {
   /// Sola kaydırma silme kısayolu bu karta eklensin mi (yalnız aktif liste).
   final bool canDelete;
 
-  /// Kaydırınca açılan çöp kutusu butonuna basınca ÖNCE onay sorar; onaylanırsa
-  /// işçiyi listeden kaldırır — soft-delete: kayıt Firestore'da kalır
+  /// Kaydırma silme davranışı işçinin durumuna göre değişir:
+  /// - Aktif işçi → [_deactivate]: soft-delete, "Pasif İşçiler"e taşınır (geri alınır).
+  /// - Pasif işçi → [_purge]: uygulamadan KALICI silinir (geri alınamaz).
+  Future<void> _delete(BuildContext context, WidgetRef ref) =>
+      worker.active ? _deactivate(context, ref) : _purge(context, ref);
+
+  /// Aktif işçiyi listeden kaldırır — soft-delete: kayıt Firestore'da kalır
   /// (yoklama/avans geçmişi korunur), yalnız "Pasif İşçiler"e taşınır.
   /// SnackBar'daki "Geri Al" ile geri alınır.
-  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+  Future<void> _deactivate(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
     final repo = ref.read(workerRepositoryProvider);
     final ok = await showConfirmDialog(
@@ -203,15 +209,48 @@ class _WorkerTile extends ConsumerWidget {
     );
   }
 
+  /// Zaten pasif olan işçiyi uygulamadan KALICI siler (geri alınamaz). Geçmiş
+  /// yoklama/avans kayıtları işçi adını denormalize sakladığından raporlarda
+  /// görünmeye devam eder; işçi yalnız listeden kaybolur.
+  Future<void> _purge(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final repo = ref.read(workerRepositoryProvider);
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Kalıcı olarak sil',
+      message: '${worker.name} uygulamadan kalıcı olarak silinsin mi? '
+          'Bu işlem geri alınamaz. Geçmiş yoklama ve avans kayıtları '
+          'raporlarda kalır.',
+      confirmLabel: 'Kalıcı Sil',
+      icon: Icons.delete_forever,
+    );
+    if (!ok) return;
+    await repo.delete(worker.id);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('${worker.name} kalıcı olarak silindi'),
+      ),
+    );
+  }
+
   String _subtitleText(bool canSeeMoney) {
     if (worker.type.isCrew) {
-      return worker.crewSize > 0 ? '${worker.crewSize} kişilik ekip' : 'Elebaşı';
+      final crewText =
+          worker.crewSize > 0 ? '${worker.crewSize} kişilik ekip' : 'Elebaşı';
+      // Para görebilen hesapta kişi başı yevmiye de gösterilir.
+      final rate = worker.dailyWageOverrideKurus;
+      if (canSeeMoney && rate != null && rate > 0) {
+        return '$crewText • ${formatKurus(rate)}/kişi';
+      }
+      return crewText;
     }
     // Kısıtlı hesap ücret göremez → yalnız cinsiyet gösterilir.
     if (!canSeeMoney) return worker.gender.label;
     final wage = worker.dailyWageOverrideKurus;
     final wageText =
-        wage == null ? 'Varsayılan ücret' : '${formatKurus(wage)} özel ücret';
+        wage == null ? 'Yevmiye girilmemiş' : '${formatKurus(wage)} yevmiye';
     return '${worker.gender.label} • $wageText';
   }
 
@@ -285,7 +324,9 @@ class _WorkerTile extends ConsumerWidget {
                     onPressed: (ctx) => _delete(ctx, ref),
                     backgroundColor: theme.colorScheme.error,
                     foregroundColor: Colors.white,
-                    icon: Icons.delete_outline,
+                    icon: worker.active
+                        ? Icons.delete_outline
+                        : Icons.delete_forever,
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ],

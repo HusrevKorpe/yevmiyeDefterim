@@ -115,4 +115,98 @@ void main() {
     expect(s.openAdvancesKurus, 50000);
     expect(s.netPaidKurus, 600000);
   });
+
+  test('net bakiye: brüt > avans → işçinin alacağı (pozitif)', () {
+    final s = buildWorkerHistorySummary(
+      attendance: [
+        ind('2026-07-02', AttendanceStatus.full), // 200000
+        ind('2026-07-03', AttendanceStatus.full), // 200000
+      ],
+      advances: [adv(50000, '2026-07-10')], // 50000 verildi
+      payrolls: const [],
+    );
+    // 400000 kazandı − 50000 avans = 350000 alacağı.
+    expect(s.netBalanceKurus, 350000);
+  });
+
+  test('net bakiye: avans > brüt → işçinin borcu (negatif)', () {
+    final s = buildWorkerHistorySummary(
+      attendance: [ind('2026-07-02', AttendanceStatus.half)], // 100000
+      advances: [adv(150000, '2026-07-10')], // 150000 verildi
+      payrolls: const [],
+    );
+    // 100000 kazandı − 150000 avans = -50000 (işçi 50000 borçlu).
+    expect(s.netBalanceKurus, -50000);
+  });
+
+  test('net bakiye: boş geçmiş → 0 (hesap denk)', () {
+    final s = buildWorkerHistorySummary(
+      attendance: const [],
+      advances: const [],
+      payrolls: const [],
+    );
+    expect(s.netBalanceKurus, 0);
+  });
+
+  test('HESAP GÖRÜLDÜ (devirsiz): kapanıştan sonra bakiye 0 olur', () {
+    // 400000 kazandı, 50000 açık avans aldı → kapanıştan önce 350000 alacağı.
+    // Kapanışta (07-24) avans kapanır; 350000 elden ödenmiş sayılır → bakiye 0.
+    final s = buildWorkerHistorySummary(
+      attendance: [
+        ind('2026-07-02', AttendanceStatus.full), // 200000
+        ind('2026-07-03', AttendanceStatus.full), // 200000
+      ],
+      advances: [
+        adv(50000, '2026-07-10',
+            settled: Advance.manualSettlementId('2026-07-24')),
+      ],
+      payrolls: const [],
+    );
+    expect(s.grossEarnedKurus, 400000, reason: 'brüt tüm zaman aynı kalır');
+    expect(s.openAdvancesKurus, 0, reason: 'kapanan avans açık değil');
+    expect(s.netBalanceKurus, 0, reason: 'kapanış sonrası hesap denk olmalı');
+  });
+
+  test('HESAP GÖRÜLDÜ (devirli): borç ikiye katlanmaz, devir kadar kalır', () {
+    // 100000 kazandı, 150000 açık avans → −50000 (işçinin borcu 50000).
+    // Kapanışta devir 50000 girildi: eski avans kapanır, aynı gün YENİ açık
+    // devir avansı oluşur. Bakiye −50000 kalmalı (−100000 DEĞİL = eski çift sayım).
+    final s = buildWorkerHistorySummary(
+      attendance: [ind('2026-07-02', AttendanceStatus.half)], // 100000
+      advances: [
+        adv(150000, '2026-07-10',
+            settled: Advance.manualSettlementId('2026-07-24')),
+        Advance(
+          id: Advance.carryoverId('2026-07-24', 'u1'),
+          workerId: 'w1',
+          workerName: 'Ahmet',
+          amountKurus: 50000,
+          date: '2026-07-24', // devir kapanış günüyle aynı tarihli, AÇIK
+          note: 'Önceki hesaptan devir',
+        ),
+      ],
+      payrolls: const [],
+    );
+    expect(s.openAdvancesKurus, 50000, reason: 'yalnız devir açık kalır');
+    expect(s.netBalanceKurus, -50000,
+        reason: 'devir tek sefer sayılmalı (çift sayım yok)');
+  });
+
+  test('HESAP GÖRÜLDÜ sonrası yeni kazanç normal işler', () {
+    // Kapanış (07-24) sonrası 07-25 günü 200000 kazandı → bakiye 200000 alacağı;
+    // kapanış öncesi kazanç denkleşmiş sayıldığından ona eklenmez.
+    final s = buildWorkerHistorySummary(
+      attendance: [
+        ind('2026-07-02', AttendanceStatus.full), // kapanış öncesi (denkleşti)
+        ind('2026-07-25', AttendanceStatus.full), // kapanış sonrası (taze)
+      ],
+      advances: [
+        adv(50000, '2026-07-10',
+            settled: Advance.manualSettlementId('2026-07-24')),
+      ],
+      payrolls: const [],
+    );
+    expect(s.netBalanceKurus, 200000,
+        reason: 'yalnız kapanış sonrası kazanç bakiyeye girer');
+  });
 }

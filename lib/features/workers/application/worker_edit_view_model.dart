@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/diagnostics/app_log.dart';
 import '../data/worker.dart';
 import 'workers_providers.dart';
 
@@ -33,10 +34,13 @@ class WorkerEditViewModel extends Notifier<WorkerEditState> {
         await repo.update(worker);
       }
       state = const WorkerEditState(done: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const WorkerEditState(
         error: 'Kaydedilemedi. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s,
+          reason: isNew ? 'isci-ekle' : 'isci-guncelle',
+          info: {'id': worker.id});
     }
   }
 
@@ -47,10 +51,12 @@ class WorkerEditViewModel extends Notifier<WorkerEditState> {
     try {
       await ref.read(workerRepositoryProvider).setActive(id, active: active);
       state = const WorkerEditState(done: true);
-    } catch (_) {
+    } catch (e, s) {
       state = const WorkerEditState(
         error: 'İşlem yapılamadı. İnternet bağlantınızı kontrol edin.',
       );
+      await logHandledError(e, s,
+          reason: 'isci-aktiflik', info: {'id': id, 'aktif': active});
     }
   }
 }
