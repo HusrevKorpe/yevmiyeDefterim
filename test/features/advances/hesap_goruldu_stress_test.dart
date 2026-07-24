@@ -41,12 +41,13 @@ class ControlledAdvanceRepository extends FakeAdvanceRepository {
   Future<void> settleAdvances(
     Iterable<String> ids,
     String settledDate, {
+    String? uid,
     Advance? carryover,
   }) async {
     settleCalls++;
     if (failSettle) throw Exception('yapay hata');
     if (settleGate != null) await settleGate!.future;
-    await super.settleAdvances(ids, settledDate, carryover: carryover);
+    await super.settleAdvances(ids, settledDate, uid: uid, carryover: carryover);
   }
 
   @override
@@ -122,6 +123,26 @@ void main() {
       expect(c.isCarryoverOf('2026-07-23'), isTrue);
       expect(c.isCarryoverOf('2026-07-22'), isFalse);
       expect(adv('normal-id').isCarryoverOf('2026-07-23'), isFalse);
+    });
+
+    test('olay-benzersiz işaret (uid): aynı gün ayrı olay, tarih aynı kalır', () {
+      final a = adv('a', settled: Advance.manualSettlementId('2026-07-24', 'A'));
+      final b = adv('b', settled: Advance.manualSettlementId('2026-07-24', 'B'));
+      // Tarih ikisinde de aynı (gösterim), ama olay kimliği (grup) farklı.
+      expect(a.settledDate, '2026-07-24');
+      expect(b.settledDate, '2026-07-24');
+      expect(a.settlementKey, 'A');
+      expect(b.settlementKey, 'B');
+      expect(a.settlementKey == b.settlementKey, isFalse,
+          reason: 'aynı gün iki kapanış farklı olay = ayrı grup');
+      // Uid'siz (eski) işaret geriye dönük: kimlik = tarih.
+      final c = adv('c', settled: Advance.manualSettlementId('2026-07-24'));
+      expect(c.settledDate, '2026-07-24');
+      expect(c.settlementKey, '2026-07-24');
+      // Devir olay kimliğine bağlı: A'nın devri yalnız A'ya ait.
+      final devA = adv(Advance.carryoverId('A', 'x'));
+      expect(devA.isCarryoverOf('A'), isTrue);
+      expect(devA.isCarryoverOf('B'), isFalse);
     });
 
     test('fromDoc: bozuk tipler güvenli varsayılana düşer (çökmez)', () {
@@ -457,7 +478,7 @@ void main() {
     expect(repo.byId('a1')!.isOpen, isFalse);
     expect(repo.byId('a2')!.isOpen, isFalse);
     final carryovers =
-        repo.all.where((x) => x.isCarryoverOf(todayIso())).toList();
+        repo.all.where((x) => x.id.startsWith(Advance.carryoverIdPrefix)).toList();
     expect(carryovers, hasLength(1));
     final c = carryovers.single;
     expect(c.isOpen, isTrue, reason: 'devir yeni AÇIK avans olmalı');
@@ -472,7 +493,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.byId('a1')!.isOpen, isTrue);
     expect(repo.byId('a2')!.isOpen, isTrue);
-    expect(repo.all.where((x) => x.isCarryoverOf(todayIso())), isEmpty);
+    expect(repo.all.where((x) => x.id.startsWith(Advance.carryoverIdPrefix)), isEmpty);
   });
 
   testWidgets('DEVİR: geçersiz tutar diyaloğu KAPATMAZ, hata gösterir; '
@@ -495,7 +516,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Hesap Görüldü'));
     await tester.pumpAndSettle();
     expect(repo.byId('a1')!.isOpen, isFalse);
-    expect(repo.all.where((x) => x.isCarryoverOf(todayIso())), hasLength(1));
+    expect(repo.all.where((x) => x.id.startsWith(Advance.carryoverIdPrefix)), hasLength(1));
   });
 
   testWidgets('tek avansta "· N kayıt" eki görünmez', (tester) async {
@@ -592,6 +613,64 @@ void main() {
     expect(repo.byId('a2')!.isOpen, isTrue);
     expect(repo.byId('c1')!.isOpen, isFalse, reason: 'eskiye dokunulmamalı');
     expect(find.text('Açık Avanslar'), findsOneWidget);
+  });
+
+  testWidgets('AdvancesScreen: aynı işçi AYNI gün İKİ ayrı kapanış → iki ayrı '
+      'grup; birini geri almak diğerine/onun devrine dokunmaz', (tester) async {
+    // #3 düzeltmesi: olay-benzersiz uid sayesinde aynı gün iki kapanış artık
+    // tek gruba birleşmez ve Geri Al yalnız kendi olayını + devrini etkiler.
+    final repo = ControlledAdvanceRepository([
+      adv('a1', settled: Advance.manualSettlementId('2026-07-20', 'A')),
+      adv(Advance.carryoverId('A', 'x'),
+          amount: 50000, date: '2026-07-20', note: 'Önceki hesaptan devir'),
+      adv('b1', settled: Advance.manualSettlementId('2026-07-20', 'B')),
+      adv(Advance.carryoverId('B', 'y'),
+          amount: 30000, date: '2026-07-20', note: 'Önceki hesaptan devir'),
+    ]);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        advanceRepositoryProvider.overrideWithValue(repo),
+        workersStreamProvider.overrideWith((ref) => Stream.value([worker])),
+      ],
+      child: const MaterialApp(
+        locale: Locale('tr', 'TR'),
+        supportedLocales: [Locale('tr', 'TR')],
+        localizationsDelegates: [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: AdvancesScreen(),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    // İki AYRI grup (eskiden tek "w1|2026-07-20" grubuna birleşirdi).
+    expect(find.text('Hesabı Görülenler (2)'), findsOneWidget);
+    await tester.tap(find.text('Hesabı Görülenler (2)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Geri Al'), findsNWidgets(2));
+
+    // İlk grubu geri al (onaylı).
+    await tester.tap(find.text('Geri Al').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Geri Al'));
+    await tester.pumpAndSettle();
+
+    // Yalnız BİR olay açıldı; diğeri kapalı kaldı (grup sırası date-eşit →
+    // hangisi açıldıysa yalnız o ve KENDİ devri etkilenir).
+    final aOpen = repo.byId('a1')!.isOpen;
+    final bOpen = repo.byId('b1')!.isOpen;
+    expect(aOpen != bOpen, isTrue, reason: 'yalnız bir olay geri alınmalı');
+    final devA = repo.byId(Advance.carryoverId('A', 'x'));
+    final devB = repo.byId(Advance.carryoverId('B', 'y'));
+    if (aOpen) {
+      expect(devA, isNull, reason: 'A açıldı → yalnız A devri silinir');
+      expect(devB, isNotNull, reason: 'B devrine dokunulmaz');
+    } else {
+      expect(devB, isNull, reason: 'B açıldı → yalnız B devri silinir');
+      expect(devA, isNotNull, reason: 'A devrine dokunulmaz');
+    }
   });
 
   testWidgets('AdvancesScreen Geri Al: kapanışın devir kaydını da siler '

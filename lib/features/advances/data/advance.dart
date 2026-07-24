@@ -40,41 +40,67 @@ abstract class Advance with _$Advance {
   bool get isOpen => settledPayrollId == null;
 
   /// Elle "Hesap görüldü" ile kapatılan avanslarda [settledPayrollId] bu önekle
-  /// başlar, ardından kapanış (hesap görüldü) tarihi gelir: `'hesap-goruldu:2026-07-22'`.
-  /// Hakediş (rafta) gerçek UUID yazar → önek çakışmaz; ayrımı [isManuallySettled]
-  /// yapar. Böylece yeni alan/şema (freezed regen) gerekmeden kapanış tarihi saklanır.
+  /// başlar, ardından kapanış tarihi gelir: `'hesap-goruldu:2026-07-22'`. İsteğe
+  /// bağlı olay kimliği (uid) eklenirse: `'hesap-goruldu:2026-07-22:<uid>'` →
+  /// aynı işçi aynı gün birden çok kez hesap görülse bile kapanışlar AYRI olaylar
+  /// olarak gruplanır (bkz. [settlementKey]). Hakediş (rafta) gerçek UUID yazar →
+  /// önek çakışmaz; ayrımı [isManuallySettled] yapar (freezed regen gerekmez).
   static const String manualSettlementPrefix = 'hesap-goruldu:';
 
-  /// Verilen [date] için "hesap görüldü" işaret değeri.
-  static String manualSettlementId(String date) => '$manualSettlementPrefix$date';
+  /// Verilen [date] için "hesap görüldü" işaret değeri. [uid] verilirse olay-
+  /// benzersiz işaret üretir (aynı gün ikinci kapanış ayrı grup olur); uid'siz
+  /// (eski) işaretler tarihe göre gruplanır — geriye dönük uyumlu.
+  static String manualSettlementId(String date, [String? uid]) =>
+      uid == null ? '$manualSettlementPrefix$date' : '$manualSettlementPrefix$date:$uid';
 
   /// Bu avans elle "Hesap görüldü" ile mi kapatıldı (hakediş mahsubu değil)?
   bool get isManuallySettled =>
       settledPayrollId != null &&
       settledPayrollId!.startsWith(manualSettlementPrefix);
 
+  /// İşaretin önek sonrası kısmı (`<date>` ya da `<date>:<uid>`) — elle
+  /// kapatılmadıysa null.
+  String? get _settlementBody => isManuallySettled
+      ? settledPayrollId!.substring(manualSettlementPrefix.length)
+      : null;
+
   /// "Hesap görüldü" kapanış tarihi (`'yyyy-MM-dd'`) — elle kapatılmadıysa ya da
   /// işaretteki tarih bozuksa null. Bozuk veri UI'da tarihsiz "Hesap görüldü"
-  /// olarak gösterilir; tarih formatlama asla çökmez.
+  /// olarak gösterilir; tarih formatlama asla çökmez. Uid'li işarette ilk ':'
+  /// öncesi tarihtir.
   String? get settledDate {
-    if (!isManuallySettled) return null;
-    final d = settledPayrollId!.substring(manualSettlementPrefix.length);
+    final body = _settlementBody;
+    if (body == null) return null;
+    final sep = body.indexOf(':');
+    final d = sep < 0 ? body : body.substring(0, sep);
     return isValidIsoDate(d) ? d : null;
   }
 
+  /// Kapanış OLAYININ kimliği: uid'li işarette uid, uid'siz (eski) işarette
+  /// tarih. "Hesabı Görülenler" gruplaması ve devir kaydı bağlaması bunu kullanır
+  /// → aynı gün ikinci kapanış ayrı olay olur; eski işaretler tarihe göre
+  /// (eskisi gibi) birleşir. Elle kapatılmadıysa null.
+  String? get settlementKey {
+    final body = _settlementBody;
+    if (body == null) return null;
+    final sep = body.indexOf(':');
+    return sep < 0 ? body : body.substring(sep + 1);
+  }
+
   /// "Hesap görüldü"de girilen devreden alacak, bu önekle başlayan ID'li YENİ
-  /// açık avans olarak yazılır: `'devir-<kapanış-tarihi>-<uuid>'`. Geri almada
+  /// açık avans olarak yazılır: `'devir-<kapanışKimliği>-<uuid>'`. Geri almada
   /// ilgili devir kaydı ID'den bulunup silinir (yeni alan/freezed regen
   /// gerekmez; kullanıcı notu/tarihi değiştirse de bağ kopmaz).
   static const String carryoverIdPrefix = 'devir-';
 
-  /// Verilen kapanış tarihi için devir avansı ID'si üretir.
-  static String carryoverId(String settledDate, String uuid) =>
-      '$carryoverIdPrefix$settledDate-$uuid';
+  /// Verilen kapanış kimliği ([settlementKey]) için devir avansı ID'si üretir.
+  /// Yeni kapanışta uid; eski/testte tarih geçilebilir (aynı string üretir).
+  static String carryoverId(String settlementKey, String uuid) =>
+      '$carryoverIdPrefix$settlementKey-$uuid';
 
-  /// Bu avans, [settledDate] tarihli "hesap görüldü"nün devir kaydı mı?
-  bool isCarryoverOf(String settledDate) =>
-      id.startsWith('$carryoverIdPrefix$settledDate-');
+  /// Bu avans, [settlementKey] kimlikli "hesap görüldü"nün devir kaydı mı?
+  bool isCarryoverOf(String settlementKey) =>
+      id.startsWith('$carryoverIdPrefix$settlementKey-');
 
   /// Firestore dokümanından okur. Eksik/bozuk alanlar güvenli varsayılana düşer
   /// (offline'da kısmi doküman gelebilir — çökme yerine güvenli varsayılan).

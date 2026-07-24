@@ -109,10 +109,12 @@ class AdvancesScreen extends ConsumerWidget {
     final legacy = settled.where((a) => !a.isManuallySettled).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
 
-    // İşçi + kapanış tarihine göre grupla (her grup = tek "hesap görüldü").
+    // İşçi + kapanış OLAYINA göre grupla (her grup = tek "hesap görüldü").
+    // settlementKey = uid (yeni) ya da tarih (eski) → aynı gün ikinci kapanış
+    // ayrı grup; eski işaretler eskisi gibi tarihe göre birleşir.
     final groups = <String, List<Advance>>{};
     for (final a in manual) {
-      (groups['${a.workerId}|${a.settledDate}'] ??= []).add(a);
+      (groups['${a.workerId}|${a.settlementKey}'] ??= []).add(a);
     }
     final keys = groups.keys.toList()
       ..sort((x, y) => (groups[y]!.first.settledDate ?? '')
@@ -153,14 +155,16 @@ class AdvancesScreen extends ConsumerWidget {
   }
 
   /// Grubun kapanışında oluşan ve hâlâ açık duran devir kayıtları — geri
-  /// almada birlikte silinir ki aynı alacak iki kez sayılmasın.
+  /// almada birlikte silinir ki aynı alacak iki kez sayılmasın. Devir, kapanış
+  /// OLAYININ kimliğine ([settlementKey]) bağlıdır → aynı gün başka bir
+  /// kapanışın devrine dokunulmaz.
   List<String> _carryoverIdsFor(List<Advance> group, List<Advance> open) {
-    final d = group.first.settledDate;
-    if (d == null) return const [];
+    final key = group.first.settlementKey;
+    if (key == null) return const [];
     final workerId = group.first.workerId;
     return [
       for (final a in open)
-        if (a.workerId == workerId && a.isCarryoverOf(d)) a.id,
+        if (a.workerId == workerId && a.isCarryoverOf(key)) a.id,
     ];
   }
 

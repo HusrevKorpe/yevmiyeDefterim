@@ -85,11 +85,13 @@ class AccountSettlementViewModel extends Notifier<bool> {
   @override
   bool build() => false;
 
-  /// [ids] avanslarını [settledDate] ile kapatır. [carryover] verilirse
+  /// [ids] avanslarını [settledDate] ile kapatır. [uid] verilirse kapanış olay-
+  /// benzersiz olur (aynı gün ikinci kapanış ayrı grup). [carryover] verilirse
   /// (devreden alacağımız) aynı batch'te yeni açık avans yazılır. Başarılıysa true.
   Future<bool> settle(
     Iterable<String> ids,
     String settledDate, {
+    String? uid,
     Advance? carryover,
   }) async {
     if (state) return false;
@@ -97,7 +99,7 @@ class AccountSettlementViewModel extends Notifier<bool> {
     try {
       await awaitWriteAck(ref
           .read(advanceRepositoryProvider)
-          .settleAdvances(ids, settledDate, carryover: carryover));
+          .settleAdvances(ids, settledDate, uid: uid, carryover: carryover));
       return true;
     } catch (e, s) {
       await logHandledError(e, s,

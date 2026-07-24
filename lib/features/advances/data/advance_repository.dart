@@ -27,11 +27,13 @@ abstract class AdvanceRepository {
 
   /// Verilen avansları "Hesap görüldü" ile kapatır (tek batch). Her birine
   /// [settledDate] tarihli işaret yazılır → açık listeden düşer, alacak kalmaz.
-  /// [carryover] verilirse (devreden alacağımız) AYNI batch'te yeni açık avans
-  /// olarak yazılır → sonraki hesaba devreder.
+  /// [uid] verilirse işaret olay-benzersiz olur (aynı gün ikinci kapanış ayrı
+  /// grup). [carryover] verilirse (devreden alacağımız) AYNI batch'te yeni açık
+  /// avans olarak yazılır → sonraki hesaba devreder.
   Future<void> settleAdvances(
     Iterable<String> ids,
     String settledDate, {
+    String? uid,
     Advance? carryover,
   });
 
@@ -79,20 +81,26 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
   Future<void> settleAdvances(
     Iterable<String> ids,
     String settledDate, {
+    String? uid,
     Advance? carryover,
-  }) {
+  }) async {
+    final marker = Advance.manualSettlementId(settledDate, uid);
+    // Yalnız HÂLÂ VAR OLAN avanslara işaret yaz. `set(merge:true)` silinmiş
+    // dokümanı yeniden YARATIR → başka cihaz o avansı bu arada sildiyse boş
+    // isimli ₺0 "hayalet" kapanmış kayıt oluşurdu. Önce oku-ele, sonra
+    // `update` (var olanı günceller, olmayanı yaratmaz). Böylece fake repo
+    // sözleşmesiyle aynı: olmayan id atlanır, var olanlar kapanır. Kapanışlar +
+    // devir tek batch'te atomiktir (yarım durum yok).
+    final existing = await _existingIds(ids);
     final batch = _db.batch();
-    final marker = Advance.manualSettlementId(settledDate);
-    for (final id in ids) {
-      batch.set(
+    for (final id in existing) {
+      batch.update(
         advancesCol(_db).doc(id),
         {'settledPayrollId': marker, ...writeStamp()},
-        SetOptions(merge: true),
       );
     }
     if (carryover != null) {
-      // Devir kaydı = normal yeni avans dokümanı (add ile aynı alanlar) —
-      // kapanışla atomik yazılır ki yarım durum (kapandı ama devir yok) olmasın.
+      // Devir kaydı = normal yeni avans dokümanı (add ile aynı alanlar).
       batch.set(advancesCol(_db).doc(carryover.id), {
         ...carryover.toMap(),
         'ts': Timestamp.fromDate(parseIsoDate(carryover.date)),
@@ -107,19 +115,32 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
   Future<void> reopenAdvances(
     Iterable<String> ids, {
     Iterable<String> deleteIds = const [],
-  }) {
+  }) async {
+    // Aynı hortlatma önlemi (bkz. [settleAdvances]): yalnız var olan avanslar
+    // yeniden açılır. Devir silme (`delete`) olmayan dokümanda zaten no-op.
+    final existing = await _existingIds(ids);
     final batch = _db.batch();
-    for (final id in ids) {
-      batch.set(
+    for (final id in existing) {
+      batch.update(
         advancesCol(_db).doc(id),
         {'settledPayrollId': null, ...writeStamp()},
-        SetOptions(merge: true),
       );
     }
     for (final id in deleteIds) {
       batch.delete(advancesCol(_db).doc(id));
     }
     return batch.commit();
+  }
+
+  /// Verilen ID'lerden Firestore'da HÂLÂ var olanları döndürür (paralel okuma).
+  /// Silinmiş dokümana yazıp "hayalet" yaratmayı önlemek için batch öncesi süzme.
+  Future<List<String>> _existingIds(Iterable<String> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return const [];
+    final snaps = await Future.wait(
+      list.map((id) => advancesCol(_db).doc(id).get()),
+    );
+    return [for (final s in snaps) if (s.exists) s.id];
   }
 
   @override

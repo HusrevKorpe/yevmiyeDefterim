@@ -192,12 +192,16 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     if (devirKurus == null) return;
 
     final today = todayIso();
+    // Bu kapanış OLAYINA özel kimlik: hem işaret (`hesap-goruldu:tarih:uid`) hem
+    // devir kaydının ID'si buna bağlanır → AYNI işçi AYNI gün ikinci kez hesap
+    // görülse bile ayrı olay/grup olur; Geri Al yalnız kendi devrini siler.
+    final eventUid = newId();
     // Devreden alacağımız: kapanışla AYNI batch'te yeni açık avans yazılır →
     // sonraki hesapta/yoklamada devam eder. Geri almada birlikte silinir.
     final carryover = devirKurus <= 0
         ? null
         : Advance(
-            id: Advance.carryoverId(today, newId()),
+            id: Advance.carryoverId(eventUid, newId()),
             workerId: workerId,
             workerName: workerName,
             amountKurus: devirKurus,
@@ -207,7 +211,7 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
 
     // Notifier'ı önden yakala: ekran kapansa da "Geri Al" güvenle çalışsın.
     final vm = ref.read(accountSettlementViewModelProvider.notifier);
-    final success = await vm.settle(ids, today, carryover: carryover);
+    final success = await vm.settle(ids, today, uid: eventUid, carryover: carryover);
     if (!mounted) return;
     if (success) {
       Navigator.of(context).pop();

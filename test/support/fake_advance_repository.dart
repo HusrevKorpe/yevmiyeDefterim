@@ -52,9 +52,10 @@ class FakeAdvanceRepository implements AdvanceRepository {
   Future<void> settleAdvances(
     Iterable<String> ids,
     String settledDate, {
+    String? uid,
     Advance? carryover,
   }) async {
-    final marker = Advance.manualSettlementId(settledDate);
+    final marker = Advance.manualSettlementId(settledDate, uid);
     for (final id in ids) {
       final a = _store[id];
       if (a != null) {
