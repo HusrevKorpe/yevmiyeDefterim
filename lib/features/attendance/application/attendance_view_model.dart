@@ -2,11 +2,17 @@
 ///
 /// Ekran durum/sayı değiştirince buradaki metotları çağırır; ücret çözümü ve
 /// snapshot burada yapılır, ekranda değil. State = son hata mesajı (yoksa null).
+///
+/// Yazmalar [awaitWriteAck] ile sarılır (avans VM'iyle aynı desen): offline'da
+/// Firestore yazım Future'ı sunucu onayına dek tamamlanmaz; sarmalayıcı en fazla
+/// birkaç saniye bekler → "Kaydet" onayı (SnackBar) askıda kalmaz, yazım yerel
+/// kuyruğa girip arkaplanda senkronlanır.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/diagnostics/app_log.dart';
+import '../../../core/firestore/write_ack.dart';
 import '../../../core/ids/ids.dart';
 import '../../settings/application/settings_providers.dart';
 import '../../settings/data/app_settings.dart';
@@ -82,9 +88,9 @@ class AttendanceViewModel extends Notifier<String?> {
   Future<void> clearStatus(Worker worker) async {
     final date = ref.read(selectedDateProvider);
     try {
-      await ref
+      await awaitWriteAck(ref
           .read(attendanceRepositoryProvider)
-          .delete(attendanceDocId(date, worker.id));
+          .delete(attendanceDocId(date, worker.id)));
     } catch (e, s) {
       state = 'Kaydedilemedi. Tekrar deneyin.';
       await logHandledError(e, s,
@@ -159,12 +165,15 @@ class AttendanceViewModel extends Notifier<String?> {
     final records =
         ref.read(attendanceForSelectedDateProvider).asData?.value ?? const [];
     final recorded = {for (final r in records) r.workerId};
-    for (final w in ref.read(activeWorkersProvider)) {
-      if (!w.type.isCrew || w.crewSize <= 0 || recorded.contains(w.id)) {
-        continue;
-      }
-      await setHeadcount(w, w.crewSize);
-    }
+    // Kaydı olmayan (önden dolu) elebaşı öntanımlıları PARALEL yazılır (sıralı
+    // await yerine): N elebaşı tek turda gider — çevrimiçi N ard-arda gidiş-dönüş
+    // beklenmez, offline'da da awaitWriteAck sınırıyla toplu birkaç saniyede
+    // döner (askıda kalmaz). Yazılacak biri yoksa anında döner → onay gecikmez.
+    final pending = [
+      for (final w in ref.read(activeWorkersProvider))
+        if (w.type.isCrew && w.crewSize > 0 && !recorded.contains(w.id)) w,
+    ];
+    await Future.wait([for (final w in pending) setHeadcount(w, w.crewSize)]);
   }
 
   /// "Kaydet" dokunuşunda günün işaret dokümanını yazar → Cloud Function
@@ -173,9 +182,9 @@ class AttendanceViewModel extends Notifier<String?> {
   /// sunucu onayına dek tamamlanmaz; bildirim işareti UI'ı asla bekletmemeli.
   Future<void> markDaySaved() async {
     try {
-      await ref
+      await awaitWriteAck(ref
           .read(attendanceRepositoryProvider)
-          .markDaySaved(ref.read(selectedDateProvider));
+          .markDaySaved(ref.read(selectedDateProvider)));
     } catch (e, s) {
       // Bildirim işareti yazılamazsa yoklama verisi etkilenmez; yalnız diğer
       // cihazlara push gitmez → teşhis için sessizce Crashlytics'e düşer.
@@ -185,7 +194,7 @@ class AttendanceViewModel extends Notifier<String?> {
 
   Future<void> _save(AttendanceRecord record) async {
     try {
-      await ref.read(attendanceRepositoryProvider).save(record);
+      await awaitWriteAck(ref.read(attendanceRepositoryProvider).save(record));
     } catch (e, s) {
       state = 'Kaydedilemedi. Tekrar deneyin.';
       await logHandledError(e, s,
