@@ -8,6 +8,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/diagnostics/app_log.dart';
+import '../../../core/firestore/write_ack.dart';
 import '../data/ledger_entry.dart';
 import 'ledger_providers.dart';
 
@@ -36,9 +37,9 @@ class LedgerEditViewModel extends Notifier<LedgerEditState> {
     try {
       final repo = ref.read(ledgerRepositoryProvider);
       if (isNew) {
-        await repo.add(entry);
+        await awaitWriteAck(repo.add(entry));
       } else {
-        await repo.update(entry);
+        await awaitWriteAck(repo.update(entry));
       }
       state = const LedgerEditState(done: true);
     } catch (e, s) {
@@ -62,7 +63,7 @@ class LedgerEditViewModel extends Notifier<LedgerEditState> {
     }
     state = const LedgerEditState(saving: true);
     try {
-      await ref.read(ledgerRepositoryProvider).delete(entry.id);
+      await awaitWriteAck(ref.read(ledgerRepositoryProvider).delete(entry.id));
       state = const LedgerEditState(done: true);
     } catch (e, s) {
       state = const LedgerEditState(
