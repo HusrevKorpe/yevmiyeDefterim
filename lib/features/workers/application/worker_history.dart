@@ -107,7 +107,12 @@ WorkerHistorySummary buildWorkerHistorySummary({
   var advancesTotal = 0;
   var openAdvances = 0;
   for (final a in advances) {
-    advancesTotal += a.amountKurus;
+    // Devir (carryover) kaydı gerçek nakit avans değil (kapanıştan taşınan
+    // bakiye) → "Verilen avans toplamı"nda çifte saymayız. AMA hâlâ AÇIK bir
+    // avanstır → net bakiyeye ([openAdvances]) normal girer.
+    if (!a.id.startsWith(Advance.carryoverIdPrefix)) {
+      advancesTotal += a.amountKurus;
+    }
     if (a.isOpen) openAdvances += a.amountKurus;
   }
 

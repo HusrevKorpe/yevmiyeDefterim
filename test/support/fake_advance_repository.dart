@@ -37,7 +37,13 @@ class FakeAdvanceRepository implements AdvanceRepository {
 
   @override
   Future<void> update(Advance advance) async {
-    _store[advance.id] = advance;
+    // Firestore impl'i gibi: düzenleme `settledPayrollId`'ye DOKUNMAZ (kapanış
+    // durumu yalnız settle/reopen ile değişir). Saklı kapanış işareti, çağıran
+    // eski (null) kopyayı gönderse bile korunur → eşzamanlı kapanış ezilmez.
+    final existing = _store[advance.id];
+    _store[advance.id] = existing == null
+        ? advance
+        : advance.copyWith(settledPayrollId: existing.settledPayrollId);
     bumpRev(advance.id);
     _tick.add(null);
   }

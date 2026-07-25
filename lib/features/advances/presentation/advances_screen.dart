@@ -15,6 +15,7 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../application/advance_providers.dart';
 import '../application/advance_view_model.dart';
+import '../application/settlement_groups.dart';
 import '../data/advance.dart';
 import 'advance_edit_screen.dart';
 import 'widgets/advance_note_chip.dart';
@@ -105,34 +106,29 @@ class AdvancesScreen extends ConsumerWidget {
     required List<Advance> open,
     required List<Advance> settled,
   }) {
-    final manual = settled.where((a) => a.isManuallySettled).toList();
     final legacy = settled.where((a) => !a.isManuallySettled).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
 
-    // İşçi + kapanış OLAYINA göre grupla (her grup = tek "hesap görüldü").
-    // settlementKey = uid (yeni) ya da tarih (eski) → aynı gün ikinci kapanış
-    // ayrı grup; eski işaretler eskisi gibi tarihe göre birleşir.
-    final groups = <String, List<Advance>>{};
-    for (final a in manual) {
-      (groups['${a.workerId}|${a.settlementKey}'] ??= []).add(a);
-    }
-    final keys = groups.keys.toList()
-      ..sort((x, y) => (groups[y]!.first.settledDate ?? '')
-          .compareTo(groups[x]!.first.settledDate ?? ''));
+    // İşçi + kapanış OLAYINA göre grupla (her grup = tek "hesap görüldü"), en yeni
+    // önce sırala, yalnız işçinin EN SON kapanışını geri-alınabilir işaretle
+    // (devir zinciri newest-first çözülür). Karar saf fonksiyonda (testli).
+    final groups = buildSettlementGroups(settled);
 
     return ExpansionTile(
       leading: const Icon(Icons.check_circle_outline),
-      title: Text('Hesabı Görülenler (${keys.length})'),
+      title: Text('Hesabı Görülenler (${groups.length})'),
       children: [
-        for (final k in keys)
+        for (final g in groups)
           _SettledWorkerCard(
-            advances: groups[k]!,
-            onReopen: () => _reopen(
-              context,
-              ref,
-              groups[k]!,
-              carryoverIds: _carryoverIdsFor(groups[k]!, open),
-            ),
+            advances: g.advances,
+            onReopen: g.reopenable
+                ? () => _reopen(
+                      context,
+                      ref,
+                      g.advances,
+                      carryoverIds: _carryoverIdsFor(g.advances, open),
+                    )
+                : null,
           ),
         for (final a in legacy)
           ListTile(
@@ -202,7 +198,10 @@ class _SettledWorkerCard extends StatelessWidget {
   const _SettledWorkerCard({required this.advances, required this.onReopen});
 
   final List<Advance> advances;
-  final VoidCallback onReopen;
+
+  /// `null` → bu işçinin daha yeni bir kapanışı var; geri almak devir zincirini
+  /// bozacağından Geri Al gizlenir (yerine bilgilendirme notu). Bkz. _settledSection.
+  final VoidCallback? onReopen;
 
   @override
   Widget build(BuildContext context) {
@@ -249,17 +248,36 @@ class _SettledWorkerCard extends StatelessWidget {
                     ),
               trailing: Text(formatKurus(a.amountKurus)),
             ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 6, bottom: 4),
-              child: TextButton.icon(
-                onPressed: onReopen,
-                icon: const Icon(Icons.undo, size: 18),
-                label: const Text('Geri Al'),
+          if (onReopen != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6, bottom: 4),
+                child: TextButton.icon(
+                  onPressed: onReopen,
+                  icon: const Icon(Icons.undo, size: 18),
+                  label: const Text('Geri Al'),
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 15, color: theme.hintColor),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Daha yeni bir hesap kapanışı var. Geri almak için önce '
+                      'onu geri alın.',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.hintColor),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
         ],
       ),
     );

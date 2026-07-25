@@ -7,6 +7,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/diagnostics/app_log.dart';
+import '../../../core/firestore/write_ack.dart';
 import '../data/worker.dart';
 import 'workers_providers.dart';
 
@@ -29,9 +30,9 @@ class WorkerEditViewModel extends Notifier<WorkerEditState> {
     try {
       final repo = ref.read(workerRepositoryProvider);
       if (isNew) {
-        await repo.add(worker);
+        await awaitWriteAck(repo.add(worker));
       } else {
-        await repo.update(worker);
+        await awaitWriteAck(repo.update(worker));
       }
       state = const WorkerEditState(done: true);
     } catch (e, s) {
@@ -49,7 +50,8 @@ class WorkerEditViewModel extends Notifier<WorkerEditState> {
     if (state.saving) return;
     state = const WorkerEditState(saving: true);
     try {
-      await ref.read(workerRepositoryProvider).setActive(id, active: active);
+      await awaitWriteAck(
+          ref.read(workerRepositoryProvider).setActive(id, active: active));
       state = const WorkerEditState(done: true);
     } catch (e, s) {
       state = const WorkerEditState(

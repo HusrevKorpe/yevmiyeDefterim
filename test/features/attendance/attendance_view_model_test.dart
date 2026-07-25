@@ -232,6 +232,57 @@ void main() {
     expect(crew.length, 2);
   });
 
+  // REGRESYON: gün yoklaması HENÜZ YÜKLENMEDEN (AsyncLoading) Kaydet'e basılırsa
+  // commitCrewDefaults hiçbir öntanımlı yazmamalı — aksi halde tüm elebaşları
+  // "kayıtsız" sanıp elle girilmiş mevcudu varsayılanla EZERDİ (sessiz veri kaybı).
+  test('commitCrewDefaults: gün akışı yüklenmeden elle girilen mevcudu EZMEZ',
+      () async {
+    final workers = FakeWorkerRepository();
+    attendance = FakeAttendanceRepository();
+    settingsRepo = FakeSettingsRepository(settings);
+    container = ProviderContainer(overrides: [
+      settingsRepositoryProvider.overrideWithValue(settingsRepo),
+      attendanceRepositoryProvider.overrideWithValue(attendance),
+      workerRepositoryProvider.overrideWithValue(workers),
+    ]);
+    container.listen(settingsStreamProvider, (_, _) {});
+    await container.read(settingsStreamProvider.future);
+
+    const boss = Worker(
+      id: 'eA',
+      name: 'A Ustası',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      defaultHeadcount: 10, // öntanımlı 10
+    );
+    await workers.add(boss);
+    container.read(selectedDateProvider.notifier).set('2026-07-15');
+
+    // Bugün için DEPODA elle 30 kişi girilmiş bir kayıt var (önceki oturum /
+    // başka cihaz). Bu kaybolmamalı.
+    await attendance.save(AttendanceRecord.crew(
+      id: attendanceDocId('2026-07-15', boss.id),
+      date: '2026-07-15',
+      workerId: boss.id,
+      workerName: boss.name,
+      headcount: 30,
+      crewRateSnapshotKurus: 150000,
+    ));
+
+    // İşçileri yükle AMA gün yoklamasına bilerek abone olma → AsyncLoading kalır.
+    container.listen(workersStreamProvider, (_, _) {});
+    await container.read(workersStreamProvider.future);
+    expect(container.read(attendanceForSelectedDateProvider).asData, isNull,
+        reason: 'ön koşul: gün akışı henüz yüklenmedi (asData null)');
+
+    await vm().commitCrewDefaults();
+
+    final r = attendance.all.whereType<CrewAttendance>().single;
+    expect(r.headcount, 30,
+        reason: 'yükleme sırasında öntanımlı (10) yazılıp 30 EZİLMEMELİ');
+    expect(attendance.count, 1, reason: 'yükleme bitmeden hiç öntanımlı yazılmaz');
+  });
+
   // "Kaydet" → günün işaret dokümanı yazılır (attendanceDays/{date}) →
   // Cloud Function diğer cihazlara "yoklama alındı" push bildirimi gönderir.
   test('markDaySaved: seçili günün işaret dokümanı yazılır', () async {
@@ -351,6 +402,77 @@ void main() {
     final r = attendance.all.single as IndividualAttendance;
     expect(r.isPaid, isFalse);
     expect(r.status, AttendanceStatus.full);
+  });
+
+  // REGRESYON (kural §4): ücret yoklama ANINDA dondurulur. Var olan bir günü
+  // SONRADAN düzenlemek (durum/kişi düzeltmek) YENİ bir dondurma anı DEĞİLDİR →
+  // araya giren yevmiye zammı geçmiş kazancı sessizce DEĞİŞTİRMEMELİ.
+  test('düzenleme: zamdan sonra eski bireysel günü düzeltmek snapshot\'ı KORUR',
+      () async {
+    await boot(settings);
+    // Eski gün: Tam, 200000 dondur.
+    container.read(selectedDateProvider.notifier).set('2026-07-17');
+    await loadSelectedDate();
+    await vm().setStatus(male, AttendanceStatus.full);
+    await waitUntil(() =>
+        container.read(attendanceByWorkerForDateProvider)[male.id]
+            is IndividualAttendance);
+
+    // Yevmiyeye zam (200000 → 300000).
+    await settingsRepo.save(const AppSettings(
+      defaultWageMaleKurus: 300000,
+      defaultWageFemaleKurus: 180000,
+      defaultCrewRateKurus: 150000,
+    ));
+    await waitUntil(() =>
+        container.read(settingsStreamProvider).asData?.value
+            .defaultWageMaleKurus ==
+        300000);
+
+    // AYNI eski günde SADECE durumu düzelt (Tam → Yarım).
+    await vm().setStatus(male, AttendanceStatus.half);
+
+    final r = attendance.all.single as IndividualAttendance;
+    expect(r.status, AttendanceStatus.half);
+    expect(r.wageSnapshotKurus, 200000,
+        reason: 'düzenleme dondurulmuş ücreti korumalı (300000 değil)');
+    expect(r.earningKurus, 100000, reason: '200000 yarım = 100000 (150000 değil)');
+  });
+
+  test('düzenleme: zamdan sonra eski elebaşı gününü düzeltmek oranı KORUR',
+      () async {
+    await boot(settings);
+    const boss = Worker(
+      id: 'e9',
+      name: 'Usta',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      dailyWageOverrideKurus: 100000, // kişi başı ₺1.000
+    );
+    container.read(selectedDateProvider.notifier).set('2026-07-17');
+    await loadSelectedDate();
+    await vm().setHeadcount(boss, 10); // 10 × 100000 dondurulur
+    await waitUntil(() =>
+        container.read(attendanceByWorkerForDateProvider)[boss.id]
+            is CrewAttendance);
+
+    // Elebaşının kişi-başı yevmiyesine zam (100000 → 120000).
+    const bossRaised = Worker(
+      id: 'e9',
+      name: 'Usta',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      dailyWageOverrideKurus: 120000,
+    );
+
+    // AYNI eski günde SADECE kişi sayısını düzelt (10 → 11).
+    await vm().setHeadcount(bossRaised, 11);
+
+    final r = attendance.all.single as CrewAttendance;
+    expect(r.headcount, 11);
+    expect(r.crewRateSnapshotKurus, 100000,
+        reason: 'düzenleme dondurulmuş kişi ücretini korumalı (120000 değil)');
+    expect(r.earningKurus, 11 * 100000);
   });
 
   // --- Tarla seçimi (setField) — "kim nerede çalıştı" (isteğe bağlı) ---

@@ -162,6 +162,9 @@ void main() {
     expect(s.openAdvancesKurus, 50000, reason: 'yalnız devir açık kalır');
     expect(s.netBalanceKurus, -50000,
         reason: 'devir tek sefer sayılmalı (çift sayım yok)');
+    expect(s.advancesTotalKurus, 150000,
+        reason: 'devir "Verilen avans toplamı"na girmez (gerçek nakit değil, '
+            'kapanıştan taşınan bakiye)');
   });
 
   test('HESAP GÖRÜLDÜ sonrası yeni kazanç normal işler', () {

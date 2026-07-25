@@ -68,11 +68,20 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
       });
 
   @override
-  Future<void> update(Advance advance) => advancesCol(_db).doc(advance.id).set({
-        ...advance.toMap(),
-        'ts': Timestamp.fromDate(parseIsoDate(advance.date)),
-        ...writeStamp(),
-      }, SetOptions(merge: true));
+  Future<void> update(Advance advance) {
+    // Düzenleme YALNIZ tutar/tarih/not/isim değiştirir. `settledPayrollId`'yi
+    // BİLEREK yazmayız (map'ten çıkarılır): `merge:true` ile açık avansın
+    // `null`'ını yazmak, başka cihazın bu arada yaptığı "Hesap Görüldü"
+    // kapanışını EZERDİ (kapanışı sessizce geri açardı). Kapanış/açılış yalnız
+    // settleAdvances/reopenAdvances üzerinden değişir; merge, yazılmayan alanın
+    // sunucudaki değerini korur.
+    final fields = advance.toMap()..remove('settledPayrollId');
+    return advancesCol(_db).doc(advance.id).set({
+      ...fields,
+      'ts': Timestamp.fromDate(parseIsoDate(advance.date)),
+      ...writeStamp(),
+    }, SetOptions(merge: true));
+  }
 
   @override
   Future<void> delete(String id) => advancesCol(_db).doc(id).delete();

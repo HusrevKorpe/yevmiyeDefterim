@@ -48,6 +48,27 @@ void main() {
     expect(repo.byId('a1')!.amountKurus, 200000);
   });
 
+  test(
+      'eşzamanlılık: düzenleme, başka cihazın "Hesap Görüldü" kapanışını GERİ AÇMAZ',
+      () async {
+    // A cihazı avansı açıkken açtı (elindeki kopyada settled=null).
+    boot([make()]);
+    // B cihazı bu arada hesabı gördü → depoda kapanış işareti var.
+    await repo.settleAdvances(['a1'], '2026-07-20', uid: 'evt1');
+    expect(repo.byId('a1')!.isOpen, isFalse);
+
+    // A cihazı tutarı değiştirip Kaydet'e bastı (hâlâ settled=null kopya gönderir).
+    await vm().submit(
+      advance: make().copyWith(amountKurus: 200000),
+      isNew: false,
+    );
+
+    // Tutar güncellendi AMA kapanış korundu (avans yeniden açılmadı).
+    expect(repo.byId('a1')!.amountKurus, 200000);
+    expect(repo.byId('a1')!.isOpen, isFalse,
+        reason: 'düzenleme settledPayrollId\'yi ezmemeli');
+  });
+
   test('açık avans silinir', () async {
     boot([make()]);
     await vm().delete(make());

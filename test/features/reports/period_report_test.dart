@@ -157,6 +157,22 @@ void main() {
     expect(r.advancesGivenKurus, 70000);
   });
 
+  test('avans: devir (carryover) "Verilen avans"a girmez (çifte sayım yok)', () {
+    final r = build(advances: [
+      advance('a', 50000, '2026-07-10'), // gerçek nakit avans
+      Advance(
+        id: Advance.carryoverId('2026-07-20', 'u1'), // 'devir-...'
+        workerId: 'a',
+        workerName: 'a',
+        amountKurus: 30000,
+        date: '2026-07-20', // dönem içi ama gerçek nakit değil
+        note: 'Önceki hesaptan devir',
+      ),
+    ]);
+    expect(r.advancesGivenKurus, 50000,
+        reason: 'devir kaydı gerçek nakit değil; kapanıştan taşınan bakiye');
+  });
+
   test('aralık dışı yoklama süzülür (grösse ve dökümden çıkar)', () {
     final r = build(attendance: [
       ind('a', '2026-07-02', AttendanceStatus.full), // içeride

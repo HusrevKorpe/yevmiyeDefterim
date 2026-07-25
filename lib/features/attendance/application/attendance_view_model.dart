@@ -28,10 +28,19 @@ class AttendanceViewModel extends Notifier<String?> {
   String? build() => null;
 
   /// Seçili günde bu işçinin mevcut yoklama kaydı (yoksa null). Durum/sayı
-  /// değişiminde tarla seçimini korumak ve [setField]'de kaydı bulmak için
-  /// okunur (ekran bu haritayı zaten canlı tutar).
-  AttendanceRecord? _existing(String workerId) =>
-      ref.read(attendanceByWorkerForDateProvider)[workerId];
+  /// değişiminde tarla/ücret snapshot'ını korumak ve [setField]'de kaydı bulmak
+  /// için okunur (ekran bu haritayı zaten canlı tutar).
+  ///
+  /// Gün değişimi penceresinde harita bir kare ÖNCEKİ günün kaydını tutabilir
+  /// (attendanceByWorkerForDateProvider "önceki değeri koru" der). O stale kaydı
+  /// kullanmak (a) [setField]'de yanlış güne yazar (existing.id eski gün) ve
+  /// (b) durum/sayı değişiminde eski günün ücret/tarla snapshot'ını yeni güne
+  /// taşırdı. Tarih uyuşmuyorsa "kayıt yok" say → ilk kayıt gibi davran.
+  AttendanceRecord? _existing(String workerId) {
+    final r = ref.read(attendanceByWorkerForDateProvider)[workerId];
+    if (r == null || r.date != ref.read(selectedDateProvider)) return null;
+    return r;
+  }
 
   AppSettings get _settings =>
       ref.read(settingsStreamProvider).asData?.value ?? AppSettings.empty;
@@ -46,15 +55,21 @@ class AttendanceViewModel extends Notifier<String?> {
   /// Bireysel işçinin durumunu yazar; o günkü ücreti dondurur (kural §4).
   Future<void> setStatus(Worker worker, AttendanceStatus status) async {
     final date = ref.read(selectedDateProvider);
-    final settings = _settings;
-    final wage = resolveWageKurus(
-      gender: worker.gender,
-      overrideKurus: worker.dailyWageOverrideKurus,
-      maleWageKurus: settings.defaultWageMaleKurus,
-      femaleWageKurus: settings.defaultWageFemaleKurus,
-    );
-    // Durum değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
     final existing = _existing(worker.id);
+    // Kayıt zaten VARSA dondurulmuş ücreti KORU: ücret yoklama ANINDA dondurulur
+    // (kural §4); sonradan durumu (Tam↔Yarım) düzeltmek YENİ bir dondurma anı
+    // değildir. İşçinin yevmiyesi bu arada değiştirilmiş olsa bile geçmiş günün
+    // kazancı sabit kalmalı (aksi halde eski günü düzenlemek kazancı sessizce
+    // güncel orana çekerdi). İlk kayıtta güncel ücret çözülüp dondurulur.
+    final wage = existing is IndividualAttendance
+        ? existing.wageSnapshotKurus
+        : resolveWageKurus(
+            gender: worker.gender,
+            overrideKurus: worker.dailyWageOverrideKurus,
+            maleWageKurus: _settings.defaultWageMaleKurus,
+            femaleWageKurus: _settings.defaultWageFemaleKurus,
+          );
+    // Durum değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
     await _save(AttendanceRecord.individual(
       id: attendanceDocId(date, worker.id),
       date: date,
@@ -88,15 +103,22 @@ class AttendanceViewModel extends Notifier<String?> {
   Future<void> setHeadcount(Worker worker, int headcount) async {
     final date = ref.read(selectedDateProvider);
     final count = headcount < 0 ? 0 : headcount;
-    // Sayı değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
     final existing = _existing(worker.id);
+    // Kayıt zaten VARSA dondurulmuş kişi ücretini KORU (kural §4): kişi sayısını
+    // düzeltmek YENİ bir dondurma anı değildir. İşçinin kişi-başı yevmiyesi bu
+    // arada değiştirilmiş olsa bile geçmiş günün oranı sabit kalmalı. İlk kayıtta
+    // güncel oran dondurulur (commitCrewDefaults'un önden-dolu yazımı dahil).
+    final rate = existing is CrewAttendance
+        ? existing.crewRateSnapshotKurus
+        : _crewRate(worker);
+    // Sayı değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
     await _save(AttendanceRecord.crew(
       id: attendanceDocId(date, worker.id),
       date: date,
       workerId: worker.id,
       workerName: worker.name,
       headcount: count,
-      crewRateSnapshotKurus: _crewRate(worker),
+      crewRateSnapshotKurus: rate,
       fieldId: existing?.fieldId,
       fieldName: existing?.fieldName,
     ));
@@ -142,8 +164,14 @@ class AttendanceViewModel extends Notifier<String?> {
   /// mevcudunu kalıcı yazar. Zaten kaydı olan (elle değiştirilmiş) elebaşı EZİLMEZ;
   /// kişi sayısı girilmemiş (crewSize == 0) elebaşı atlanır.
   Future<void> commitCrewDefaults() async {
-    final records =
-        ref.read(attendanceForSelectedDateProvider).asData?.value ?? const [];
+    // Günün kayıtları HENÜZ YÜKLENMEDİYSE hiçbir öntanımlı yazma. `asData`,
+    // AsyncLoading'de (gün değişiminde yeniden abonelik / ilk yükleme; önceki
+    // değer tutulsa bile) null döner. Eski `?? const []` bunu "kayıt yok" sanıp
+    // TÜM elebaşları öntanımlı mevcutla EZERDİ → elle girilen kişi sayısı sessizce
+    // kaybolurdu. Yüklenince Kaydet tekrar çalışır (bkz. attendanceByWorkerForDateProvider).
+    final data = ref.read(attendanceForSelectedDateProvider).asData;
+    if (data == null) return;
+    final records = data.value;
     final recorded = {for (final r in records) r.workerId};
     // Kaydı olmayan (önden dolu) elebaşı öntanımlıları PARALEL yazılır (sıralı
     // await yerine): N elebaşı tek turda gider — çevrimiçi N ard-arda gidiş-dönüş

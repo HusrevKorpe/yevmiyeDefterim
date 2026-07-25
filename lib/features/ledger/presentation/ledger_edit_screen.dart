@@ -162,8 +162,23 @@ class _LedgerEditScreenState extends ConsumerState<LedgerEditScreen> {
     } catch (_) {
       return true; // sürüm okunamadı (offline) → üzerine yazmaya izin ver
     }
-    if (now == null || now == base) return true;
+    if (now == base) return true; // değişmemiş → sessiz devam
     if (!mounted) return false;
+    if (now == null) {
+      // Doküman siz düzenlerken başka cihazda SİLİNMİŞ. update() `set(merge:true)`
+      // kullandığından kaydetmek onu YENİDEN yaratır (silinen gider Kasa/rapora
+      // geri döner). Sessiz "hortlama" olmasın diye ayrı onay — avans deposundaki
+      // `_existingIds` hayalet-korumasının ledger karşılığı.
+      return showConfirmDialog(
+        context,
+        title: 'Kayıt silinmiş',
+        message: 'Bu kayıt siz düzenlerken başka bir cihazda silindi. '
+            'Kaydederseniz yeniden oluşturulur. Yine de kaydedilsin mi?',
+        confirmLabel: 'Yeniden Oluştur',
+        icon: Icons.restore_from_trash,
+        accent: StatusColors.half,
+      );
+    }
     return showConfirmDialog(
       context,
       title: 'Kayıt değişmiş',

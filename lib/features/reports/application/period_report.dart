@@ -129,9 +129,13 @@ PeriodReport buildPeriodReport({
         .add(r);
   }
 
-  // Verilen avans (dönem içindeki avans tarihleri).
+  // Verilen avans (dönem içindeki avans tarihleri). Devir (carryover) kaydı
+  // gerçek nakit avans DEĞİL — "Hesap Görüldü"de kapanıştan devreden bakiyenin
+  // yeni açık avans olarak taşınmasıdır. Orijinal avans zaten sayıldığından onu
+  // da saymak çifte sayım olur → `devir-` önekli kayıtlar hariç.
   var advancesGiven = 0;
   for (final a in advances) {
+    if (a.id.startsWith(Advance.carryoverIdPrefix)) continue;
     if (_inRange(a.date, startIso, endIso)) advancesGiven += a.amountKurus;
   }
 
