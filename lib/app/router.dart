@@ -17,8 +17,6 @@ import '../features/auth/data/app_user.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/ledger/presentation/ledger_screen.dart';
-// Hakediş şimdilik rafta — geri açınca bu import'u da aç.
-// import '../features/payroll/presentation/payroll_screen.dart';
 import '../features/reports/presentation/report_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/workers/presentation/workers_screen.dart';
@@ -74,7 +72,6 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
         const blocked = <String>{
           AppRoutes.report,
           AppRoutes.settings,
-          AppRoutes.payroll,
         };
         if (blocked.contains(state.matchedLocation)) return AppRoutes.home;
       }
@@ -143,18 +140,6 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
-          // Geri açmak için bu branch'i ve main_shell.dart'taki eşi olan
-          // Hakediş destination'ını birlikte aç (ikisinin sırası eşleşmeli).
-          // StatefulShellBranch(
-          //   routes: [
-          //     GoRoute(
-          //       path: AppRoutes.payroll,
-          //       builder: (context, state) => const PayrollScreen(),
-          //     ),
-          //   ],
-          // ),
-          // --- /HAKEDİŞ ---
           StatefulShellBranch(
             routes: [
               GoRoute(

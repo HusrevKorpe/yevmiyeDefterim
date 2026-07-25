@@ -27,14 +27,6 @@ class AttendanceViewModel extends Notifier<String?> {
   @override
   String? build() => null;
 
-  // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-  // Ödenmiş (hakedişe girmiş) gün düzenlenemez — donmuş hakedişi bozmamak için
-  // (kural §3, §6; plan §8 riski). UI'da tile kilitliydi; bu VM guard'ı savunma
-  // derinliğiydi. Hakedişi geri açınca aşağıdaki sabiti ve setStatus/setHeadcount
-  // içindeki guard'ları birlikte aç (mevcut kayıt okuma: [_existing]).
-  // static const String _paidLockMessage = 'Bu gün ödendiği için düzenlenemez.';
-  // --- /ÖDEME KİLİDİ ---
-
   /// Seçili günde bu işçinin mevcut yoklama kaydı (yoksa null). Durum/sayı
   /// değişiminde tarla seçimini korumak ve [setField]'de kaydı bulmak için
   /// okunur (ekran bu haritayı zaten canlı tutar).
@@ -53,12 +45,6 @@ class AttendanceViewModel extends Notifier<String?> {
 
   /// Bireysel işçinin durumunu yazar; o günkü ücreti dondurur (kural §4).
   Future<void> setStatus(Worker worker, AttendanceStatus status) async {
-    // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-    // Hakedişi geri açınca bu guard'ı da aç:
-    // if (_existing(worker.id)?.isPaid ?? false) {
-    //   state = _paidLockMessage;
-    //   return;
-    // }
     final date = ref.read(selectedDateProvider);
     final settings = _settings;
     final wage = resolveWageKurus(
@@ -100,12 +86,6 @@ class AttendanceViewModel extends Notifier<String?> {
 
   /// Elebaşının kişi sayısını yazar; o günkü kişi ücretini dondurur.
   Future<void> setHeadcount(Worker worker, int headcount) async {
-    // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-    // Hakedişi geri açınca bu guard'ı da aç:
-    // if (_existing(worker.id)?.isPaid ?? false) {
-    //   state = _paidLockMessage;
-    //   return;
-    // }
     final date = ref.read(selectedDateProvider);
     final count = headcount < 0 ? 0 : headcount;
     // Sayı değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.

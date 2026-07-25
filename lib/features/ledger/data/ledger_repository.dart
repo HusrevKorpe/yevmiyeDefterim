@@ -69,11 +69,9 @@ class FirestoreLedgerRepository implements LedgerRepository {
   /// 1. **Gelir** (`type == 'income'`) — gelir kavramı kaldırıldı, KALICI elenir.
   ///    (`type == 'tahsilat'` GÖRÜNÜR — esnafa önden verilen para; toplamlardan
   ///    dışlanması [summarizeLedger]'da yapılır, burada değil.)
-  /// 2. **Otomatik maaş/elebaşı** (`source: payroll/elebasi`) — hakediş "Öde"
-  ///    akışının yazdığı salt-okunur kayıtlar. Hakediş rafa kalkınca bunları
-  ///    silecek arayüz kalmadığından Kasa'da asılı kalıyorlardı → eleniyorlar.
-  ///    --- HAKEDİŞ ŞİMDİLİK RAFTA ---: hakediş geri açılınca bu source süzgecini
-  ///    kaldır ki maaş ödemeleri Kasa'ya yeniden yansısın (kural §6 çifte-sayım).
+  /// 2. **Otomatik maaş/elebaşı** (`source: payroll/elebasi`) — kaldırılan
+  ///    hakediş "Öde" akışının vaktiyle yazdığı salt-okunur kayıtlar. Firestore'da
+  ///    duran bu eski dokümanlar Kasa'ya karışmasın diye KALICI elenir.
   static bool _isVisibleExpense(QueryDocumentSnapshot<Map<String, dynamic>> d) {
     final data = d.data();
     if (data['type'] == 'income') return false;

@@ -6,8 +6,6 @@ import 'package:yevmiye_defterim/features/advances/application/advance_providers
 import 'package:yevmiye_defterim/features/advances/data/advance.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
 import 'package:yevmiye_defterim/features/ledger/data/ledger_entry.dart';
-import 'package:yevmiye_defterim/features/payroll/application/payroll_providers.dart';
-import 'package:yevmiye_defterim/features/payroll/data/payroll.dart';
 import 'package:yevmiye_defterim/features/reports/application/period_report.dart';
 import 'package:yevmiye_defterim/features/reports/application/report_providers.dart';
 
@@ -22,13 +20,11 @@ void main() {
     required Stream<List<AttendanceRecord>> attendance,
     required Stream<List<LedgerEntry>> ledger,
     required Stream<List<Advance>> advances,
-    required Stream<List<Payroll>> payrolls,
   }) async {
     final c = ProviderContainer(overrides: [
       reportAttendanceProvider.overrideWith((ref) => attendance),
       reportLedgerProvider.overrideWith((ref) => ledger),
       advancesStreamProvider.overrideWith((ref) => advances),
-      payrollsStreamProvider.overrideWith((ref) => payrolls),
     ]);
     addTearDown(c.dispose);
     final sub = c.listen(reportProvider, (_, _) {});
@@ -45,7 +41,6 @@ void main() {
       attendance: Stream.value(const []),
       ledger: Stream.value(const []),
       advances: Stream.value(const []),
-      payrolls: Stream.value(const []),
     );
     expect(state, isA<AsyncData<PeriodReport>>());
   });
@@ -56,7 +51,6 @@ void main() {
       attendance: Stream.error('izin reddedildi'),
       ledger: Stream.value(const []),
       advances: Stream.value(const []),
-      payrolls: Stream.value(const []),
     );
     expect(state, isA<AsyncError<PeriodReport>>());
   });
@@ -68,7 +62,6 @@ void main() {
       attendance: stuck.stream, // hiç emisyon yok → sonsuz "yükleniyor"
       ledger: Stream.value(const []),
       advances: Stream.value(const []),
-      payrolls: Stream.value(const []),
     );
     expect(state, isA<AsyncLoading<PeriodReport>>());
     // Kritik: takılı kaynak "veri hazır/boş" olarak DEĞERLENDİRİLMEZ.

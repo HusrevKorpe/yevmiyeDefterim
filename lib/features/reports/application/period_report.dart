@@ -2,12 +2,11 @@
 ///
 /// Üç bağımsız metrik grubu tek dönemde birleşir:
 ///  1. Kasa: toplam gider + kategori kırılımı ([summarizeLedger]).
-///  2. İşçilik: dönemde tahakkuk eden brüt (yoklama kazancı), ödenen net
-///     (hakediş), verilen avans.
+///  2. İşçilik: dönemde tahakkuk eden brüt (yoklama kazancı), verilen avans.
 ///  3. İşçi bazında kazanç dökümü.
 ///
 /// Çifte sayım yok (kural §6): kasa ve işçilik AYRI metriklerdir; kasa yalnız
-/// ledger'dan, işçilik yalnız yoklama/hakediş/avanstan türetilir. Girişler
+/// ledger'dan, işçilik yalnız yoklama/avanstan türetilir. Girişler
 /// dönem dışıysa da güvenli: hepsi [startIso, endIso] aralığına süzülür.
 library;
 
@@ -16,7 +15,6 @@ import '../../advances/data/advance.dart';
 import '../../attendance/data/attendance_record.dart';
 import '../../ledger/application/ledger_summary.dart';
 import '../../ledger/data/ledger_entry.dart';
-import '../../payroll/data/payroll.dart';
 import '../../workers/data/worker.dart';
 
 /// Bir işçinin dönem kazanç dökümü (rapor satırı).
@@ -58,7 +56,6 @@ class PeriodReport {
     this.expenseKurus = 0,
     this.expenseByCategory = const {},
     this.grossLaborKurus = 0,
-    this.netPaidKurus = 0,
     this.advancesGivenKurus = 0,
     this.workerEarnings = const [],
   });
@@ -72,9 +69,6 @@ class PeriodReport {
 
   /// Dönemde tahakkuk eden brüt işçilik (yoklama kazançları toplamı, kuruş).
   final int grossLaborKurus;
-
-  /// Dönemde ödenen hakediş neti (paidDate dönem içindekiler, kuruş).
-  final int netPaidKurus;
 
   /// Dönemde verilen avans toplamı (kuruş).
   final int advancesGivenKurus;
@@ -95,7 +89,6 @@ class PeriodReport {
   bool get isEmpty =>
       expenseKurus == 0 &&
       grossLaborKurus == 0 &&
-      netPaidKurus == 0 &&
       advancesGivenKurus == 0 &&
       workerEarnings.isEmpty;
 }
@@ -115,7 +108,6 @@ PeriodReport buildPeriodReport({
   required String endIso,
   required List<AttendanceRecord> attendance,
   required List<Advance> advances,
-  required List<Payroll> payrolls,
   required List<LedgerEntry> ledger,
 }) {
   // 1. Kasa — dönemdeki gider kayıtları (mevcut saf özet).
@@ -143,12 +135,6 @@ PeriodReport buildPeriodReport({
     if (_inRange(a.date, startIso, endIso)) advancesGiven += a.amountKurus;
   }
 
-  // Ödenen net (paidDate dönem içindeki hakedişler).
-  var netPaid = 0;
-  for (final p in payrolls) {
-    if (_inRange(p.paidDate, startIso, endIso)) netPaid += p.netPaidKurus;
-  }
-
   // Yalnız fiilen çalışılan (gün girilen) işçileri listele → gürültüsüz.
   final earnings = accs.values
       .where((a) => a.hasActivity)
@@ -162,7 +148,6 @@ PeriodReport buildPeriodReport({
     expenseKurus: ledgerSummary.expenseKurus,
     expenseByCategory: ledgerSummary.expenseByCategory,
     grossLaborKurus: grossLabor,
-    netPaidKurus: netPaid,
     advancesGivenKurus: advancesGiven,
     workerEarnings: earnings,
   );

@@ -154,8 +154,7 @@ class _IndividualTile extends ConsumerWidget {
       ),
       // Para/gider kısıtlı hesap yevmiye tutarını görmez (yoklama açık kalır).
       showWage: ref.watch(canSeeMoneyProvider),
-      // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-      // Hakedişi geri açınca: `locked: byWorker[worker.id]?.isPaid ?? false`.
+      // Ödeme kilidi yok (hakediş kaldırıldı) — her gün düzenlenebilir.
       locked: false,
       // Geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla değişiklik koruması).
       onChanged: (s) =>
@@ -200,8 +199,7 @@ class _CrewTile extends ConsumerWidget {
           worker.dailyWageOverrideKurus ?? settings.defaultCrewRateKurus,
       // Para/gider kısıtlı hesap tutarı görmez (kişi sayısı açık kalır).
       showWage: ref.watch(canSeeMoneyProvider),
-      // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-      // Hakedişi geri açınca: `locked: crew?.isPaid ?? false`.
+      // Ödeme kilidi yok (hakediş kaldırıldı) — her gün düzenlenebilir.
       locked: false,
       // Geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla değişiklik koruması).
       onChanged: (c) =>

@@ -1,6 +1,6 @@
 /// Faz 4 akışı — GERÇEK uygulamayı çalıştırır (router, shell, ViewModel'lar),
-/// yalnız veri katmanı bellek-içi seed'li fake'lerle değiştirilir. Rapor ekranı,
-/// işçi geçmişi ekranı ve ödenmiş-gün kilidi görsel olarak doğrulanır.
+/// yalnız veri katmanı bellek-içi seed'li fake'lerle değiştirilir. Rapor ekranı
+/// ve işçi geçmişi ekranı görsel olarak doğrulanır.
 library;
 
 import 'package:flutter/material.dart';
@@ -19,8 +19,6 @@ import 'package:yevmiye_defterim/features/auth/application/auth_providers.dart';
 import 'package:yevmiye_defterim/features/auth/data/app_user.dart';
 import 'package:yevmiye_defterim/features/ledger/application/ledger_providers.dart';
 import 'package:yevmiye_defterim/features/ledger/data/ledger_entry.dart';
-import 'package:yevmiye_defterim/features/payroll/application/payroll_providers.dart';
-import 'package:yevmiye_defterim/features/payroll/data/payroll.dart';
 import 'package:yevmiye_defterim/features/reports/application/report_providers.dart';
 import 'package:yevmiye_defterim/features/settings/application/settings_providers.dart';
 import 'package:yevmiye_defterim/features/settings/data/app_settings.dart';
@@ -31,7 +29,6 @@ import '../test/support/fake_advance_repository.dart';
 import '../test/support/fake_attendance_repository.dart';
 import '../test/support/fake_auth_repository.dart';
 import '../test/support/fake_ledger_repository.dart';
-import '../test/support/fake_payroll_repository.dart';
 import '../test/support/fake_settings_repository.dart';
 import '../test/support/fake_worker_repository.dart';
 
@@ -101,21 +98,6 @@ void main() {
           date: '2026-07-10'),
     ]);
 
-    // Ödenmiş hakediş (Ahmet, 2026-07-15).
-    final payrolls = FakePayrollRepository()
-      ..payrolls.add(const Payroll(
-        id: 'pay1',
-        workerId: 'w1',
-        workerName: 'Ahmet Yılmaz',
-        workerType: WorkerType.gundelik,
-        periodStart: '2026-07-01',
-        periodEnd: '2026-07-15',
-        paidDate: '2026-07-15',
-        grossKurus: 200000,
-        advancesDeductedKurus: 50000,
-        netPaidKurus: 150000,
-      ));
-
     // Kasa — gider kayıtları.
     final ledger = FakeLedgerRepository([
       const LedgerEntry(
@@ -148,7 +130,6 @@ void main() {
         workerRepositoryProvider.overrideWithValue(workers),
         attendanceRepositoryProvider.overrideWithValue(attendance),
         advanceRepositoryProvider.overrideWithValue(advances),
-        payrollRepositoryProvider.overrideWithValue(payrolls),
         ledgerRepositoryProvider.overrideWithValue(ledger),
       ],
       child: const YevmiyeApp(),
@@ -188,8 +169,8 @@ void main() {
     await tester.tap(find.byType(BackButton).first);
     await tester.pumpAndSettle();
 
-    // Yoklama sekmesi → 2026-07-15. Ödeme kilidi rafta (hakediş ile birlikte):
-    // "Ödendi" rozeti görünmez, ödenmiş gün de artık düzenlenebilir.
+    // Yoklama sekmesi → 2026-07-15. Ödeme kilidi yok (hakediş kaldırıldı):
+    // "Ödendi" rozeti görünmez, her gün düzenlenebilir.
     await tester.tap(find.text('Yoklama').last);
     await tester.pumpAndSettle();
     expect(find.text('Ödendi'), findsNothing);

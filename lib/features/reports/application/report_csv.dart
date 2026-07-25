@@ -38,7 +38,6 @@ String buildReportCsv(PeriodReport report) {
     '',
     _row(['İŞÇİLİK']),
     _row(['Tahakkuk eden brüt', formatKurusPlain(report.grossLaborKurus)]),
-    _row(['Ödenen (net)', formatKurusPlain(report.netPaidKurus)]),
     _row(['Verilen avans', formatKurusPlain(report.advancesGivenKurus)]),
     '',
     _row(['İŞÇİ KAZANÇLARI']),

@@ -17,10 +17,6 @@ import '../../advances/data/advance.dart';
 import '../../advances/presentation/widgets/advance_note_chip.dart';
 import '../../auth/application/user_access.dart';
 import '../../attendance/data/attendance_record.dart';
-import '../../payroll/application/payroll_providers.dart';
-// --- HAKEDİŞ ŞİMDİLİK RAFTA --- geri açınca bu import'u da aç.
-// import '../../payroll/data/payroll.dart';
-// --- /HAKEDİŞ ---
 import '../application/worker_history.dart';
 import '../application/worker_history_providers.dart';
 import '../data/worker.dart';
@@ -53,9 +49,6 @@ class WorkerDetailScreen extends ConsumerWidget {
         ref.watch(attendanceByWorkerProvider(id)).asData?.value ?? const [];
     // Avans kısıtlı hesaba da açık (2026-07-23) → her hesapta izlenir.
     final advances = ref.watch(advancesByWorkerProvider(id));
-    // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
-    // final payrolls = ref.watch(payrollsByWorkerProvider(id));
-    // --- /HAKEDİŞ ---
 
     return Scaffold(
       appBar: GradientAppBar(
@@ -79,9 +72,6 @@ class WorkerDetailScreen extends ConsumerWidget {
               onRetry: () {
                 ref.invalidate(attendanceByWorkerProvider(id));
                 ref.invalidate(advancesStreamProvider);
-                if (canSeeMoney) {
-                  ref.invalidate(payrollsStreamProvider);
-                }
               },
               data: (_) => ListView(
                 padding: const EdgeInsets.only(bottom: 32),
@@ -112,15 +102,6 @@ class WorkerDetailScreen extends ConsumerWidget {
                       if (i > 0) const _RowDivider(),
                       _AdvanceRow(advance: advances[i]),
                     ],
-                  // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
-                  // Geri açmak için bu bloğu, yukarıdaki `payrolls` izlemesini,
-                  // `_PayrollRow` sınıfını ve payroll import'unu birlikte aç.
-                  // _Section('Ödenen Hakedişler (${payrolls.length})'),
-                  // if (payrolls.isEmpty)
-                  //   const _EmptyLine('Ödenmiş hakediş yok.')
-                  // else
-                  //   for (final p in payrolls) _PayrollRow(payroll: p),
-                  // --- /HAKEDİŞ ---
                 ],
               ),
             ),
@@ -245,7 +226,7 @@ class _SummaryCard extends StatelessWidget {
               ],
             ),
             // Kalan bakiye şeridi (alacağı/vereceği) — yalnız para görebilen
-            // hesapta. Brüt kazanç − verilen avans (− ödenen hakediş, rafta).
+            // hesapta. (Denkleşmemiş) brüt kazanç − açık avans.
             if (canSeeMoney) ...[
               const SizedBox(height: 12),
               _BalanceBanner(netKurus: summary.netBalanceKurus),

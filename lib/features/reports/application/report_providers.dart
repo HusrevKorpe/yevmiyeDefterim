@@ -1,8 +1,8 @@
 /// Rapor Riverpod sağlayıcıları (kural §7).
 ///
-/// Rapor dönemi Kasa/Hakediş döneminden BAĞIMSIZDIR (kullanıcı raporu farklı
-/// aralıkta görebilir). Dönem → yoklama/kasa aralık sorgusu + tüm avans/hakediş
-/// akışı → saf [buildPeriodReport]. Avans/hakediş builder içinde süzülür.
+/// Rapor dönemi Kasa döneminden BAĞIMSIZDIR (kullanıcı raporu farklı
+/// aralıkta görebilir). Dönem → yoklama/kasa aralık sorgusu + tüm avans
+/// akışı → saf [buildPeriodReport]. Avans builder içinde süzülür.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +13,6 @@ import '../../attendance/application/attendance_providers.dart';
 import '../../attendance/data/attendance_record.dart';
 import '../../ledger/application/ledger_providers.dart';
 import '../../ledger/data/ledger_entry.dart';
-import '../../payroll/application/payroll_providers.dart';
 import 'period_report.dart';
 
 /// Seçili rapor dönemi (uçlar dahil, `'yyyy-MM-dd'`).
@@ -88,25 +87,20 @@ final Provider<AsyncValue<PeriodReport>> reportProvider =
   final p = ref.watch(reportPeriodProvider);
   final attendance = ref.watch(reportAttendanceProvider);
   final advances = ref.watch(advancesStreamProvider);
-  final payrolls = ref.watch(payrollsStreamProvider);
   final ledger = ref.watch(reportLedgerProvider);
 
-  for (final src in [attendance, advances, payrolls, ledger]) {
+  for (final src in [attendance, advances, ledger]) {
     if (src.hasError) {
       return AsyncError<PeriodReport>(
           src.error!, src.stackTrace ?? StackTrace.current);
     }
   }
-  if (attendance.hasValue &&
-      advances.hasValue &&
-      payrolls.hasValue &&
-      ledger.hasValue) {
+  if (attendance.hasValue && advances.hasValue && ledger.hasValue) {
     return AsyncData(buildPeriodReport(
       startIso: p.start,
       endIso: p.end,
       attendance: attendance.requireValue,
       advances: advances.requireValue,
-      payrolls: payrolls.requireValue,
       ledger: ledger.requireValue,
     ));
   }

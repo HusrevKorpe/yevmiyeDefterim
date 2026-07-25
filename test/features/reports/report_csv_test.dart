@@ -16,7 +16,6 @@ void main() {
           'bakkal': 30000,
         },
         grossLaborKurus: 900000,
-        netPaidKurus: 400000,
         advancesGivenKurus: 70000,
         workerEarnings: earnings,
       );

@@ -1,13 +1,12 @@
 /// İşçi geçmişi özeti — saf fonksiyon (Firestore'suz → unit test, kural §11).
 ///
-/// Bir işçinin TÜM zamanki yoklama/avans/hakediş toplamları (dönemden bağımsız).
+/// Bir işçinin TÜM zamanki yoklama/avans toplamları (dönemden bağımsız).
 /// Rapor dönem-bazlıyken bu işçi-detay ekranı içindir. Çifte sayım yok: her
 /// metrik ayrı kaynaktan (kural §6).
 library;
 
 import '../../advances/data/advance.dart';
 import '../../attendance/data/attendance_record.dart';
-import '../../payroll/data/payroll.dart';
 
 class WorkerHistorySummary {
   const WorkerHistorySummary({
@@ -19,7 +18,6 @@ class WorkerHistorySummary {
     this.unreconciledGrossKurus = 0,
     this.advancesTotalKurus = 0,
     this.openAdvancesKurus = 0,
-    this.netPaidKurus = 0,
   });
 
   /// Bireysel: tam / yarım gün sayısı.
@@ -45,13 +43,10 @@ class WorkerHistorySummary {
   /// Açık (henüz mahsup edilmemiş) avans toplamı (kuruş).
   final int openAdvancesKurus;
 
-  /// Ödenen hakediş neti toplamı (kuruş).
-  final int netPaidKurus;
-
   /// Çalışılan (gün girilen) gün sayısı.
   int get workedDays => fullDays + halfDays + crewDays;
 
-  /// Net bakiye (kuruş): (denkleşmemiş) brüt kazanç − AÇIK avans − ödenen hakediş.
+  /// Net bakiye (kuruş): (denkleşmemiş) brüt kazanç − AÇIK avans.
   /// Pozitif → işçinin bizden ALACAĞI var; negatif → işçinin bize BORCU (vereceği).
   ///
   /// "Hesap görüldü" bir KAPANIŞTIR: o güne kadarki kazanç ve avanslar
@@ -60,15 +55,13 @@ class WorkerHistorySummary {
   /// 0'a döner. Kapanışta girilen devir (aynı tarihli YENİ açık avans) kadar
   /// negatife (işçinin borcu) geçer. Kapanış sonrası yeni kazanç/avans normal
   /// işler; "Geri Al" kapanışı kaldırınca bakiye eski hâline döner.
-  int get netBalanceKurus =>
-      unreconciledGrossKurus - openAdvancesKurus - netPaidKurus;
+  int get netBalanceKurus => unreconciledGrossKurus - openAdvancesKurus;
 }
 
 /// İşçinin geçmiş toplamlarını saf biçimde türetir.
 WorkerHistorySummary buildWorkerHistorySummary({
   required List<AttendanceRecord> attendance,
   required List<Advance> advances,
-  required List<Payroll> payrolls,
 }) {
   // En son "hesap görüldü" kapanış tarihi (geçerli tarihli, elle kapatılmış
   // avanslardan). O gün ve öncesindeki kazanç+avans denkleştirilmiş sayılır →
@@ -118,11 +111,6 @@ WorkerHistorySummary buildWorkerHistorySummary({
     if (a.isOpen) openAdvances += a.amountKurus;
   }
 
-  var netPaid = 0;
-  for (final p in payrolls) {
-    netPaid += p.netPaidKurus;
-  }
-
   return WorkerHistorySummary(
     fullDays: fullDays,
     halfDays: halfDays,
@@ -132,6 +120,5 @@ WorkerHistorySummary buildWorkerHistorySummary({
     unreconciledGrossKurus: unreconciledGross,
     advancesTotalKurus: advancesTotal,
     openAdvancesKurus: openAdvances,
-    netPaidKurus: netPaid,
   );
 }

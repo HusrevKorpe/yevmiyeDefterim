@@ -3,7 +3,6 @@ import 'package:yevmiye_defterim/core/constants/categories.dart';
 import 'package:yevmiye_defterim/features/advances/data/advance.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
 import 'package:yevmiye_defterim/features/ledger/data/ledger_entry.dart';
-import 'package:yevmiye_defterim/features/payroll/data/payroll.dart';
 import 'package:yevmiye_defterim/features/reports/application/period_report.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
@@ -61,23 +60,9 @@ void main() {
         date: date,
       );
 
-  Payroll payroll(String worker, int net, String paidDate) => Payroll(
-        id: '$worker-$paidDate',
-        workerId: worker,
-        workerName: worker,
-        workerType: WorkerType.gundelik,
-        periodStart: start,
-        periodEnd: end,
-        paidDate: paidDate,
-        grossKurus: net,
-        advancesDeductedKurus: 0,
-        netPaidKurus: net,
-      );
-
   PeriodReport build({
     List<AttendanceRecord> attendance = const [],
     List<Advance> advances = const [],
-    List<Payroll> payrolls = const [],
     List<LedgerEntry> ledgerEntries = const [],
   }) =>
       buildPeriodReport(
@@ -85,7 +70,6 @@ void main() {
         endIso: end,
         attendance: attendance,
         advances: advances,
-        payrolls: payrolls,
         ledger: ledgerEntries,
       );
 
@@ -171,14 +155,6 @@ void main() {
       advance('b', 20000, '2026-07-31'), // sınır (dahil)
     ]);
     expect(r.advancesGivenKurus, 70000);
-  });
-
-  test('ödenen net: yalnız paidDate dönem içindeki hakedişler', () {
-    final r = build(payrolls: [
-      payroll('a', 400000, '2026-07-15'), // içeride
-      payroll('b', 300000, '2026-08-01'), // dönem dışı
-    ]);
-    expect(r.netPaidKurus, 400000);
   });
 
   test('aralık dışı yoklama süzülür (grösse ve dökümden çıkar)', () {

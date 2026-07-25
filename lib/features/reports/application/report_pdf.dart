@@ -84,7 +84,6 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
 
         _title(t('İşçilik')),
         _kv(t('Tahakkuk eden brüt'), money(report.grossLaborKurus)),
-        _kv(t('Ödenen (net)'), money(report.netPaidKurus)),
         _kv(t('Verilen avans'), money(report.advancesGivenKurus)),
         pw.SizedBox(height: 14),
 

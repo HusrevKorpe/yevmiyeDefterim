@@ -13,8 +13,6 @@ import 'theme.dart';
 import 'update_notice.dart';
 
 /// 5 büyük alt menü: Ana Sayfa, İşçiler, Yoklama, Avans, Giderler.
-/// (Hakediş sekmesi şimdilik rafta — aşağıdaki işaretli bloğu ve router'daki
-/// eşi olan branch'i geri açınca dönecek.)
 ///
 /// Para/gider kısıtlı hesapta da BÜTÜN sekmeler görünür (2026-07-23'te Avans
 /// da açıldı); kısıt yalnız yevmiye tutarı gizleme + Rapor/Ayarlar
@@ -108,10 +106,6 @@ class _MainShellState extends ConsumerState<MainShell> {
         selectedIcon: Icon(Icons.fact_check),
         label: 'Yoklama',
       ),
-      // --- HAKEDİŞ ŞİMDİLİK RAFTA ---
-      // Geri açmak için router.dart'taki payroll branch'i ile birlikte, buraya
-      // İşçiler'den sonraki uygun sıraya Hakediş destination'ı ekle.
-      // --- /HAKEDİŞ ---
       const NavigationDestination(
         icon: Icon(Icons.payments_outlined),
         selectedIcon: Icon(Icons.payments),

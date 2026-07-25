@@ -1,6 +1,6 @@
 /// Rapor ekranı — dönem seç → kasa + işçilik özeti + işçi bazında kazanç (§8).
 ///
-/// Rapor dönemi Kasa/Hakediş'ten bağımsızdır. Kasa kartı [LedgerSummaryCard]
+/// Rapor dönemi Kasa'dan bağımsızdır. Kasa kartı [LedgerSummaryCard]
 /// ile paylaşılır (DRY). Dışa aktarma (PDF/CSV) app bar'dan (Faz 4 Part D).
 library;
 
@@ -14,7 +14,6 @@ import '../../../core/widgets/period_range_selector.dart';
 import '../../advances/application/advance_providers.dart';
 import '../../ledger/application/ledger_summary.dart';
 import '../../ledger/presentation/widgets/ledger_summary_card.dart';
-import '../../payroll/application/payroll_providers.dart';
 import '../application/period_report.dart';
 import '../application/report_providers.dart';
 import '../application/report_share.dart';
@@ -103,7 +102,6 @@ class ReportScreen extends ConsumerWidget {
                 ref.invalidate(reportAttendanceProvider);
                 ref.invalidate(reportLedgerProvider);
                 ref.invalidate(advancesStreamProvider);
-                ref.invalidate(payrollsStreamProvider);
               },
               data: (report) => _ReportBody(report: report),
             ),

@@ -22,19 +22,9 @@ class _AttendanceRow extends StatelessWidget {
       title: Text(formatHumanDate(record.date)),
       subtitle: Text(detail),
       trailing: canSeeMoney
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // --- ÖDEME KİLİDİ ŞİMDİLİK RAFTA (hakediş ile birlikte) ---
-                // Hakedişi geri açınca kilit ikonunu da geri getir:
-                // if (record.isPaid)
-                //   Icon(Icons.lock, size: 15, color: theme.colorScheme.outline),
-                // if (record.isPaid) const SizedBox(width: 6),
-                Text(
-                  formatKurus(record.earningKurus),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
+          ? Text(
+              formatKurus(record.earningKurus),
+              style: const TextStyle(fontWeight: FontWeight.w600),
             )
           : null,
     );
@@ -82,35 +72,6 @@ class _AdvanceRow extends StatelessWidget {
     );
   }
 }
-
-// --- HAKEDİŞ ŞİMDİLİK RAFTA --- (build'deki bloğu geri açınca bunu da aç)
-// class _PayrollRow extends StatelessWidget {
-//   const _PayrollRow({required this.payroll});
-//   final Payroll payroll;
-//
-//   @override
-//   Widget build(BuildContext context) {
-//     return ListTile(
-//       dense: true,
-//       leading: const Icon(Icons.payments, size: 20),
-//       title: Text(formatHumanDate(payroll.paidDate)),
-//       subtitle: Text(
-//         '${formatHumanDate(payroll.periodStart)} – '
-//         '${formatHumanDate(payroll.periodEnd)}',
-//         maxLines: 1,
-//         overflow: TextOverflow.ellipsis,
-//       ),
-//       trailing: Text(
-//         formatKurus(payroll.netPaidKurus),
-//         style: TextStyle(
-//           fontWeight: FontWeight.w600,
-//           color: Colors.green.shade700,
-//         ),
-//       ),
-//     );
-//   }
-// }
-// --- /HAKEDİŞ ---
 
 class _Section extends StatelessWidget {
   const _Section(this.text);
