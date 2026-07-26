@@ -121,6 +121,37 @@ void main() {
     expect(r.cells['2026-07-05']!.isCrew, isTrue);
   });
 
+  test('0-kişilik elebaşı kaydı çalışılan gün SAYILMAZ (worker_history ile tutarlı)',
+      () {
+    final g = buildMonthlyGrid(
+      monthIso: '2026-07',
+      workers: [worker('c1', 'Reis', WorkerType.elebasi)],
+      records: [
+        crew('c1', 'Reis', '2026-07-05', 3, 100000), // gerçek gün
+        crew('c1', 'Reis', '2026-07-06', 0, 100000), // "gelmedi" işareti → sayılmaz
+      ],
+    );
+
+    final r = g.rows.single;
+    expect(r.crewDays, 1, reason: 'yalnız 0>kişili gün sayılır');
+    expect(r.crewHeadcountTotal, 3);
+    expect(r.grossKurus, 300000, reason: '0 kişi × ücret = 0 katkı');
+    expect(r.cells['2026-07-05']!.crewHeadcount, 3);
+    expect(r.cells['2026-07-06'], isNull,
+        reason: '0-kişilik gün hücre bile oluşturmaz (görünmez)');
+  });
+
+  test('yalnızca 0-kişilik kaydı olan elebaşı satır AÇMAZ (boş satır yok)', () {
+    final g = buildMonthlyGrid(
+      monthIso: '2026-07',
+      workers: [worker('c1', 'Reis', WorkerType.elebasi)],
+      records: [
+        crew('c1', 'Reis', '2026-07-06', 0, 100000),
+      ],
+    );
+    expect(g.rows, isEmpty);
+  });
+
   test('satır sırası: sabit → gündelik → elebaşı, sonra ada göre', () {
     final g = buildMonthlyGrid(
       monthIso: '2026-07',

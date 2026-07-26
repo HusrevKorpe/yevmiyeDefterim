@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yevmiye_defterim/core/date/app_date.dart';
 import 'package:yevmiye_defterim/core/ids/ids.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_view_model.dart';
@@ -170,6 +171,7 @@ void main() {
   // "Kaydet" → önden dolu (henüz kaydı olmayan) elebaşı öntanımlı mevcutları
   // (crewSize) o güne yazılır; elle girilmiş kayıt ezilmez; kişi sayısı
   // girilmemiş elebaşı atlanır (İşçiler'de girilen ekip sayısı yoklamaya gelsin).
+  // Öntanımlı yazma YALNIZ BUGÜN olur → seçili gün bugün alınır (bkz. bug #1).
   test('commitCrewDefaults: kaydı olmayan elebaşı crewSize ile yazılır', () async {
     final workers = FakeWorkerRepository();
     attendance = FakeAttendanceRepository();
@@ -210,7 +212,7 @@ void main() {
     await workers.add(bossC);
     await workers.add(male); // bireysel işçi → elebaşı akışına girmemeli
 
-    container.read(selectedDateProvider.notifier).set('2026-07-15');
+    container.read(selectedDateProvider.notifier).set(todayIso());
     await vm().setHeadcount(bossB, 2); // B için elle kayıt
 
     // Sağlayıcıları canlı tut + ilk emisyonu bekle (ViewModel senkron okur).
@@ -256,13 +258,16 @@ void main() {
       defaultHeadcount: 10, // öntanımlı 10
     );
     await workers.add(boss);
-    container.read(selectedDateProvider.notifier).set('2026-07-15');
+    // Öntanımlı yazma yalnız bugün olduğundan (bug #1) asData guard'ını izole
+    // test etmek için seçili gün BUGÜN alınır.
+    final today = todayIso();
+    container.read(selectedDateProvider.notifier).set(today);
 
     // Bugün için DEPODA elle 30 kişi girilmiş bir kayıt var (önceki oturum /
     // başka cihaz). Bu kaybolmamalı.
     await attendance.save(AttendanceRecord.crew(
-      id: attendanceDocId('2026-07-15', boss.id),
-      date: '2026-07-15',
+      id: attendanceDocId(today, boss.id),
+      date: today,
       workerId: boss.id,
       workerName: boss.name,
       headcount: 30,
@@ -281,6 +286,46 @@ void main() {
     expect(r.headcount, 30,
         reason: 'yükleme sırasında öntanımlı (10) yazılıp 30 EZİLMEMELİ');
     expect(attendance.count, 1, reason: 'yükleme bitmeden hiç öntanımlı yazılmaz');
+  });
+
+  // REGRESYON (bug #1): GEÇMİŞ günde "Kaydet" öntanımlı elebaşı mevcudu YAZMAZ.
+  // Aksi halde 3 hafta önceki bir güne (geçmiş-gün onayından sonra) çalışmamış
+  // tüm ekipler crewSize × yevmiye ile kayda geçer → HAYALET GİDER. Geçmiş
+  // gündeki elle düzeltmeler zaten anında kaydedilir; toplu öntanımlı yalnız
+  // bugüne yazılır.
+  test('commitCrewDefaults: GEÇMİŞ günde öntanımlı YAZMAZ (hayalet gider yok)',
+      () async {
+    final workers = FakeWorkerRepository();
+    attendance = FakeAttendanceRepository();
+    settingsRepo = FakeSettingsRepository(settings);
+    container = ProviderContainer(overrides: [
+      settingsRepositoryProvider.overrideWithValue(settingsRepo),
+      attendanceRepositoryProvider.overrideWithValue(attendance),
+      workerRepositoryProvider.overrideWithValue(workers),
+    ]);
+    container.listen(settingsStreamProvider, (_, _) {});
+    await container.read(settingsStreamProvider.future);
+
+    const boss = Worker(
+      id: 'eA',
+      name: 'A Ustası',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      defaultHeadcount: 10,
+    );
+    await workers.add(boss);
+
+    // Geçmiş bir gün seç (bugün DEĞİL).
+    container.read(selectedDateProvider.notifier).set('2020-01-15');
+    container.listen(workersStreamProvider, (_, _) {});
+    await container.read(workersStreamProvider.future);
+    container.listen(attendanceForSelectedDateProvider, (_, _) {});
+    await container.read(attendanceForSelectedDateProvider.future);
+
+    await vm().commitCrewDefaults();
+
+    expect(attendance.count, 0,
+        reason: 'geçmiş güne öntanımlı elebaşı mevcudu yazılmamalı');
   });
 
   // "Kaydet" → günün işaret dokümanı yazılır (attendanceDays/{date}) →

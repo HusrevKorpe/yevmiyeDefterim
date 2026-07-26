@@ -44,6 +44,43 @@ void main() {
     expect(groups.every((g) => g.reopenable), isTrue);
   });
 
+  test('AYNI GÜN zincir: yalnız devri kapatan (son) kapanış geri alınabilir', () {
+    // C1 (u1) A1'i kapatır → devir kaydı (devir-u1-x) oluşur.
+    // Aynı gün C2 (u2) o devir kaydını da kapatır (zincir).
+    // İkisinin de tarihi aynı (07-13) → yalnız tarihe bakınca ikisi de "en son"
+    // görünürdü; devir zinciri C1'i "aşılmış" işaretler → yalnız C2 geri alınabilir.
+    final groups = buildSettlementGroups([
+      settled('a1', 'wA', '2026-07-13', uid: 'u1'),
+      settled(Advance.carryoverId('u1', 'x'), 'wA', '2026-07-13', uid: 'u2'),
+    ]);
+    expect(groups.length, 2);
+    final c1 = groups.firstWhere((g) => g.key == 'wA|u1');
+    final c2 = groups.firstWhere((g) => g.key == 'wA|u2');
+    expect(c2.reopenable, isTrue, reason: 'devri kapatan son olay geri alınabilir');
+    expect(c1.reopenable, isFalse,
+        reason: 'aşılmış (devri sonra kapatıldı) → geri almak çift devir yaratırdı');
+  });
+
+  test('AÇIK devir bırakan aynı-gün kapanış geri alınabilir kalır', () {
+    // C1 (u1) A1'i kapatır, devir AÇIK kalır (yeniden kapatılmadı) → aşılmamış.
+    // Devir kaydı settled listesinde YOK (açık) → C1 zincirin ucu, geri alınabilir.
+    final groups = buildSettlementGroups([
+      settled('a1', 'wA', '2026-07-13', uid: 'u1'),
+    ]);
+    expect(groups.single.reopenable, isTrue);
+  });
+
+  test('aynı gün BAĞIMSIZ iki kapanış: ikisi de geri alınabilir (zincir yok)', () {
+    // İki ayrı avans, aynı gün ayrı olaylarla kapatıldı; aralarında devir yok →
+    // birini geri almak diğerini etkilemez → ikisi de geri alınabilir kalmalı.
+    final groups = buildSettlementGroups([
+      settled('a1', 'wA', '2026-07-13', uid: 'u1'),
+      settled('a2', 'wA', '2026-07-13', uid: 'u2'),
+    ]);
+    expect(groups.length, 2);
+    expect(groups.every((g) => g.reopenable), isTrue);
+  });
+
   test('aynı kapanış olayının birden çok avansı tek grupta toplanır', () {
     final groups = buildSettlementGroups([
       settled('a1', 'wA', '2026-07-10', uid: 'e1'),

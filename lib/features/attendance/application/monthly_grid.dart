@@ -113,6 +113,10 @@ MonthlyAttendanceGrid buildMonthlyGrid({
   final grouped = <String, List<AttendanceRecord>>{};
   for (final r in records) {
     if (!daySet.contains(r.date)) continue;
+    // 0-kişilik elebaşı kaydı "çalışılan gün" değildir → hiç sayma (işçi-detay
+    // ekranıyla, worker_history, tutarlı olsun; kazanç zaten 0). Böyle bir kayıt
+    // yalnız o güne aitse işçiye satır bile açtırmaz (boş satır gürültüsü yok).
+    if (r is CrewAttendance && r.headcount <= 0) continue;
     (grouped[r.workerId] ??= <AttendanceRecord>[]).add(r);
   }
 

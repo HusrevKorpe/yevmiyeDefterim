@@ -11,6 +11,7 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/date/app_date.dart';
 import '../../../core/diagnostics/app_log.dart';
 import '../../../core/firestore/write_ack.dart';
 import '../../../core/ids/ids.dart';
@@ -100,6 +101,13 @@ class AttendanceViewModel extends Notifier<String?> {
   }
 
   /// Elebaşının kişi sayısını yazar; o günkü kişi ücretini dondurur.
+  ///
+  /// Sayı 0'a indirilince kayıt SİLİNMEZ, 0-kişilik kayıt kalıcı yazılır — bu
+  /// "bu ekip bugün gelmedi" işaretidir. Silseydik elebaşı yeniden ÖNDEN DOLU
+  /// (crewSize) görünür ve "Kaydet" [commitCrewDefaults] ile öntanımlı mevcudu
+  /// sessizce geri yazardı (hayalet gider). 0-kişilik kayıt kazanca (0 × ücret),
+  /// aylık tabloya ve işçi-detayına GİRMEZ (headcount>0 koruması) → görünmez ama
+  /// öntanımlının geri yazılmasını engeller.
   Future<void> setHeadcount(Worker worker, int headcount) async {
     final date = ref.read(selectedDateProvider);
     final count = headcount < 0 ? 0 : headcount;
@@ -164,6 +172,14 @@ class AttendanceViewModel extends Notifier<String?> {
   /// mevcudunu kalıcı yazar. Zaten kaydı olan (elle değiştirilmiş) elebaşı EZİLMEZ;
   /// kişi sayısı girilmemiş (crewSize == 0) elebaşı atlanır.
   Future<void> commitCrewDefaults() async {
+    // ÖNTANIMLI YAZMA YALNIZ BUGÜN. Geçmiş bir güne öntanımlı elebaşı mevcudu
+    // (crewSize) YAZMA — o gün o ekiplerin gerçekten gelip gelmediğini bilmiyoruz.
+    // Geçmiş günde "Kaydet" (geçmiş-gün onayından geçtikten sonra) çalışmamış tüm
+    // elebaşıları crewSize × yevmiye ile kayda geçirir → HAYALET GİDER (aylık
+    // tabloya, rapora ve net bakiyeye girer). Geçmiş gündeki elle düzeltmeler
+    // (+/- dokunuşu) zaten anında kaydedilir; öntanımlı toplu-yazma yalnız bugünün
+    // "tek dokunuşla ekipleri onayla" akışı içindir.
+    if (ref.read(selectedDateProvider) != todayIso()) return;
     // Günün kayıtları HENÜZ YÜKLENMEDİYSE hiçbir öntanımlı yazma. `asData`,
     // AsyncLoading'de (gün değişiminde yeniden abonelik / ilk yükleme; önceki
     // değer tutulsa bile) null döner. Eski `?? const []` bunu "kayıt yok" sanıp

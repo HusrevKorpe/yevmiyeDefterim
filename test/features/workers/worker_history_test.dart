@@ -183,4 +183,41 @@ void main() {
     expect(s.netBalanceKurus, 200000,
         reason: 'yalnız kapanış sonrası kazanç bakiyeye girer');
   });
+
+  test('SİMETRİ: kapanış GÜNÜ sonrası aynı güne kazanç DA avans DA sayılmaz', () {
+    // Kapanış 07-24. Aynı gün (kapanıştan sonra) hem ₺2.000 kazanç hem ₺500 açık
+    // avans girildi. Simetri (bug #3, seçenek A): kapanış günü tam denkleşmiş
+    // sayılır → ikisi de bakiyeye girmez (biri sayılıp diğeri sayılmaz asimetrisi
+    // yok). Gerekirse "Geri Al" ile kapanış kaldırılıp tekrar kapatılır.
+    final s = buildWorkerHistorySummary(
+      attendance: [
+        ind('2026-07-24', AttendanceStatus.full), // kapanış günü kazancı (200000)
+      ],
+      advances: [
+        adv(150000, '2026-07-10',
+            settled: Advance.manualSettlementId('2026-07-24')),
+        adv(50000, '2026-07-24'), // kapanış günü AÇIK avans (devir DEĞİL)
+      ],
+    );
+    expect(s.openAdvancesKurus, 0,
+        reason: 'kapanış günü açık avansı (devir değil) denkleşmiş sayılır');
+    expect(s.unreconciledGrossKurus, 0,
+        reason: 'kapanış günü kazancı denkleşmiş sayılır');
+    expect(s.netBalanceKurus, 0, reason: 'kazanç↔avans simetrik → bakiye 0');
+  });
+
+  test('kapanış SONRASI (sonraki gün) açık avans bakiyeye normal girer', () {
+    // Kapanış 07-24; 07-25 (sonraki gün) ₺500 açık avans → denkleşmiş DEĞİL,
+    // borç yaratır. (Simetrinin diğer yüzü: gerçekten kapanıştan sonraki avans sayılır.)
+    final s = buildWorkerHistorySummary(
+      attendance: const [],
+      advances: [
+        adv(150000, '2026-07-10',
+            settled: Advance.manualSettlementId('2026-07-24')),
+        adv(50000, '2026-07-25'), // kapanış sonrası → açık, sayılır
+      ],
+    );
+    expect(s.openAdvancesKurus, 50000);
+    expect(s.netBalanceKurus, -50000, reason: 'kapanış sonrası avans borç yaratır');
+  });
 }
