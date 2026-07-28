@@ -94,18 +94,25 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
     Advance? carryover,
   }) async {
     final marker = Advance.manualSettlementId(settledDate, uid);
-    // Yalnız HÂLÂ VAR OLAN avanslara işaret yaz. `set(merge:true)` silinmiş
-    // dokümanı yeniden YARATIR → başka cihaz o avansı bu arada sildiyse boş
-    // isimli ₺0 "hayalet" kapanmış kayıt oluşurdu. Önce oku-ele, sonra
-    // `update` (var olanı günceller, olmayanı yaratmaz). Böylece fake repo
-    // sözleşmesiyle aynı: olmayan id atlanır, var olanlar kapanır. Kapanışlar +
-    // devir tek batch'te atomiktir (yarım durum yok).
+    // İşaretler `set(merge:true)` ile yazılır, `update` ile DEĞİL. Neden: kapanış
+    // + devir TEK batch'tedir ve `batch.update` hedef doküman commit anında yoksa
+    // TÜM batch'i sunucuda reddeder. Başka cihaz bu avanslardan birini biz
+    // `_existingIds` okuduktan SONRA ama batch sunucuya gitmeden silerse, `update`
+    // silinmiş dokümanı bulamaz → kapanışlar VE devir (yeni GERÇEK borç) sessizce
+    // geri alınır (awaitWriteAck çoktan "başarı" demiş, kullanıcı devri görmüştür).
+    // `set` asla reddetmez → devir asla kaybolmaz. `_existingIds` yine de
+    // en-iyi-çaba hayalet azaltıcıdır: zaten silinip senkronlanmış avanslara
+    // işaret yazmayız. Kalan dar yarış (okumadan sonra, commit'ten önce silme)
+    // yalnız ₺0 boş-isimli KAPALI kozmetik kayıt bırakır (Advance.fromDoc
+    // toleranslı; isOpen=false → bakiyeye etkisi 0). Fake repo sözleşmesiyle aynı:
+    // olmayan id atlanır, var olanlar kapanır, devir DAİMA yazılır (tek batch).
     final existing = await _existingIds(ids);
     final batch = _db.batch();
     for (final id in existing) {
-      batch.update(
+      batch.set(
         advancesCol(_db).doc(id),
         {'settledPayrollId': marker, ...writeStamp()},
+        SetOptions(merge: true),
       );
     }
     if (carryover != null) {
@@ -125,14 +132,20 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
     Iterable<String> ids, {
     Iterable<String> deleteIds = const [],
   }) async {
-    // Aynı hortlatma önlemi (bkz. [settleAdvances]): yalnız var olan avanslar
-    // yeniden açılır. Devir silme (`delete`) olmayan dokümanda zaten no-op.
+    // Yeniden açma da `set(merge:true)` kullanır (bkz. [settleAdvances]): aynı
+    // batch'te o kapanışın devir kayıtları da silinir ([deleteIds]). `batch.update`
+    // yeniden açılacak avanslardan biri eşzamanlı silinmişse TÜM batch'i reddedip
+    // "Geri Al"ı sessizce başarısız kılardı → devir kayıtları silinmeden kalır,
+    // borç çift görünürdü. `set` reddetmez. `_existingIds` en-iyi-çaba ghost
+    // azaltıcı; kalan dar yarış yalnız ₺0 AÇIK kozmetik kayıt bırakır (bakiye 0).
+    // `batch.delete` olmayan dokümanda zaten no-op.
     final existing = await _existingIds(ids);
     final batch = _db.batch();
     for (final id in existing) {
-      batch.update(
+      batch.set(
         advancesCol(_db).doc(id),
         {'settledPayrollId': null, ...writeStamp()},
+        SetOptions(merge: true),
       );
     }
     for (final id in deleteIds) {

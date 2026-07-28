@@ -29,7 +29,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _backingUp = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await shareBackup(ref.read(firestoreProvider));
+      final fromCache = await shareBackup(ref.read(firestoreProvider));
+      // Çevrimdışı alınan yedek cihaz önbelleğinden gelir → en güncel/eksiksiz
+      // veriyi içermeyebilir. Sessiz kalma; kullanıcı bilsin ki internete
+      // bağlanıp yeniden alsın (yedek tek güvenlik ağı).
+      if (fromCache) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Çevrimdışısınız — yedek cihazdaki önbellekten alındı, en '
+              'güncel veriyi içermeyebilir. İnternete bağlanıp tekrar alın.',
+            ),
+            duration: Duration(seconds: 6),
+          ),
+        );
+      }
     } catch (e, s) {
       messenger.showSnackBar(
         const SnackBar(

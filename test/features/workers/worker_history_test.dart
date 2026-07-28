@@ -206,6 +206,24 @@ void main() {
     expect(s.netBalanceKurus, 0, reason: 'kazanç↔avans simetrik → bakiye 0');
   });
 
+  test('kapanış ÖNCESİne tarihli hâlâ açık avans (sonradan girilen) bakiyeye girer', () {
+    // Kapanış 07-24. Sonradan unutulan bir avans 07-20 (kapanıştan ÖNCE) tarihiyle
+    // AÇIK girilir. O an var olmadığından kapanış onu kapatmadı → gerçek borçtur.
+    // Avanslar ekranı onu "açık" gösterir; bakiye de saymalı (iki ekran çelişmesin).
+    // Yalnız kapanış GÜNÜNÜN kendisi denkleşmiş sayılır, öncesi değil.
+    final s = buildWorkerHistorySummary(
+      attendance: const [],
+      advances: [
+        adv(150000, '2026-07-10',
+            settled: Advance.manualSettlementId('2026-07-24')),
+        adv(50000, '2026-07-20'), // kapanış ÖNCESİ ama AÇIK (sonradan girilmiş)
+      ],
+    );
+    expect(s.openAdvancesKurus, 50000,
+        reason: 'kapanış öncesine tarihli açık avans denkleşmemiş borçtur');
+    expect(s.netBalanceKurus, -50000);
+  });
+
   test('kapanış SONRASI (sonraki gün) açık avans bakiyeye normal girer', () {
     // Kapanış 07-24; 07-25 (sonraki gün) ₺500 açık avans → denkleşmiş DEĞİL,
     // borç yaratır. (Simetrinin diğer yüzü: gerçekten kapanıştan sonraki avans sayılır.)

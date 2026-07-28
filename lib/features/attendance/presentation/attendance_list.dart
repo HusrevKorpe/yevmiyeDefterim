@@ -146,12 +146,16 @@ class _IndividualTile extends ConsumerWidget {
     return IndividualAttendanceTile(
       worker: worker,
       status: record?.status,
-      resolvedWageKurus: resolveWageKurus(
-        gender: worker.gender,
-        overrideKurus: worker.dailyWageOverrideKurus,
-        maleWageKurus: settings.defaultWageMaleKurus,
-        femaleWageKurus: settings.defaultWageFemaleKurus,
-      ),
+      // Kayıt varsa DONDURULMUŞ ücret okunur (kural §4: geçmiş ücret yeniden
+      // türetilmez → rapor/aylık tablo/net bakiye ile aynı sayı). Kaydı yoksa
+      // güncel yevmiye önden gösterilir.
+      resolvedWageKurus: record?.wageSnapshotKurus ??
+          resolveWageKurus(
+            gender: worker.gender,
+            overrideKurus: worker.dailyWageOverrideKurus,
+            maleWageKurus: settings.defaultWageMaleKurus,
+            femaleWageKurus: settings.defaultWageFemaleKurus,
+          ),
       // Para/gider kısıtlı hesap yevmiye tutarını görmez (yoklama açık kalır).
       showWage: ref.watch(canSeeMoneyProvider),
       // Ödeme kilidi yok (hakediş kaldırıldı) — her gün düzenlenebilir.
@@ -194,9 +198,11 @@ class _CrewTile extends ConsumerWidget {
       name: worker.name,
       headcount: headcount,
       pending: crew == null && headcount > 0,
-      // Kişi başı ücret artık işçinin kendi yevmiyesinden (girilmemişse ayar).
-      crewRateKurus:
-          worker.dailyWageOverrideKurus ?? settings.defaultCrewRateKurus,
+      // Kayıt varsa DONDURULMUŞ kişi-başı ücret okunur (kural §4: geçmiş ücret
+      // yeniden türetilmez → satırdaki "N × ₺X = ₺toplam" rapor/net bakiye ile
+      // aynı). Kaydı yoksa işçinin güncel yevmiyesi (girilmemişse ayar) önden.
+      crewRateKurus: crew?.crewRateSnapshotKurus ??
+          (worker.dailyWageOverrideKurus ?? settings.defaultCrewRateKurus),
       // Para/gider kısıtlı hesap tutarı görmez (kişi sayısı açık kalır).
       showWage: ref.watch(canSeeMoneyProvider),
       // Ödeme kilidi yok (hakediş kaldırıldı) — her gün düzenlenebilir.

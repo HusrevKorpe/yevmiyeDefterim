@@ -22,6 +22,14 @@ class SelectedDateNotifier extends Notifier<String> {
   void set(String isoDate) => state = isoDate;
   void shift(int days) => state = shiftIsoDate(state, days);
   void today() => state = todayIso();
+
+  /// Gece yarısı devri: uygulama arka planda kalıp ertesi gün öne alınınca
+  /// "bugün"e sabitlenen ekranlar dünü gösterir (bkz. [MainShell] yaşam
+  /// döngüsü). Seçili gün HÂLÂ [previousDay] ise (kullanıcı elle başka güne
+  /// gitmediyse) yeni güne kaydırır; elle seçilmiş geçmiş/gelecek gün KORUNUR.
+  void rolloverIfOnDay(String previousDay) {
+    if (state == previousDay) state = todayIso();
+  }
 }
 
 final NotifierProvider<SelectedDateNotifier, String> selectedDateProvider =

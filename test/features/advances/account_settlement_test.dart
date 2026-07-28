@@ -82,5 +82,49 @@ void main() {
       expect(repo.byId('a1')!.isOpen, isTrue);
       expect(repo.byId('a2')!.isOpen, isTrue);
     });
+
+    Advance carry(int kurus) => Advance(
+          id: 'devir-2026-07-22-x',
+          workerId: 'w1',
+          workerName: 'Ahmet',
+          amountKurus: kurus,
+          date: '2026-07-22',
+        );
+
+    // Gerçek Firestore düzeltmesinin (advance_repository.dart) sözleşme karşılığı:
+    // kapanış işaretleri `set(merge:true)` ile yazılır, `update` ile DEĞİL →
+    // hedeflerden biri commit anında yoksa batch REDDEDİLMEZ. `update` olsaydı
+    // tüm batch düşer, DEVİR (yeni gerçek borç) sessizce kaybolurdu. Fake bu
+    // toleranslı sözleşmeyi modeller (olmayan id atlanır); test onu sabitler.
+    test('settle: bir kaynak avans EŞZAMANLI SİLİNMİŞSE devir yine yazılır ve '
+        'kalanlar kapanır (batch reddi → devir kaybı yok)', () async {
+      boot([adv('a1')]); // a2 kasıtlı YOK: başka cihaz bu arada sildi.
+      final ok = await vm().settle(
+        ['a1', 'a2'],
+        '2026-07-22',
+        carryover: carry(60000),
+      );
+      expect(ok, isTrue);
+      expect(repo.byId('a1')!.isOpen, isFalse, reason: 'var olan kapanır');
+      expect(repo.byId('a2'), isNull, reason: 'olmayan id atlanır (hayalet yok)');
+      final c = repo.byId('devir-2026-07-22-x');
+      expect(c, isNotNull, reason: 'DEVİR asla kaybolmaz');
+      expect(c!.amountKurus, 60000);
+      expect(c.isOpen, isTrue);
+    });
+
+    test('reopen: bir avans EŞZAMANLI SİLİNMİŞSE devir kayıtları yine silinir '
+        '(batch reddi → geri-al yarım kalmaz)', () async {
+      boot([adv('a1', settled: Advance.manualSettlementId('2026-07-22'))]);
+      await repo.add(carry(60000)); // kapanışta oluşan devir kaydı.
+      final ok = await vm().reopen(
+        ['a1', 'a2'], // a2 YOK: eşzamanlı silinmiş.
+        deleteIds: ['devir-2026-07-22-x'],
+      );
+      expect(ok, isTrue);
+      expect(repo.byId('a1')!.isOpen, isTrue, reason: 'var olan yeniden açılır');
+      expect(repo.byId('devir-2026-07-22-x'), isNull,
+          reason: 'devir kaydı silinir (batch reddedilmedi)');
+    });
   });
 }

@@ -61,7 +61,7 @@ class DashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 10),
                 AsyncRetry(
                   value: summaryAsync,
-                  onRetry: () => ref.invalidate(todaySummaryProvider),
+                  onRetry: () => refreshTodaySummary(ref),
                   message:
                       'Özet yüklenemedi. İnternet bağlantınızı kontrol edin.',
                   data: (summary) {

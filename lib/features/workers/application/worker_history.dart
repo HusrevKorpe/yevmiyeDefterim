@@ -41,9 +41,10 @@ class WorkerHistorySummary {
   final int advancesTotalKurus;
 
   /// Net bakiyeye giren açık (henüz mahsup edilmemiş) avans toplamı (kuruş):
-  /// kapanış tarihinden SONRAKİ açık avanslar + (her zaman) devir kayıtları;
-  /// kapanış yoksa tüm açık avanslar. Kapanış günü ve öncesine ait açık avanslar
-  /// —devir hariç— denkleşmiş sayılıp dışarıda kalır (kazançla simetri).
+  /// kapanış GÜNÜ HARİÇ tüm açık avanslar + (her zaman) devir kayıtları; kapanış
+  /// yoksa tüm açık avanslar. Yalnız kapanış GÜNÜNE ait açık avans —devir hariç—
+  /// denkleşmiş sayılıp dışarıda kalır; kapanıştan ÖNCEye tarihlenip hâlâ açık
+  /// duran avans (sonradan geçmiş tarihle girilen) gerçek borçtur → sayılır.
   final int openAdvancesKurus;
 
   /// Çalışılan (gün girilen) gün sayısı.
@@ -52,17 +53,23 @@ class WorkerHistorySummary {
   /// Net bakiye (kuruş): (denkleşmemiş) brüt kazanç − AÇIK avans.
   /// Pozitif → işçinin bizden ALACAĞI var; negatif → işçinin bize BORCU (vereceği).
   ///
-  /// "Hesap görüldü" bir KAPANIŞTIR: kapanış GÜNÜ ve öncesi TAM denkleşmiş
-  /// sayılır (simetri) — o güne (veya öncesine) ait kazanç [unreconciledGrossKurus]
-  /// dışıdır VE o güne ait açık avans (devir hariç) [openAdvancesKurus] dışıdır →
-  /// bakiye 0'a döner. Kapanışta girilen devir (aynı tarihli YENİ açık avans)
-  /// istisnadır ve sayılır → o kadar negatife (işçinin borcu) geçer.
+  /// "Hesap görüldü" bir KAPANIŞTIR. Kazanç tarafında kapanış GÜNÜ ve öncesi
+  /// denkleşmiş sayılır → [unreconciledGrossKurus] yalnız kapanıştan SONRAKİ
+  /// günleri alır (geçmiş yoklama denkleşmiş tarihtir, yeniden açılmaz).
   ///
-  /// Kapanış GÜNÜ tam kapanır: kapanıştan sonra AYNI güne girilen kazanç da avans
-  /// da bakiyeye girmez (ikisi de denkleşmiş sayılır — asimetri yok). Gün-bazlı
-  /// veride kapanış "anı" ayrıştırılamadığından bilinçli tercih budur; sonradan
-  /// aynı güne iş/avans gerekiyorsa "Geri Al" ile kapanış kaldırılıp tekrar
-  /// kapatılır. Kapanış SONRAKİ günlerde yeni kazanç/avans normal işler.
+  /// Avans tarafında ise yalnız kapanış GÜNÜNE ait açık avans denkleşmiş sayılır
+  /// (o an tüm açık avanslar kapatıldığından, kapanış günü açık kalan avans ancak
+  /// kapanıştan sonra girilmiş demektir → denkleşmiş kabul). Kapanıştan ÖNCEye
+  /// tarihlenip hâlâ açık avans (unutulup sonradan geçmiş tarihle girilen) GERÇEK
+  /// borçtur ve [openAdvancesKurus]'a girer — Avanslar ekranı da onu "açık"
+  /// gösterdiğinden iki ekran çelişmesin. Kapanışta girilen devir (aynı tarihli
+  /// YENİ açık avans) her zaman sayılır → o kadar negatife (işçinin borcu) geçer.
+  ///
+  /// Bu asimetri (geçmiş kazanç denkleşmiş ↔ geçmiş açık avans borç) bilinçlidir:
+  /// avansın kendi açık/kapalı yaşam döngüsü ve ekranı var, kazancın yok. Sadece
+  /// kapanış GÜNÜNÜN kendisinde iki taraf da denkleşmiş sayılır (gün-bazlı veride
+  /// kapanış "anı" ayrıştırılamaz); o güne iş/avans gerekirse "Geri Al" ile
+  /// kapanış kaldırılıp tekrar kapatılır.
   int get netBalanceKurus => unreconciledGrossKurus - openAdvancesKurus;
 }
 
@@ -122,16 +129,17 @@ WorkerHistorySummary buildWorkerHistorySummary({
       advancesTotal += a.amountKurus;
     }
     if (!a.isOpen) continue;
-    // SİMETRİ (bkz. [netBalanceKurus]): kapanış (Hesap Görüldü) GÜNÜ ve öncesi
-    // denkleşmiş sayılır → o güne (veya öncesine) ait açık avans bakiyeye GİRMEZ,
-    // tıpkı o güne ait kazancın girmediği gibi ([unreconciledGross] tarih > kapanış
-    // ölçütüyle). Böylece "kapanış gününden sonra aynı gün" girilen kazanç ile avans
-    // aynı davranır (biri sayılıp diğeri sayılmaz asimetrisi yok). Devir kaydı
-    // İSTİSNADIR: kapanış gününde oluşur ama taşınan gerçek borçtur → her zaman
-    // sayılır. Kapanış yoksa (reconciledThrough == null) tüm açık avanslar sayılır.
-    if (reconciledThrough == null ||
-        isCarryover ||
-        a.date.compareTo(reconciledThrough) > 0) {
+    // Kapanış (Hesap Görüldü) YALNIZ kapanış GÜNÜNE ait açık avansı denkleşmiş
+    // sayar: o an tüm açık avanslar kapatıldığından, kapanış günü hâlâ açık kalan
+    // bir avans ancak kapanıştan SONRA o güne girilmiştir → denkleşmiş kabul
+    // (kapanış "anı" gün-bazlı veride ayrıştırılamaz). Kapanıştan ÖNCEye
+    // tarihlenip hâlâ açık avans (unutulup sonradan geçmiş tarihle girilen)
+    // GERÇEK borçtur → sayılır; Avanslar ekranı da onu "açık" gösterir, iki ekran
+    // çelişmesin. Devir kaydı İSTİSNADIR: kapanış gününde oluşur ama taşınan
+    // gerçek borçtur → her zaman sayılır. Kapanış yoksa tüm açık avanslar sayılır.
+    // (Kazanç tarafı geçmiş TAMAMINI denkleşmiş sayar; bu asimetri bilinçli —
+    // bkz. [netBalanceKurus].)
+    if (reconciledThrough == null || isCarryover || a.date != reconciledThrough) {
       openAdvances += a.amountKurus;
     }
   }

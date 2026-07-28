@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/date/app_date.dart';
 import '../core/widgets/app_dialog.dart';
+import '../features/attendance/application/attendance_providers.dart';
 import '../features/auth/application/user_access.dart';
 import '../features/workers/application/workers_providers.dart';
 import '../features/workers/data/worker.dart';
@@ -28,10 +30,50 @@ class MainShell extends ConsumerStatefulWidget {
   ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends ConsumerState<MainShell> {
+class _MainShellState extends ConsumerState<MainShell>
+    with WidgetsBindingObserver {
   /// Yevmiye hatırlatması bu oturumda değerlendirildi mi (tekrar tekrar
   /// tetiklenmesin — sekme değişimi build'i yeniden çağırır).
   bool _wageNoticeHandled = false;
+
+  /// Uygulama öne alındığında gün değiştiyse "bugün"e bağlı sağlayıcıları
+  /// tazelemek için son bilinen yerel iş günü (`'yyyy-MM-dd'`).
+  late String _lastKnownDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastKnownDay = todayIso();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Gece yarısı devri: telefon arka planda kalıp ertesi gün öne alınınca
+  /// "bugün"e sabitlenen sağlayıcılar (Ana Sayfa özeti, bugünün yoklaması)
+  /// dünü gösterir; yoklama ekranı dün açılır (sabah erken saha kullanımı).
+  /// Öne gelişte gün değişmişse bunları tazeleriz. Sağlayıcı gövdeleri
+  /// [todayIso]'yu kuruluşta bir kez okur → yalnız yeniden kurulunca (invalidate)
+  /// yeni günü alır; arka plan/ön plan geçişi widget'ları yok etmez.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final now = todayIso();
+    if (now == _lastKnownDay) return;
+    final previousDay = _lastKnownDay;
+    _lastKnownDay = now;
+    // Bugüne sabitli akış yeni günü çeksin. Ana Sayfa özeti bundan TÜRETİLİR
+    // (todaySummaryProvider) → ayrıca invalidate gerekmez, kendiliğinden
+    // yeniden hesaplanır.
+    ref.invalidate(todayAttendanceProvider);
+    // Yoklama ekranı hâlâ "dünde" (kullanıcı elle başka güne gitmediyse) →
+    // yeni güne kaydır; elle seçilmiş gün korunur.
+    ref.read(selectedDateProvider.notifier).rolloverIfOnDay(previousDay);
+  }
 
   void _onTap(int branchIndex) {
     widget.navigationShell.goBranch(

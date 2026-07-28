@@ -1,4 +1,5 @@
-/// İşçiler ekranı — tür bazında gruplu liste, ekle/düzenle (plan §5, kural §8).
+/// İşçiler ekranı — tür bazında gruplu liste, arama, ekle/düzenle
+/// (plan §5, kural §8).
 library;
 
 import 'package:flutter/material.dart';
@@ -11,16 +12,56 @@ import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../auth/application/user_access.dart';
+import '../application/worker_search.dart';
 import '../application/workers_providers.dart';
 import '../data/worker.dart';
 import 'worker_detail_screen.dart';
 import 'worker_edit_screen.dart';
 
-class WorkersScreen extends ConsumerWidget {
+part 'worker_tile.dart';
+
+class WorkersScreen extends ConsumerStatefulWidget {
   const WorkersScreen({super.key});
 
-  /// Yeni işçi ekle (FAB) — doğrudan düzenleme ekranı.
-  void _openAdd(BuildContext context) {
+  @override
+  ConsumerState<WorkersScreen> createState() => _WorkersScreenState();
+}
+
+class _WorkersScreenState extends ConsumerState<WorkersScreen> {
+  final TextEditingController _queryCtrl = TextEditingController();
+  final FocusNode _queryFocus = FocusNode();
+
+  /// Arama çubuğu açık mı (başlıktaki "Ara" hapı ile açılır/kapanır).
+  bool _searchOpen = false;
+
+  @override
+  void dispose() {
+    _queryCtrl.dispose();
+    _queryFocus.dispose();
+    super.dispose();
+  }
+
+  String get _query => _queryCtrl.text.trim();
+
+  void _toggleSearch() {
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) _queryCtrl.clear();
+    });
+    if (_searchOpen) {
+      _queryFocus.requestFocus();
+    } else {
+      _queryFocus.unfocus();
+    }
+  }
+
+  void _clearQuery() {
+    setState(_queryCtrl.clear);
+    _queryFocus.requestFocus();
+  }
+
+  /// Yeni işçi ekle (başlıktaki "Ekle") — doğrudan düzenleme ekranı.
+  void _openAdd() {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => const WorkerEditScreen(),
@@ -29,7 +70,7 @@ class WorkersScreen extends ConsumerWidget {
   }
 
   /// İşçiye dokun → geçmiş/detay ekranı (düzenleme oradaki kalem butonunda).
-  void _openDetail(BuildContext context, Worker worker) {
+  void _openDetail(Worker worker) {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => WorkerDetailScreen(worker: worker),
@@ -38,49 +79,106 @@ class WorkersScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final workersAsync = ref.watch(workersStreamProvider);
 
     return Scaffold(
       appBar: GradientAppBar(
         actions: [
+          _HeaderPill(
+            icon: _searchOpen ? Icons.close : Icons.search,
+            label: _searchOpen ? 'Kapat' : 'Ara',
+            onPressed: _toggleSearch,
+          ),
+          const SizedBox(width: 8),
           Padding(
-            padding: const EdgeInsets.only(right: 10, left: 2),
-            child: _AddButton(onPressed: () => _openAdd(context)),
+            padding: const EdgeInsets.only(right: 10),
+            child: _HeaderPill(
+              icon: Icons.add,
+              label: 'Ekle',
+              onPressed: _openAdd,
+            ),
           ),
         ],
       ),
       body: SafeArea(
         top: false,
-        child: AsyncRetry(
-          value: workersAsync,
-          onRetry: () => ref.invalidate(workersStreamProvider),
-          message: 'İşçiler yüklenemedi. İnternet bağlantınızı kontrol edin.',
-          data: (workers) {
-            if (workers.isEmpty) return const _EmptyWorkers();
-            final active = workers.where((w) => w.active).toList();
-            final passive = workers.where((w) => !w.active).toList();
-            return SlidableAutoCloseBehavior(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 96),
-                children: [
-                  for (final type in WorkerType.values)
-                    ..._section(context, type, active),
-                  if (passive.isNotEmpty) _passiveSection(context, passive),
-                ],
+        child: Column(
+          children: [
+            // Açılış/kapanış yumuşak olsun diye AnimatedSize; kapalıyken
+            // yer kaplamaz.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: _searchOpen
+                  ? _SearchField(
+                      controller: _queryCtrl,
+                      focusNode: _queryFocus,
+                      onChanged: (_) => setState(() {}),
+                      onClear: _clearQuery,
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+            Expanded(
+              child: AsyncRetry(
+                value: workersAsync,
+                onRetry: () => ref.invalidate(workersStreamProvider),
+                message:
+                    'İşçiler yüklenemedi. İnternet bağlantınızı kontrol edin.',
+                data: (workers) {
+                  if (_query.isNotEmpty) return _results(workers);
+                  if (workers.isEmpty) return const _EmptyWorkers();
+                  return _grouped(workers);
+                },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
   }
 
-  List<Widget> _section(
-    BuildContext context,
-    WorkerType type,
-    List<Worker> active,
-  ) {
+  /// Normal görünüm: aktifler tür başlıkları altında, pasifler katlanır bölümde.
+  Widget _grouped(List<Worker> workers) {
+    final active = workers.where((w) => w.active).toList();
+    final passive = workers.where((w) => !w.active).toList();
+    return SlidableAutoCloseBehavior(
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 96),
+        children: [
+          for (final type in WorkerType.values) ..._section(type, active),
+          if (passive.isNotEmpty) _passiveSection(passive),
+        ],
+      ),
+    );
+  }
+
+  /// Arama görünümü: başlıksız düz liste, en iyi eşleşme başta. Pasif işçiler
+  /// de bulunur (rozetle işaretlenir).
+  Widget _results(List<Worker> workers) {
+    final results = searchWorkers(workers, _query);
+    if (results.isEmpty) return _NoResults(query: _query);
+    return SlidableAutoCloseBehavior(
+      child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.only(top: 2, bottom: 96),
+        itemCount: results.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) return _ResultCount(results.length);
+          final w = results[index - 1];
+          return _WorkerTile(
+            worker: w,
+            onTap: () => _openDetail(w),
+            canDelete: true,
+            showBadge: true,
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _section(WorkerType type, List<Worker> active) {
     final group = active.where((w) => w.type == type).toList();
     if (group.isEmpty) return const [];
     return [
@@ -88,13 +186,13 @@ class WorkersScreen extends ConsumerWidget {
       for (final w in group)
         _WorkerTile(
           worker: w,
-          onTap: () => _openDetail(context, w),
+          onTap: () => _openDetail(w),
           canDelete: true,
         ),
     ];
   }
 
-  Widget _passiveSection(BuildContext context, List<Worker> passive) {
+  Widget _passiveSection(List<Worker> passive) {
     return ExpansionTile(
       leading: const Icon(Icons.person_off_outlined),
       title: Text('Pasif İşçiler (${passive.length})'),
@@ -102,7 +200,7 @@ class WorkersScreen extends ConsumerWidget {
         for (final w in passive)
           _WorkerTile(
             worker: w,
-            onTap: () => _openDetail(context, w),
+            onTap: () => _openDetail(w),
             canDelete: true,
           ),
       ],
@@ -110,38 +208,77 @@ class WorkersScreen extends ConsumerWidget {
   }
 }
 
-/// Başlıktaki küçük beyaz "Ekle" hapı — degrade üzerinde güçlü kontrast
-/// (Kasa ekranındaki ile aynı desen).
-class _AddButton extends StatelessWidget {
-  const _AddButton({required this.onPressed});
+/// Başlığın hemen altındaki yumuşak arama kutusu.
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    required this.onClear,
+  });
 
-  final VoidCallback onPressed;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onPressed,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add, size: 18, color: kHeroBottom),
-              SizedBox(width: 4),
-              Text(
-                'Ekle',
-                style: TextStyle(
-                  color: kHeroBottom,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+    final theme = Theme.of(context);
+    final OutlineInputBorder border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide.none,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        onChanged: onChanged,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(
+          hintText: 'İşçi ara…',
+          filled: true,
+          fillColor:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          prefixIcon: Icon(Icons.search, color: theme.colorScheme.primary),
+          suffixIcon: controller.text.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Temizle',
+                  onPressed: onClear,
                 ),
-              ),
-            ],
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          border: border,
+          enabledBorder: border,
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "3 sonuç" — arama listesinin başındaki sessiz bilgi satırı.
+class _ResultCount extends StatelessWidget {
+  const _ResultCount(this.count);
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 2),
+      child: Text(
+        '$count sonuç',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -161,179 +298,37 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _WorkerTile extends ConsumerWidget {
-  const _WorkerTile({
-    required this.worker,
-    required this.onTap,
-    this.canDelete = false,
-  });
-
-  final Worker worker;
-  final VoidCallback onTap;
-
-  /// Sola kaydırma silme kısayolu bu karta eklensin mi (yalnız aktif liste).
-  final bool canDelete;
-
-  /// Kaydırma silme davranışı işçinin durumuna göre değişir:
-  /// - Aktif işçi → [_deactivate]: soft-delete, "Pasif İşçiler"e taşınır (geri alınır).
-  /// - Pasif işçi → [_purge]: uygulamadan KALICI silinir (geri alınamaz).
-  Future<void> _delete(BuildContext context, WidgetRef ref) =>
-      worker.active ? _deactivate(context, ref) : _purge(context, ref);
-
-  /// Aktif işçiyi listeden kaldırır — soft-delete: kayıt Firestore'da kalır
-  /// (yoklama/avans geçmişi korunur), yalnız "Pasif İşçiler"e taşınır.
-  /// SnackBar'daki "Geri Al" ile geri alınır.
-  Future<void> _deactivate(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(workerRepositoryProvider);
-    final ok = await showConfirmDialog(
-      context,
-      title: 'İşçiyi kaldır',
-      message: '${worker.name} listeden kaldırılsın mı? Kaydı ve geçmişi '
-          'korunur, “Pasif İşçiler”e taşınır.',
-      confirmLabel: 'Kaldır',
-      icon: Icons.person_off_outlined,
-    );
-    if (!ok) return;
-    await repo.setActive(worker.id, active: false);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('${worker.name} listeden kaldırıldı'),
-        action: SnackBarAction(
-          label: 'Geri Al',
-          onPressed: () => repo.setActive(worker.id, active: true),
-        ),
-      ),
-    );
-  }
-
-  /// Zaten pasif olan işçiyi uygulamadan KALICI siler (geri alınamaz). Geçmiş
-  /// yoklama/avans kayıtları işçi adını denormalize sakladığından raporlarda
-  /// görünmeye devam eder; işçi yalnız listeden kaybolur.
-  Future<void> _purge(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(workerRepositoryProvider);
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Kalıcı olarak sil',
-      message: '${worker.name} uygulamadan kalıcı olarak silinsin mi? '
-          'Bu işlem geri alınamaz. Geçmiş yoklama ve avans kayıtları '
-          'raporlarda kalır.',
-      confirmLabel: 'Kalıcı Sil',
-      icon: Icons.delete_forever,
-    );
-    if (!ok) return;
-    await repo.delete(worker.id);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('${worker.name} kalıcı olarak silindi'),
-      ),
-    );
-  }
-
-  String _subtitleText(bool canSeeMoney) {
-    if (worker.type.isCrew) {
-      final crewText =
-          worker.crewSize > 0 ? '${worker.crewSize} kişilik ekip' : 'Elebaşı';
-      // Para görebilen hesapta kişi başı yevmiye de gösterilir.
-      final rate = worker.dailyWageOverrideKurus;
-      if (canSeeMoney && rate != null && rate > 0) {
-        return '$crewText • ${formatKurus(rate)}/kişi';
-      }
-      return crewText;
-    }
-    // Kısıtlı hesap ücret göremez → yalnız cinsiyet gösterilir.
-    if (!canSeeMoney) return worker.gender.label;
-    final wage = worker.dailyWageOverrideKurus;
-    final wageText =
-        wage == null ? 'Yevmiye girilmemiş' : '${formatKurus(wage)} yevmiye';
-    return '${worker.gender.label} • $wageText';
-  }
+class _NoResults extends StatelessWidget {
+  const _NoResults({required this.query});
+  final String query;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final canSeeMoney = ref.watch(canSeeMoneyProvider);
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final accent = theme.colorScheme.primary;
-    final Widget card = Material(
-      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  worker.type.isCrew ? Icons.groups : Icons.person,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      worker.name,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _subtitleText(canSeeMoney),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right,
-                  color: theme.colorScheme.onSurfaceVariant),
-            ],
-          ),
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
+      children: [
+        Icon(
+          Icons.search_off,
+          size: 48,
+          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
         ),
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: canDelete
-          ? Slidable(
-              key: ValueKey('worker-${worker.id}'),
-              // Sola kaydırınca sağdan açılan çöp kutusu butonu; SİLME yalnız
-              // butona basınca olur (kaydırma tek başına silmez).
-              endActionPane: ActionPane(
-                motion: const DrawerMotion(),
-                extentRatio: 0.28,
-                children: [
-                  SlidableAction(
-                    onPressed: (ctx) => _delete(ctx, ref),
-                    backgroundColor: theme.colorScheme.error,
-                    foregroundColor: Colors.white,
-                    icon: worker.active
-                        ? Icons.delete_outline
-                        : Icons.delete_forever,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ],
-              ),
-              child: card,
-            )
-          : card,
+        const SizedBox(height: 14),
+        Text(
+          '“$query” bulunamadı',
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Adın bir bölümünü yazmayı deneyin.',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }

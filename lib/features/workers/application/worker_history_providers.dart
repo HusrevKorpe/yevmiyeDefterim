@@ -3,6 +3,13 @@
 /// İşçiye özel yoklama (aralıksız, tek-alan sorgu) ve avans geçmişi.
 /// Avans tüm-akıştan client-side süzülür (az kayıt). Toplamlar saf
 /// [buildWorkerHistorySummary] ile türetilir.
+///
+/// Bellek notu (§7 ölçek): bu family sağlayıcıları `isAutoDispose:true` — işçi
+/// detay ekranı PUSH edilen (alt-menü şubesi gibi kalıcı DEĞİL) bir sayfa;
+/// kapanınca (pop) o işçinin TÜM yoklama geçmişi bellekten boşalır. Aksi halde
+/// oturum boyunca gezilen her işçinin bütün geçmişi bellekte birikirdi (3 yıllık
+/// işçide ~1000 kayıt/işçi). Ekran açıkken izlendiğinden veri eksiksiz kalır;
+/// yalnız çıkışta serbest bırakılır, dönüşte önbellekten anında yeniden gelir.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,34 +22,42 @@ import 'worker_history.dart';
 
 /// Bir işçinin tüm yoklama kayıtları, yeni→eski sıralı.
 final attendanceByWorkerProvider =
-    StreamProvider.family<List<AttendanceRecord>, String>((ref, workerId) {
-  return ref
-      .watch(attendanceRepositoryProvider)
-      .watchByWorker(workerId)
-      .map((records) {
-    final sorted = [...records]..sort((a, b) => b.date.compareTo(a.date));
-    return sorted;
-  });
-});
+    StreamProvider.family<List<AttendanceRecord>, String>(
+  isAutoDispose: true,
+  (ref, workerId) {
+    return ref
+        .watch(attendanceRepositoryProvider)
+        .watchByWorker(workerId)
+        .map((records) {
+      final sorted = [...records]..sort((a, b) => b.date.compareTo(a.date));
+      return sorted;
+    });
+  },
+);
 
 /// Bir işçinin avansları, yeni→eski sıralı (tüm-akıştan süzülür).
-final advancesByWorkerProvider =
-    Provider.family<List<Advance>, String>((ref, workerId) {
-  final all = ref.watch(advancesStreamProvider).asData?.value ?? const [];
-  return all.where((a) => a.workerId == workerId).toList()
-    ..sort((a, b) => b.date.compareTo(a.date));
-});
+final advancesByWorkerProvider = Provider.family<List<Advance>, String>(
+  isAutoDispose: true,
+  (ref, workerId) {
+    final all = ref.watch(advancesStreamProvider).asData?.value ?? const [];
+    return all.where((a) => a.workerId == workerId).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  },
+);
 
 /// İşçi geçmiş toplamları — saf özet.
 final workerHistorySummaryProvider =
-    Provider.family<WorkerHistorySummary, String>((ref, workerId) {
-  return buildWorkerHistorySummary(
-    attendance:
-        ref.watch(attendanceByWorkerProvider(workerId)).asData?.value ??
-            const [],
-    advances: ref.watch(advancesByWorkerProvider(workerId)),
-  );
-});
+    Provider.family<WorkerHistorySummary, String>(
+  isAutoDispose: true,
+  (ref, workerId) {
+    return buildWorkerHistorySummary(
+      attendance:
+          ref.watch(attendanceByWorkerProvider(workerId)).asData?.value ??
+              const [],
+      advances: ref.watch(advancesByWorkerProvider(workerId)),
+    );
+  },
+);
 
 /// İşçi geçmişi kaynak akışlarının birleşik durumu (kural §8: sonsuz spinner /
 /// yutulan hata yerine yükleniyor→veri / hata→"Yeniden Dene").
@@ -50,18 +65,21 @@ final workerHistorySummaryProvider =
 /// Yoklama ve avans her zaman izlenir (avans 2026-07-23'te kısıtlı hesaba da
 /// açıldı). Herhangi biri hata verirse → [AsyncError]; hepsi hazır →
 /// [AsyncData]; aksi → [AsyncLoading].
-final workerHistoryStateProvider =
-    Provider.family<AsyncValue<void>, String>((ref, workerId) {
-  final attendance = ref.watch(attendanceByWorkerProvider(workerId));
-  final advances = ref.watch(advancesStreamProvider);
+final workerHistoryStateProvider = Provider.family<AsyncValue<void>, String>(
+  isAutoDispose: true,
+  (ref, workerId) {
+    final attendance = ref.watch(attendanceByWorkerProvider(workerId));
+    final advances = ref.watch(advancesStreamProvider);
 
-  for (final src in [attendance, advances]) {
-    if (src.hasError) {
-      return AsyncError<void>(src.error!, src.stackTrace ?? StackTrace.current);
+    for (final src in [attendance, advances]) {
+      if (src.hasError) {
+        return AsyncError<void>(
+            src.error!, src.stackTrace ?? StackTrace.current);
+      }
     }
-  }
-  if (attendance.hasValue && advances.hasValue) {
-    return const AsyncData<void>(null);
-  }
-  return const AsyncLoading<void>();
-});
+    if (attendance.hasValue && advances.hasValue) {
+      return const AsyncData<void>(null);
+    }
+    return const AsyncLoading<void>();
+  },
+);

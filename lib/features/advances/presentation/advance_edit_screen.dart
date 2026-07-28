@@ -83,8 +83,24 @@ class _AdvanceEditScreenState extends ConsumerState<AdvanceEditScreen> {
     } catch (_) {
       return true;
     }
-    if (now == null || now == base) return true;
+    if (now == base) return true; // değişmemiş → sessiz devam
     if (!mounted) return false;
+    if (now == null) {
+      // Avans siz düzenlerken başka cihazda SİLİNMİŞ. update() `set(merge:true)`
+      // kullandığından kaydetmek onu YENİDEN yaratır (silinen avans açık avans
+      // olarak geri döner). Sessiz "hortlama" olmasın diye ayrı onay — deponun
+      // settle/reopen'daki `_existingIds` hayalet-korumasının düzenleme
+      // karşılığı (bkz. ledger_edit_screen).
+      return showConfirmDialog(
+        context,
+        title: 'Avans silinmiş',
+        message: 'Bu avans siz düzenlerken başka bir cihazda silindi. '
+            'Kaydederseniz yeniden oluşturulur. Yine de kaydedilsin mi?',
+        confirmLabel: 'Yeniden Oluştur',
+        icon: Icons.restore_from_trash,
+        accent: StatusColors.half,
+      );
+    }
     return showConfirmDialog(
       context,
       title: 'Avans değişmiş',

@@ -1,31 +1,56 @@
 /// Ana Sayfa "Bugün Özeti" sağlayıcısı (kural §7).
 ///
 /// Bugünün yoklamasını işçi cinsiyetleriyle birleştirir. Cinsiyet yoklama
-/// kaydında tutulmaz; işçi listesinden (workerId → Gender) çözülür. İşçi listesi
-/// (cinsiyet haritası) yüklenene kadar EMIT ETMEZ → "6 işçi / 0 kadın" gibi
-/// yanlış ara durum görünmez; onun yerine yükleniyor göstergesi kalır.
+/// kaydında tutulmaz; işçi listesinden (workerId → Gender) çözülür.
+///
+/// **İki akış da CANLI dinlenir.** Eskiden cinsiyet haritası `watchAll().first`
+/// ile TEK SEFER okunup donduruluyordu: uygulama açıkken listeye eklenen işçi
+/// haritada olmadığından, o işçi bugün çalışsa bile ne kadına ne erkeğe sayılırdı
+/// (28 Temmuz 2026: gün içinde eklenen 3 kadın yüzünden "9 kadın çalıştı" yerine
+/// "Kadın 6" göründü — yoklama ve kazanç doğruydu, yalnız Ana Sayfa sayacı eksikti).
+/// Artık işçi listesi değişince özet kendiliğinden güncellenir.
+///
+/// İşçi listesi (cinsiyet haritası) yüklenene kadar veri YAYINLANMAZ → "6 işçi /
+/// 0 kadın" gibi yanlış ara durum görünmez; onun yerine yükleniyor göstergesi kalır.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/date/app_date.dart';
 import '../../attendance/application/attendance_providers.dart';
 import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import 'day_summary.dart';
 
 /// Bugünün özeti (cinsiyet ayrıştırılmış). Seçili tarihten bağımsız.
-final StreamProvider<DaySummary> todaySummaryProvider =
-    StreamProvider<DaySummary>((ref) async* {
-  // Cinsiyet haritasını kurmak için işçilerin ilk yüklenişini bekle (böylece
-  // kadın/erkek sayıları hiç 0'dan başlamaz). Not: harita bu ilk anla dondurulur;
-  // gün içinde işçi ekleme/düzenlemesi sonraki açılışta yansır (Ana Sayfa için
-  // yeterli — reaktiflik gerekirse iki akış combineLatest ile birleştirilmeli).
-  final workers = await ref.watch(workerRepositoryProvider).watchAll().first;
-  final genderById = <String, Gender>{for (final w in workers) w.id: w.gender};
+///
+/// Türetilmiş (Provider) — kendi Firestore dinleyicisini AÇMAZ, uygulamanın
+/// zaten dinlediği işçi ve bugün-yoklaması akışlarını birleştirir.
+final Provider<AsyncValue<DaySummary>> todaySummaryProvider =
+    Provider<AsyncValue<DaySummary>>((ref) {
+  final workers = ref.watch(workersStreamProvider);
+  final attendance = ref.watch(todayAttendanceProvider);
 
-  yield* ref
-      .watch(attendanceRepositoryProvider)
-      .watchByDate(todayIso())
-      .map((records) => summarizeDay(records, genderById: genderById));
+  // Hata öncelikli: AsyncRetry "Yeniden Dene" kutusunu göstersin.
+  if (workers case AsyncError(:final error, :final stackTrace)) {
+    return AsyncError<DaySummary>(error, stackTrace);
+  }
+  if (attendance case AsyncError(:final error, :final stackTrace)) {
+    return AsyncError<DaySummary>(error, stackTrace);
+  }
+
+  // İşçiler gelmeden özet yayınlama (cinsiyetler 0'dan başlamasın).
+  final list = workers.asData?.value;
+  if (list == null) return const AsyncLoading<DaySummary>();
+
+  final genderById = <String, Gender>{for (final w in list) w.id: w.gender};
+  return attendance.whenData(
+    (records) => summarizeDay(records, genderById: genderById),
+  );
 });
+
+/// Ana Sayfa "Yeniden Dene": özeti besleyen İKİ kaynağı da yeniden aboneler.
+/// (Özet artık türetilmiş → kendisini invalidate etmek akışları yeniden kurmaz.)
+void refreshTodaySummary(WidgetRef ref) {
+  ref.invalidate(workersStreamProvider);
+  ref.invalidate(todayAttendanceProvider);
+}

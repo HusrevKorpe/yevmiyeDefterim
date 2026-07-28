@@ -20,10 +20,18 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/collections.dart';
 import '../../../core/firestore/refs.dart';
 
+/// Yedek üretim sonucu: JSON metni + veri (kısmen) önbellekten mi geldi.
+///
+/// [fromCache] true ise en az bir koleksiyon SUNUCUDAN değil cihazdaki
+/// önbellekten okundu (çevrimdışı) → yedek eksik/eski olabilir; çağıran
+/// kullanıcıyı uyarır (bkz. settings_screen). Yedek burada tek güvenlik ağı
+/// olduğundan sessiz kalması pahalıdır — bu yüzden bayrak taşınır.
+typedef BackupResult = ({String json, bool fromCache});
+
 /// Tüm koleksiyonları okuyup yedeği JSON metni olarak üretir.
 ///
 /// [now] test edilebilirlik için dışarıdan verilebilir (damga).
-Future<String> buildBackupJson(
+Future<BackupResult> buildBackupJson(
   FirebaseFirestore db, {
   DateTime? now,
 }) async {
@@ -35,15 +43,22 @@ Future<String> buildBackupJson(
     FsCollections.payrolls: payrollsCol(db),
   };
 
+  // get() varsayılan kaynak = sunucu+önbellek: çevrimdışıysa hata vermeden
+  // önbellekten döner. Bu sessiz düşüşü yakalamak için her okumanın
+  // metadata.isFromCache'ini biriktiririz; biri bile önbellekten geldiyse
+  // yedek eksik/eski olabilir.
+  var fromCache = false;
   final collections = <String, dynamic>{};
   for (final entry in cols.entries) {
     final snap = await entry.value.get();
+    if (snap.metadata.isFromCache) fromCache = true;
     collections[entry.key] = {
       for (final doc in snap.docs) doc.id: _sanitize(doc.data()),
     };
   }
 
   final settingsSnap = await settingsDocRef(db).get();
+  if (settingsSnap.metadata.isFromCache) fromCache = true;
 
   final root = <String, dynamic>{
     'app': 'yevmiye_defterim',
@@ -51,18 +66,27 @@ Future<String> buildBackupJson(
     'version': 1,
     'workspace': kWorkspaceId,
     'exportedAt': (now ?? DateTime.now()).toIso8601String(),
+    // Çevrimdışı alınan yedek dosyada da işaretlensin (elle geri yüklerken
+    // "bu kopya eksik olabilir" görülebilsin).
+    'fromCache': fromCache,
     'collections': collections,
     'settings': settingsSnap.exists ? _sanitize(settingsSnap.data()) : null,
   };
 
-  return const JsonEncoder.withIndent('  ').convert(root);
+  return (
+    json: const JsonEncoder.withIndent('  ').convert(root),
+    fromCache: fromCache,
+  );
 }
 
 /// Yedeği JSON dosyası olarak paylaşır (Drive/e-posta/dosyalar vb.).
-Future<void> shareBackup(FirebaseFirestore db, {DateTime? now}) async {
+///
+/// Dönüş: veri (kısmen) çevrimdışı önbellekten alındıysa `true` → çağıran
+/// kullanıcıyı "yedek eksik olabilir" diye uyarır.
+Future<bool> shareBackup(FirebaseFirestore db, {DateTime? now}) async {
   final stamp = now ?? DateTime.now();
-  final json = await buildBackupJson(db, now: stamp);
-  final bytes = Uint8List.fromList(utf8.encode(json));
+  final result = await buildBackupJson(db, now: stamp);
+  final bytes = Uint8List.fromList(utf8.encode(result.json));
   final file = XFile.fromData(
     bytes,
     mimeType: 'application/json',
@@ -71,6 +95,7 @@ Future<void> shareBackup(FirebaseFirestore db, {DateTime? now}) async {
   await SharePlus.instance.share(
     ShareParams(files: [file], subject: 'Yevmiye Defteri Yedeği'),
   );
+  return result.fromCache;
 }
 
 /// Dosya adı için `yyyy-MM-dd-HHmm` (yerel).

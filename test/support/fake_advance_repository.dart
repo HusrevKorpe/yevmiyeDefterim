@@ -61,6 +61,10 @@ class FakeAdvanceRepository implements AdvanceRepository {
     String? uid,
     Advance? carryover,
   }) async {
+    // Gerçek Firestore impl'iyle aynı toleranslı sözleşme: olmayan (eşzamanlı
+    // silinmiş) id ATLANIR, devir DAİMA yazılır. Firestore tarafı bunu
+    // `set(merge:true)` ile sağlar (`batch.update` olsaydı olmayan hedef tüm
+    // batch'i reddeder, devir kaybolurdu — bkz. advance_repository.dart).
     final marker = Advance.manualSettlementId(settledDate, uid);
     for (final id in ids) {
       final a = _store[id];
