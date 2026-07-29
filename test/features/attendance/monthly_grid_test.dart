@@ -218,6 +218,43 @@ void main() {
     expect(r.grossKurus, 180000);
   });
 
+  group('removed işareti (kalıntı satır temizliği)', () {
+    test('aktif işçinin satırı kalıntı DEĞİLDİR', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [
+          ind('w1', 'Ahmet', '2026-07-01', AttendanceStatus.full, 200000),
+        ],
+      );
+      expect(g.rows.single.removed, isFalse);
+    });
+
+    test('listede olmayan (kalıcı silinmiş) işçinin satırı kalıntıdır', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: const [],
+        records: [
+          ind('wX', 'Hüsrev Deneme', '2026-07-02', AttendanceStatus.full, 1000),
+        ],
+      );
+      expect(g.rows.single.removed, isTrue);
+    });
+
+    test('pasif (soft-delete) işçinin satırı da kalıntıdır', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [
+          worker('w1', 'Deneme', WorkerType.gundelik).copyWith(active: false),
+        ],
+        records: [
+          ind('w1', 'Deneme', '2026-07-02', AttendanceStatus.full, 1000),
+        ],
+      );
+      expect(g.rows.single.removed, isTrue);
+    });
+  });
+
   test('güncel işçi adı yoklama kaydındaki addan önceliklidir', () {
     final g = buildMonthlyGrid(
       monthIso: '2026-07',

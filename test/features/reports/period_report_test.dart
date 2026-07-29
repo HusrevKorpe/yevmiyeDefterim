@@ -19,6 +19,8 @@ void main() {
     int wage = 200000,
     Gender gender = Gender.male,
     String? paidPayrollId,
+    String? fieldId,
+    String? fieldName,
   }) =>
       AttendanceRecord.individual(
         id: '${date}_$worker',
@@ -29,6 +31,8 @@ void main() {
         status: status,
         wageSnapshotKurus: wage,
         paidPayrollId: paidPayrollId,
+        fieldId: fieldId,
+        fieldName: fieldName,
       );
 
   AttendanceRecord crew(String worker, String date, int headcount,
@@ -180,6 +184,27 @@ void main() {
     ]);
     expect(r.grossLaborKurus, 200000);
     expect(r.workerEarnings.single.fullDays, 1);
+  });
+
+  test('tarla kırılımı toplamı = dönem işçilik brütü (para kaybolmaz)', () {
+    final r = build(attendance: [
+      ind('a', '2026-07-02', AttendanceStatus.full,
+          fieldId: 'f1', fieldName: 'Dere'),
+      ind('b', '2026-07-02', AttendanceStatus.half), // tarlasız
+      crew('e', '2026-07-03', 4),
+    ]);
+    expect(r.hasFieldCosts, isTrue);
+    final toplam =
+        r.fieldCosts.fold<int>(0, (sum, f) => sum + f.grossKurus);
+    expect(toplam, r.grossLaborKurus);
+  });
+
+  test('hiç tarla seçilmemişse hasFieldCosts false (bölüm gizlenir)', () {
+    final r = build(attendance: [
+      ind('a', '2026-07-02', AttendanceStatus.full),
+    ]);
+    expect(r.fieldCosts.single.isUnassigned, isTrue);
+    expect(r.hasFieldCosts, isFalse);
   });
 
   test('ödenmiş gün de brüt işçiliğe dahildir (tahakkuk metriği)', () {

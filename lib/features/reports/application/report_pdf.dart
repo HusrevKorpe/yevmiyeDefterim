@@ -14,6 +14,7 @@ import 'package:printing/printing.dart';
 
 import '../../../core/money/money.dart';
 import '../../workers/data/worker.dart';
+import 'field_cost.dart';
 import 'period_report.dart';
 
 /// Yüklenen fontlar + Türkçe glif desteklenmiyorsa çeviri bayrağı.
@@ -86,6 +87,40 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
         _kv(t('Tahakkuk eden brüt'), money(report.grossLaborKurus)),
         _kv(t('Verilen avans'), money(report.advancesGivenKurus)),
         pw.SizedBox(height: 14),
+
+        // Tarla kırılımı yalnız tarla seçimi kullanıldıysa basılır.
+        if (report.hasFieldCosts) ...[
+          _title(t('Tarla Maliyeti (İşçilik)')),
+          pw.TableHelper.fromTextArray(
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+            cellAlignments: {
+              0: pw.Alignment.centerLeft,
+              1: pw.Alignment.center,
+              2: pw.Alignment.center,
+              3: pw.Alignment.center,
+              4: pw.Alignment.centerRight,
+            },
+            headers: [
+              t('Tarla'),
+              t('Yevmiye'),
+              t('Gün'),
+              t('İşçi'),
+              t('Tutar (TL)'),
+            ],
+            data: [
+              for (final f in report.fieldCosts)
+                [
+                  t(f.fieldName),
+                  formatWorkdays(f.workdays),
+                  '${f.dayCount}',
+                  '${f.workerCount}',
+                  formatKurusPlain(f.grossKurus),
+                ],
+            ],
+          ),
+          pw.SizedBox(height: 14),
+        ],
 
         _title(t('İşçi Kazançları (${report.workerEarnings.length})')),
         if (report.workerEarnings.isEmpty)

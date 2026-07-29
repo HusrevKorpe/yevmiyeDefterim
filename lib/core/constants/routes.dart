@@ -15,4 +15,5 @@ class AppRoutes {
   static const String settings = '/ayarlar';
   static const String advances = '/avanslar';
   static const String report = '/rapor';
+  static const String fieldCosts = '/rapor/tarla';
 }

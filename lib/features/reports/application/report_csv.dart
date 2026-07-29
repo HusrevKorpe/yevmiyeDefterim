@@ -6,6 +6,7 @@ library;
 
 import '../../../core/money/money.dart';
 import '../../workers/data/worker.dart';
+import 'field_cost.dart';
 import 'period_report.dart';
 
 /// TR-Excel ayırıcısı (virgül ondalık olduğu için).
@@ -39,6 +40,20 @@ String buildReportCsv(PeriodReport report) {
     _row(['İŞÇİLİK']),
     _row(['Tahakkuk eden brüt', formatKurusPlain(report.grossLaborKurus)]),
     _row(['Verilen avans', formatKurusPlain(report.advancesGivenKurus)]),
+    // Tarla kırılımı yalnız tarla seçimi kullanıldıysa yazılır (boş bölüm yok).
+    if (report.hasFieldCosts) ...[
+      '',
+      _row(['TARLA MALİYETİ (İŞÇİLİK)']),
+      _row(['Tarla', 'Yevmiye', 'Gün', 'İşçi', 'Tutar (TL)']),
+      for (final f in report.fieldCosts)
+        _row([
+          f.fieldName,
+          formatWorkdays(f.workdays),
+          '${f.dayCount}',
+          '${f.workerCount}',
+          formatKurusPlain(f.grossKurus),
+        ]),
+    ],
     '',
     _row(['İŞÇİ KAZANÇLARI']),
     _row([

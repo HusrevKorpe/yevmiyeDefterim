@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yevmiye_defterim/features/reports/application/field_cost.dart';
 import 'package:yevmiye_defterim/features/reports/application/period_report.dart';
 import 'package:yevmiye_defterim/features/reports/application/report_csv.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
@@ -6,7 +7,11 @@ import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 /// CSV dışa aktarma saf testleri (kural §11): BOM, bölümler, tutar formatı,
 /// alan tırnaklama, dosya adı.
 void main() {
-  PeriodReport report({List<WorkerEarning> earnings = const []}) => PeriodReport(
+  PeriodReport report({
+    List<WorkerEarning> earnings = const [],
+    List<FieldCost> fieldCosts = const [],
+  }) =>
+      PeriodReport(
         startIso: '2026-07-01',
         endIso: '2026-07-31',
         expenseKurus: 200000,
@@ -18,6 +23,23 @@ void main() {
         grossLaborKurus: 900000,
         advancesGivenKurus: 70000,
         workerEarnings: earnings,
+        fieldCosts: fieldCosts,
+      );
+
+  FieldCost field(
+    String? id,
+    String name, {
+    int halves = 2,
+    int days = 1,
+    int gross = 200000,
+  }) =>
+      FieldCost(
+        fieldId: id,
+        fieldName: name,
+        workdayHalves: halves,
+        dayCount: days,
+        grossKurus: gross,
+        workers: const [],
       );
 
   test('UTF-8 BOM ile başlar', () {
@@ -60,6 +82,24 @@ void main() {
       ),
     ]));
     expect(csv, contains('"Ali;Veli"'));
+  });
+
+  test('tarla bölümü: yevmiye/gün/işçi/tutar satırları', () {
+    final csv = buildReportCsv(report(fieldCosts: [
+      field('f1', 'Dere', halves: 5, days: 3, gross: 500000),
+      field(null, kUnassignedFieldLabel, halves: 2, gross: 200000),
+    ]));
+    expect(csv, contains('TARLA MALİYETİ (İŞÇİLİK)'));
+    expect(csv, contains('Dere;2,5;3;0;5.000,00'));
+    expect(csv, contains('$kUnassignedFieldLabel;1;1;0;2.000,00'));
+  });
+
+  test('tarla seçimi hiç kullanılmadıysa tarla bölümü yazılmaz', () {
+    // Yalnız "seçilmemiş" satırı olan rapor → bölüm gürültü olurdu.
+    final csv = buildReportCsv(report(fieldCosts: [
+      field(null, kUnassignedFieldLabel),
+    ]));
+    expect(csv.contains('TARLA MALİYETİ'), isFalse);
   });
 
   test('dosya adı dönem uçlarını içerir', () {

@@ -6,7 +6,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/routes.dart';
 import '../../../core/diagnostics/app_log.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
@@ -17,6 +19,7 @@ import '../../ledger/presentation/widgets/ledger_summary_card.dart';
 import '../application/period_report.dart';
 import '../application/report_providers.dart';
 import '../application/report_share.dart';
+import 'widgets/report_field_card.dart';
 import 'widgets/report_labor_card.dart';
 import 'widgets/worker_earning_tile.dart';
 
@@ -134,6 +137,16 @@ class _ReportBody extends StatelessWidget {
         LedgerSummaryCard(summary: kasa),
         const SizedBox(height: 8),
         ReportLaborCard(report: report),
+        // Tarla seçimi isteğe bağlı: hiç kullanılmadıysa bölüm hiç çıkmaz.
+        // Kart yalnız özettir; tarla listesi ve işçi dökümü kendi sayfasında
+        // (`/rapor/tarla`) açılır → rapor akışı kısa kalır.
+        if (report.hasFieldCosts) ...[
+          const SizedBox(height: 8),
+          ReportFieldCard(
+            costs: report.fieldCosts,
+            onTap: () => context.push(AppRoutes.fieldCosts),
+          ),
+        ],
         if (report.workerEarnings.isNotEmpty) ...[
           _Section('İşçi Kazançları (${report.workerEarnings.length})'),
           for (final e in report.workerEarnings)

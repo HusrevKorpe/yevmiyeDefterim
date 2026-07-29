@@ -46,11 +46,17 @@ class MonthlyWorkerRow {
     required this.crewDays,
     required this.crewHeadcountTotal,
     required this.grossKurus,
+    this.removed = false,
   });
 
   final String workerId;
   final String workerName;
   final WorkerType type;
+
+  /// İşçi artık kullanımda değil: İşçiler listesinden kalıcı silinmiş ya da
+  /// pasife alınmış. Satır yine de çizilir (geçmiş kaybolmaz) ama kalıntı /
+  /// deneme kaydını temizleme ("Kayıtları Sil") yalnız bu satırlarda açıktır.
+  final bool removed;
 
   /// Gün ISO (`'yyyy-MM-dd'`) → hücre. Yalnız kaydı olan günler bulunur;
   /// eksik günler UI'da boş çizilir.
@@ -97,8 +103,9 @@ class MonthlyAttendanceGrid {
 ///
 /// - Yalnız [monthIso] ayına düşen kayıtlar sayılır (savunma amaçlı süzülür).
 /// - Satır kümesi = o ayda en az bir kaydı olan işçiler. İsim/tür güncel [workers]
-///   listesinden alınır; işçi listede yoksa (silinmiş/pasif) yoklama kaydından
-///   türetilir — geçmiş veri kaybolmaz.
+///   listesinden alınır; işçi listede yoksa (kalıcı silinmiş) yoklama kaydından
+///   türetilir — geçmiş veri kaybolmaz. Silinmiş/pasif işçinin satırı
+///   [MonthlyWorkerRow.removed] ile işaretlenir (temizleme yalnız orada açık).
 /// - Sıralama [compareWorkers] ile aynı: önce tür, sonra ad.
 MonthlyAttendanceGrid buildMonthlyGrid({
   required String monthIso,
@@ -163,6 +170,8 @@ MonthlyAttendanceGrid buildMonthlyGrid({
       crewDays: crewDays,
       crewHeadcountTotal: crewHeadcountTotal,
       grossKurus: gross,
+      // İşçi listede yok (kalıcı silinmiş) ya da pasif → satır "kalıntı"dır.
+      removed: w == null || !w.active,
     ));
   });
 

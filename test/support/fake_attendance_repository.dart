@@ -66,6 +66,16 @@ class FakeAttendanceRepository implements AttendanceRepository {
   }
 
   @override
+  Future<int> deleteByWorker(String workerId) async {
+    final ids = _forWorker(workerId).map((r) => r.id).toList();
+    for (final id in ids) {
+      _store.remove(id);
+    }
+    _tick.add(null);
+    return ids.length;
+  }
+
+  @override
   Future<void> markDaySaved(String date) async {
     markedDays.add(date);
   }

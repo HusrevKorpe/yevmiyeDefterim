@@ -14,6 +14,7 @@ import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../advances/application/advance_providers.dart';
 import '../../advances/data/advance.dart';
+import '../../advances/presentation/advance_edit_screen.dart';
 import '../../advances/presentation/widgets/advance_note_chip.dart';
 import '../../auth/application/user_access.dart';
 import '../../attendance/data/attendance_record.dart';
@@ -33,6 +34,16 @@ class WorkerDetailScreen extends ConsumerWidget {
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         builder: (_) => WorkerEditScreen(worker: worker),
+      ),
+    );
+  }
+
+  /// Bu işçi ön-seçili "Avans Ver" ekranı — arama → detay → avans kısayolu.
+  /// Avans kısıtlı hesaba da açık (2026-07-23) → herkes kullanabilir.
+  void _openAdvance(BuildContext context) {
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => AdvanceEditScreen(initialWorkerId: worker.id),
       ),
     );
   }
@@ -81,6 +92,10 @@ class WorkerDetailScreen extends ConsumerWidget {
                     summary: summary,
                     canSeeMoney: canSeeMoney,
                   ),
+                  // Pasif işçi avans ekranındaki seçim listesinde yok
+                  // (activeWorkersProvider) → kısayol da yalnız aktifte.
+                  if (worker.active)
+                    _GiveAdvanceButton(onPressed: () => _openAdvance(context)),
                   _Section('Yoklama Geçmişi (${attendance.length})'),
                   if (attendance.isEmpty)
                     const _EmptyLine('Bu işçi için yoklama kaydı yok.')
@@ -107,6 +122,37 @@ class WorkerDetailScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Özet kartının hemen altındaki kompakt "Avans Ver" kısayolu.
+///
+/// Arattığı işçinin detayına giren kullanıcı avans için Avans sekmesine gidip
+/// listeden aynı işçiyi yeniden aramak zorunda kalmasın diye buradadır.
+class _GiveAdvanceButton extends StatelessWidget {
+  const _GiveAdvanceButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          // Tema varsayılanı 56px — kart aralarında derli toplu dursun.
+          minimumSize: const Size.fromHeight(46),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        icon: const Icon(Icons.payments, size: 20),
+        // Büyük sistem yazısında taşmasın — tek satıra sığdır.
+        label: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text('Avans Ver'),
+        ),
       ),
     );
   }

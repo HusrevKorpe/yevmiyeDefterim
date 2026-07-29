@@ -145,8 +145,13 @@ class _MonthlyGridTableState extends State<_MonthlyGridTable> {
                     physics: const NeverScrollableScrollPhysics(),
                     itemExtent: _kRowH,
                     itemCount: grid.rows.length,
-                    itemBuilder: (context, i) =>
-                        _NameCell(row: grid.rows[i], line: line),
+                    itemBuilder: (context, i) => _NameCell(
+                      row: grid.rows[i],
+                      line: line,
+                      // Kalıntı temizleme yıkıcıdır → yalnız sahip hesapta
+                      // (para görebilen) açık; kısıtlı hesap tabloyu okur.
+                      canPurge: widget.canSeeMoney,
+                    ),
                   ),
                 ),
                 // Kaydırılan gövde (yatay dış, dikey iç tembel liste → yalnız
@@ -266,15 +271,62 @@ class _HeaderTotalCell extends StatelessWidget {
   }
 }
 
-class _NameCell extends StatelessWidget {
-  const _NameCell({required this.row, required this.line});
+class _NameCell extends ConsumerWidget {
+  const _NameCell({
+    required this.row,
+    required this.line,
+    required this.canPurge,
+  });
   final MonthlyWorkerRow row;
   final Color line;
 
-  @override
-  Widget build(BuildContext context) {
+  /// Kalıntı satırı temizleme (uzun basma) bu hesapta açık mı.
+  final bool canPurge;
+
+  /// Silinmiş/pasif işçinin ARTIK KAYDI KALMASIN: tüm yoklama + avans kayıtları
+  /// silinir, satır tablodan düşer. Deneme amaçlı açılıp silinen işçinin geride
+  /// bıraktığı satırı temizlemenin tek yolu budur (bkz. [purgeWorkerRecords]).
+  Future<void> _purge(BuildContext context, WidgetRef ref) async {
     final theme = Theme.of(context);
-    return Container(
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Kayıtları sil',
+      message: '${row.workerName} İşçiler listesinden kaldırılmış. Bu işçiye '
+          'ait TÜM yoklama ve avans kayıtları (bu ay dahil, tüm aylar) kalıcı '
+          'olarak silinsin mi? Bu işlem geri alınamaz.',
+      confirmLabel: 'Kalıcı Sil',
+      icon: Icons.delete_forever,
+      accent: theme.colorScheme.error,
+    );
+    if (!ok) return;
+    try {
+      final result = await purgeWorkerRecords(
+        attendance: ref.read(attendanceRepositoryProvider),
+        advances: ref.read(advanceRepositoryProvider),
+        workers: ref.read(workerRepositoryProvider),
+        workerId: row.workerId,
+      );
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('${row.workerName}: ${result.summary}'),
+      ));
+    } catch (e, s) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('Kayıtlar silinemedi. Tekrar deneyin.'),
+      ));
+      await logHandledError(e, s,
+          reason: 'kalinti-temizleme', info: {'workerId': row.workerId});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final cell = Container(
       width: _kNameW,
       height: _kRowH,
       alignment: Alignment.centerLeft,
@@ -300,8 +352,20 @@ class _NameCell extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
+          // Listeden kaldırılmış işçi işareti — bu satır temizlenebilir.
+          if (row.removed) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.person_off_outlined,
+                size: 13, color: theme.colorScheme.onSurfaceVariant),
+          ],
         ],
       ),
+    );
+    if (!row.removed || !canPurge) return cell;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => _purge(context, ref),
+      child: cell,
     );
   }
 }

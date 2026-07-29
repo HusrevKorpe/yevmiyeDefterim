@@ -8,6 +8,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/date/app_date.dart';
+import '../../../core/firestore/batch_delete.dart';
 import '../../../core/firestore/refs.dart';
 import '../../../core/firestore/write_stamp.dart';
 import 'advance.dart';
@@ -24,6 +25,11 @@ abstract class AdvanceRepository {
 
   /// Avansı siler (yalnız kapanmamış avans için — çağıran doğrular).
   Future<void> delete(String id);
+
+  /// Bir işçinin TÜM avanslarını (açık + kapanmış) siler; silinen kayıt sayısını
+  /// döndürür. Yalnız kalıntı/deneme verisi temizliği içindir — normal akışta
+  /// kapanmış avans SİLİNMEZ. Çağıran onay almakla yükümlüdür.
+  Future<int> deleteByWorker(String workerId);
 
   /// Verilen avansları "Hesap görüldü" ile kapatır (tek batch). Her birine
   /// [settledDate] tarihli işaret yazılır → açık listeden düşer, alacak kalmaz.
@@ -85,6 +91,13 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
 
   @override
   Future<void> delete(String id) => advancesCol(_db).doc(id).delete();
+
+  @override
+  Future<int> deleteByWorker(String workerId) async {
+    final snap =
+        await advancesCol(_db).where('workerId', isEqualTo: workerId).get();
+    return deleteDocsInBatches(_db, snap.docs.map((d) => d.reference));
+  }
 
   @override
   Future<void> settleAdvances(

@@ -11,11 +11,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/date/app_date.dart';
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../advances/application/advance_providers.dart';
 import '../../auth/application/user_access.dart';
+import '../../workers/application/worker_purge.dart';
 import '../../workers/application/workers_providers.dart';
+import '../application/attendance_providers.dart';
 import '../application/monthly_grid.dart';
 import '../application/monthly_grid_providers.dart';
 import '../data/attendance_record.dart';
@@ -181,6 +186,11 @@ class _MonthlyBody extends ConsumerWidget {
         if (grid.isEmpty) return const _EmptyMonth();
         return Column(
           children: [
+            // Kalıntı satır varsa (silinmiş/pasif işçi) temizleme ipucu —
+            // uzun basma keşfedilebilir olsun. Kısıtlı hesapta temizleme
+            // kapalı olduğundan ipucu da çıkmaz.
+            if (canSeeMoney && grid.rows.any((r) => r.removed))
+              const _RemovedHint(),
             Expanded(
               child: _MonthlyGridTable(grid: grid, canSeeMoney: canSeeMoney),
             ),
@@ -188,6 +198,36 @@ class _MonthlyBody extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// "Listeden kaldırılmış işçi" satırlarının nasıl temizleneceğini anlatan
+/// tek satırlık ipucu. Deneme amaçlı açılıp silinen işçi tabloda satır bırakır
+/// (satırlar yoklama kayıtlarından türetilir) — bu satır tek çıkış yolunu söyler.
+class _RemovedHint extends StatelessWidget {
+  const _RemovedHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+      child: Row(
+        children: [
+          Icon(Icons.person_off_outlined,
+              size: 13, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'İşaretli işçi listeden kaldırılmış. Kayıtlarını tamamen silmek '
+              'için adına basılı tutun.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

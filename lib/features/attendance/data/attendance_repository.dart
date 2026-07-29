@@ -6,6 +6,7 @@ library;
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/date/app_date.dart';
+import '../../../core/firestore/batch_delete.dart';
 import '../../../core/firestore/refs.dart';
 import '../../../core/firestore/write_stamp.dart';
 import 'attendance_record.dart';
@@ -27,6 +28,11 @@ abstract class AttendanceRepository {
   /// Kaydı siler (deterministik ID). Yoklama alınmayan/geri alınan gün için:
   /// kayıt hiç tutulmaz → gün "Yok" sayılmaz, hiçbir hesaba girmez.
   Future<void> delete(String id);
+
+  /// Bir işçinin TÜM yoklama kayıtlarını (her ay, her gün) siler; silinen kayıt
+  /// sayısını döndürür. Yalnız kalıntı/deneme verisi temizliği içindir — geçmiş
+  /// yoklama normalde SİLİNMEZ (kural §4). Çağıran onay almakla yükümlüdür.
+  Future<int> deleteByWorker(String workerId);
 
   /// "Kaydet" dokunuşunda günün işaret dokümanını yazar
   /// (`attendanceDays/{date}`, deterministik ID → günde tek doküman).
@@ -80,6 +86,14 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
 
   @override
   Future<void> delete(String id) => attendanceCol(_db).doc(id).delete();
+
+  @override
+  Future<int> deleteByWorker(String workerId) async {
+    final snap = await attendanceCol(_db)
+        .where('workerId', isEqualTo: workerId)
+        .get();
+    return deleteDocsInBatches(_db, snap.docs.map((d) => d.reference));
+  }
 
   @override
   Future<void> markDaySaved(String date) =>

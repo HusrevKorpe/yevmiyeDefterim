@@ -17,6 +17,7 @@ import '../features/auth/data/app_user.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/ledger/presentation/ledger_screen.dart';
+import '../features/reports/presentation/field_cost_screen.dart';
 import '../features/reports/presentation/report_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/workers/presentation/workers_screen.dart';
@@ -71,6 +72,7 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       if (isMoneyRestricted(user.email)) {
         const blocked = <String>{
           AppRoutes.report,
+          AppRoutes.fieldCosts,
           AppRoutes.settings,
         };
         if (blocked.contains(state.matchedLocation)) return AppRoutes.home;
@@ -91,6 +93,13 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.report,
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const ReportScreen(),
+      ),
+      // Tarla maliyeti Rapor'un alt sayfası: rapordaki özet kartından açılır,
+      // para içerdiği için kısıtlı hesapta engellidir (bkz. `blocked`).
+      GoRoute(
+        path: AppRoutes.fieldCosts,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const FieldCostScreen(),
       ),
       GoRoute(
         path: AppRoutes.monthlyAttendance,

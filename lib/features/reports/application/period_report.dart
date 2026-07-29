@@ -1,9 +1,10 @@
 /// Dönem raporu — saf fonksiyon (Firestore'suz → unit test, kural §11).
 ///
-/// Üç bağımsız metrik grubu tek dönemde birleşir:
+/// Dört bağımsız metrik grubu tek dönemde birleşir:
 ///  1. Kasa: toplam gider + kategori kırılımı ([summarizeLedger]).
 ///  2. İşçilik: dönemde tahakkuk eden brüt (yoklama kazancı), verilen avans.
 ///  3. İşçi bazında kazanç dökümü.
+///  4. Tarla bazında işçilik maliyeti ([buildFieldCosts]).
 ///
 /// Çifte sayım yok (kural §6): kasa ve işçilik AYRI metriklerdir; kasa yalnız
 /// ledger'dan, işçilik yalnız yoklama/avanstan türetilir. Girişler
@@ -16,6 +17,7 @@ import '../../attendance/data/attendance_record.dart';
 import '../../ledger/application/ledger_summary.dart';
 import '../../ledger/data/ledger_entry.dart';
 import '../../workers/data/worker.dart';
+import 'field_cost.dart';
 
 /// Bir işçinin dönem kazanç dökümü (rapor satırı).
 class WorkerEarning {
@@ -58,6 +60,7 @@ class PeriodReport {
     this.grossLaborKurus = 0,
     this.advancesGivenKurus = 0,
     this.workerEarnings = const [],
+    this.fieldCosts = const [],
   });
 
   final String startIso;
@@ -75,6 +78,14 @@ class PeriodReport {
 
   /// İşçi bazında kazanç, brüte göre azalan sıralı.
   final List<WorkerEarning> workerEarnings;
+
+  /// Tarla bazında işçilik maliyeti (brüte göre azalan; tarlası seçilmemiş
+  /// satır en sonda). Toplamı [grossLaborKurus]'a eşittir.
+  final List<FieldCost> fieldCosts;
+
+  /// En az bir kayıtta tarla seçilmiş mi? Tarla özelliği hiç kullanılmadıysa
+  /// (tek satır "Tarla seçilmemiş") rapor bölümü gösterilmez — gürültü olmaz.
+  bool get hasFieldCosts => fieldCosts.any((f) => !f.isUnassigned);
 
   /// Dönem mazot gideri (kuruş).
   int get mazotKurus => expenseByCategory[LedgerCategory.mazot] ?? 0;
@@ -154,6 +165,12 @@ PeriodReport buildPeriodReport({
     grossLaborKurus: grossLabor,
     advancesGivenKurus: advancesGiven,
     workerEarnings: earnings,
+    // 4. Tarla bazında işçilik (aynı yoklama listesinden, ayrı kırılım).
+    fieldCosts: buildFieldCosts(
+      startIso: startIso,
+      endIso: endIso,
+      attendance: attendance,
+    ),
   );
 }
 

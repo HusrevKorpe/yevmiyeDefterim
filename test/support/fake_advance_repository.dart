@@ -55,6 +55,19 @@ class FakeAdvanceRepository implements AdvanceRepository {
   }
 
   @override
+  Future<int> deleteByWorker(String workerId) async {
+    final ids = [
+      for (final a in _store.values)
+        if (a.workerId == workerId) a.id,
+    ];
+    for (final id in ids) {
+      _store.remove(id);
+    }
+    _tick.add(null);
+    return ids.length;
+  }
+
+  @override
   Future<void> settleAdvances(
     Iterable<String> ids,
     String settledDate, {
