@@ -36,13 +36,13 @@ class FieldCostScreen extends ConsumerWidget {
       appBar: const GradientAppBar(title: 'Tarla Maliyeti'),
       body: Column(
         children: [
+          // Hazır aralık düğmeleri (Bu Hafta/Bu Ay) BİLEREK yok: Rapor ekranıyla
+          // aynı dönem pili, aynı sadelik.
           PeriodRangeSelector(
             startIso: period.start,
             endIso: period.end,
             onSetStart: notifier.setStart,
             onSetEnd: notifier.setEnd,
-            onThisWeek: notifier.thisWeek,
-            onThisMonth: notifier.thisMonth,
           ),
           Expanded(
             child: AsyncRetry<PeriodReport>(
