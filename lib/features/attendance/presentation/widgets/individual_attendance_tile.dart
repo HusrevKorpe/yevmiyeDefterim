@@ -9,6 +9,7 @@ import '../../../workers/data/worker.dart';
 import '../../data/attendance_record.dart';
 import '../../data/field.dart';
 import 'field_chips.dart';
+import 'overtime_chips.dart';
 import 'paid_lock_badge.dart';
 
 class IndividualAttendanceTile extends StatelessWidget {
@@ -25,6 +26,9 @@ class IndividualAttendanceTile extends StatelessWidget {
     this.fieldId,
     this.fieldName,
     this.onFieldChanged,
+    this.overtimeHours = 0,
+    this.overtimeRateKurus = 0,
+    this.onOvertimeChanged,
   });
 
   final Worker worker;
@@ -49,6 +53,22 @@ class IndividualAttendanceTile extends StatelessWidget {
   final String? fieldId;
   final String? fieldName;
   final ValueChanged<Field?>? onFieldChanged;
+
+  /// O günün mesai saati + mesai saat ücreti (kuruş). Ücret kayıtta dondurulmuş
+  /// değerdir; kayıt yoksa işçinin güncel ücreti önden gösterilir. Mesai
+  /// isteğe bağlıdır (0 saat = mesai yok).
+  final int overtimeHours;
+  final int overtimeRateKurus;
+
+  /// Null ise mesai şeridi hiç çizilmez.
+  final ValueChanged<int>? onOvertimeChanged;
+
+  /// Mesai şeridi de tarla çipleriyle aynı koşulda görünür: yalnız Tam/Yarım
+  /// seçiliyken (gelmeyen/boş günde mesai sorusu anlamsız) ve kilitli değilken.
+  bool get _showOvertime =>
+      onOvertimeChanged != null &&
+      !locked &&
+      (status == AttendanceStatus.full || status == AttendanceStatus.half);
 
   /// Tarla çipleri yalnız Tam/Yarım seçiliyken görünür (Yok/boş günde "nerede
   /// çalıştı" sorusu anlamsız). Tarla tanımlı değilse satır hiç çıkmaz; ama
@@ -183,6 +203,15 @@ class IndividualAttendanceTile extends StatelessWidget {
               selectedFieldId: fieldId,
               selectedFieldName: fieldName,
               onChanged: onFieldChanged!,
+            ),
+          ],
+          if (_showOvertime) ...[
+            SizedBox(height: _showFields ? 4 : 8),
+            OvertimeChips(
+              hours: overtimeHours,
+              rateKurus: overtimeRateKurus,
+              showAmount: showWage,
+              onChanged: onOvertimeChanged!,
             ),
           ],
           const Divider(height: 14),

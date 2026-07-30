@@ -255,6 +255,69 @@ void main() {
     });
   });
 
+  group('mesai — hücre üst simgesi ve ay toplamı', () {
+    AttendanceRecord withOvertime(
+      String date,
+      AttendanceStatus status, {
+      int hours = 0,
+      int rate = 10000,
+    }) =>
+        AttendanceRecord.individual(
+          id: '${date}_w1',
+          date: date,
+          workerId: 'w1',
+          workerName: 'Ahmet',
+          workerType: WorkerType.gundelik,
+          status: status,
+          wageSnapshotKurus: 200000,
+          overtimeHours: hours,
+          overtimeRateSnapshotKurus: rate,
+        );
+
+    test('hücre mesai saatini taşır; kazanç mesai dahil', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [withOvertime('2026-07-02', AttendanceStatus.full, hours: 2)],
+      );
+      final cell = g.rows.single.cells['2026-07-02']!;
+      expect(cell.overtimeHours, 2);
+      expect(cell.earningKurus, 220000);
+      expect(g.rows.single.grossKurus, 220000);
+    });
+
+    test('mesaisiz gün 0 saat', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [ind('w1', 'Ahmet', '2026-07-02', AttendanceStatus.full, 200000)],
+      );
+      expect(g.rows.single.cells['2026-07-02']!.overtimeHours, 0);
+    });
+
+    test('"Yok" günündeki mesai hücrede de sayılmaz', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [
+          withOvertime('2026-07-02', AttendanceStatus.absent, hours: 3),
+        ],
+      );
+      final cell = g.rows.single.cells['2026-07-02']!;
+      expect(cell.overtimeHours, 0);
+      expect(cell.earningKurus, 0);
+    });
+
+    test('elebaşı hücresinde mesai yok', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [worker('e1', 'Usta', WorkerType.elebasi)],
+        records: [crew('e1', 'Usta', '2026-07-02', 4, 150000)],
+      );
+      expect(g.rows.single.cells['2026-07-02']!.overtimeHours, 0);
+    });
+  });
+
   test('güncel işçi adı yoklama kaydındaki addan önceliklidir', () {
     final g = buildMonthlyGrid(
       monthIso: '2026-07',

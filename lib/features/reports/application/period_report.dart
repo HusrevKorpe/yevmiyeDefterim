@@ -30,6 +30,8 @@ class WorkerEarning {
     this.crewDays = 0,
     this.crewHeadcountTotal = 0,
     this.grossKurus = 0,
+    this.overtimeHours = 0,
+    this.overtimeKurus = 0,
   });
 
   final String workerId;
@@ -44,8 +46,13 @@ class WorkerEarning {
   final int crewDays;
   final int crewHeadcountTotal;
 
-  /// Dönem brüt kazancı (kuruş).
+  /// Dönem brüt kazancı (kuruş) — mesai DAHİL.
   final int grossKurus;
+
+  /// Dönemdeki mesai saati ve mesai tutarı (kuruş). [grossKurus] içindedir;
+  /// ayrıca gösterilir ki "brütün ne kadarı mesai" görülebilsin.
+  final int overtimeHours;
+  final int overtimeKurus;
 
   bool get isCrew => type == WorkerType.elebasi;
 }
@@ -58,6 +65,8 @@ class PeriodReport {
     this.expenseKurus = 0,
     this.expenseByCategory = const {},
     this.grossLaborKurus = 0,
+    this.overtimeKurus = 0,
+    this.overtimeHours = 0,
     this.advancesGivenKurus = 0,
     this.workerEarnings = const [],
     this.fieldCosts = const [],
@@ -70,8 +79,19 @@ class PeriodReport {
   final int expenseKurus;
   final Map<String, int> expenseByCategory;
 
-  /// Dönemde tahakkuk eden brüt işçilik (yoklama kazançları toplamı, kuruş).
+  /// Dönemde tahakkuk eden brüt işçilik (yoklama kazançları toplamı, kuruş) —
+  /// mesai DAHİLDİR.
   final int grossLaborKurus;
+
+  /// Dönem mesai tutarı (kuruş) ve toplam mesai saati. [grossLaborKurus] içinde
+  /// zaten sayılıdır (çifte sayım yok — kural §6); ayrı tutulur ki raporda
+  /// "brütün ne kadarı mesai" satırı gösterilebilsin.
+  final int overtimeKurus;
+  final int overtimeHours;
+
+  /// Dönemde hiç mesai girildi mi? Girilmediyse rapor/PDF/CSV'de mesai satırı
+  /// hiç çıkmaz (gürültü olmaz — tarla kırılımıyla aynı desen).
+  bool get hasOvertime => overtimeHours > 0 || overtimeKurus > 0;
 
   /// Dönemde verilen avans toplamı (kuruş).
   final int advancesGivenKurus;
@@ -128,10 +148,15 @@ PeriodReport buildPeriodReport({
 
   // 2. İşçilik brütü + işçi bazında döküm (dönemdeki yoklamalar).
   var grossLabor = 0;
+  var overtimeKurus = 0;
+  var overtimeHours = 0;
   final accs = <String, _WorkerAcc>{};
   for (final r in attendance) {
     if (!_inRange(r.date, startIso, endIso)) continue;
     grossLabor += r.earningKurus;
+    // Mesai brütün İÇİNDE; burada yalnız kırılımı için ayrıca toplanır.
+    overtimeKurus += r.overtimeKurus;
+    overtimeHours += r.overtimeHoursCounted;
     accs
         .putIfAbsent(
           r.workerId,
@@ -163,6 +188,8 @@ PeriodReport buildPeriodReport({
     expenseKurus: ledgerSummary.expenseKurus,
     expenseByCategory: ledgerSummary.expenseByCategory,
     grossLaborKurus: grossLabor,
+    overtimeKurus: overtimeKurus,
+    overtimeHours: overtimeHours,
     advancesGivenKurus: advancesGiven,
     workerEarnings: earnings,
     // 4. Tarla bazında işçilik (aynı yoklama listesinden, ayrı kırılım).
@@ -187,11 +214,15 @@ class _WorkerAcc {
   int crewDays = 0;
   int crewHeadcountTotal = 0;
   int grossKurus = 0;
+  int overtimeHours = 0;
+  int overtimeKurus = 0;
 
   bool get hasActivity => fullDays + halfDays + crewDays > 0;
 
   void add(AttendanceRecord r) {
     grossKurus += r.earningKurus;
+    overtimeHours += r.overtimeHoursCounted;
+    overtimeKurus += r.overtimeKurus;
     switch (r) {
       case IndividualAttendance(:final status):
         if (status == AttendanceStatus.full) {
@@ -216,5 +247,7 @@ class _WorkerAcc {
         crewDays: crewDays,
         crewHeadcountTotal: crewHeadcountTotal,
         grossKurus: grossKurus,
+        overtimeHours: overtimeHours,
+        overtimeKurus: overtimeKurus,
       );
 }

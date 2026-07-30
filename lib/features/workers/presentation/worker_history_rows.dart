@@ -12,10 +12,14 @@ class _AttendanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detail = switch (record) {
+    final base = switch (record) {
       IndividualAttendance(:final status) => status.label,
       CrewAttendance(:final headcount) => '$headcount kişi',
     };
+    // Mesai varsa gün etiketine eklenir → tutarın neden yevmiyeden yüksek
+    // olduğu satırda görünür ("Tam • 2 saat mesai").
+    final hours = record.overtimeHoursCounted;
+    final detail = hours > 0 ? '$base • $hours saat mesai' : base;
     return ListTile(
       dense: true,
       leading: const Icon(Icons.event, size: 20),

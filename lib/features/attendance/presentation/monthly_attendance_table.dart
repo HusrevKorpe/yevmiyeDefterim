@@ -433,6 +433,25 @@ class _DayCell extends StatelessWidget {
                 style: TextStyle(
                     color: theme.colorScheme.onSurfaceVariant, fontSize: 16));
         }
+        // Mesai varsa işaretin yanına küçük saat üst simgesi ("✓²") → günlük
+        // tutarın neden yevmiyeden yüksek olduğu tabloda da anlaşılır.
+        if (c.overtimeHours > 0) {
+          mark = Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              mark,
+              Text(
+                '${c.overtimeHours}',
+                style: TextStyle(
+                  color: theme.colorScheme.tertiary,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 9,
+                ),
+              ),
+            ],
+          );
+        }
       }
     }
 

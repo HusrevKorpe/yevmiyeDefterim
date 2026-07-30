@@ -54,6 +54,17 @@ abstract class Worker with _$Worker {
     /// = ₺20.000). Girilmemişse (null) elebaşı yalnız kişi sayısı takip edilir.
     int? dailyWageOverrideKurus,
 
+    /// Mesai (fazla çalışma) SAAT ücreti (kuruş) — isteğe bağlı, yalnız bireysel
+    /// işçide anlamlı. Yoklamada girilen mesai saatiyle çarpılır (örn. 2 saat ×
+    /// ₺100 = ₺200) ve o günün kazancına eklenir.
+    ///
+    /// Yevmiyeden TÜRETİLMEZ (yevmiye ÷ 8 gibi bir varsayım yok): sahada mesai
+    /// saati genelde ayrı, yuvarlak bir sayıdır → otomatik bölme sessizce yanlış
+    /// para üretirdi. Girilmemişse (null) mesai saati girilse bile tutar ₺0 olur
+    /// ve yoklama satırı "mesai saat ücreti girilmemiş" uyarısı gösterir
+    /// (yevmiyenin 0 olduğu durumun aynı deseni).
+    int? overtimeHourlyKurus,
+
     /// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
     /// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para
     /// hesabına GİRMEZ (günlük kişi sayısı yoklamada ayrıca tutulur). Yalnız
@@ -73,6 +84,7 @@ abstract class Worker with _$Worker {
       type: _typeFromName(m['type']),
       gender: _genderFromName(m['gender']),
       dailyWageOverrideKurus: _asIntOrNull(m['dailyWageOverrideKurus']),
+      overtimeHourlyKurus: _asIntOrNull(m['overtimeHourlyKurus']),
       defaultHeadcount: _asIntOrNull(m['defaultHeadcount']),
       active: (m['active'] as bool?) ?? true,
     );
@@ -90,6 +102,7 @@ abstract class Worker with _$Worker {
         'type': type.name,
         'gender': gender.name,
         'dailyWageOverrideKurus': dailyWageOverrideKurus,
+        'overtimeHourlyKurus': overtimeHourlyKurus,
         'defaultHeadcount': defaultHeadcount,
         'active': active,
       };

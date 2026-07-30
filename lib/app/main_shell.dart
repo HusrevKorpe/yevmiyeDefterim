@@ -17,7 +17,7 @@ import 'update_notice.dart';
 /// 5 büyük alt menü: Ana Sayfa, İşçiler, Yoklama, Avans, Giderler.
 ///
 /// Para/gider kısıtlı hesapta da BÜTÜN sekmeler görünür (2026-07-23'te Avans
-/// da açıldı); kısıt yalnız yevmiye tutarı gizleme + Rapor/Ayarlar
+/// da açıldı); kısıt yalnız yevmiye tutarı gizleme + Rapor/Yönetim
 /// erişiminde kaldı (bkz. user_access.dart / router redirect). Bir sekme
 /// yeniden koşullu gizlenecek olursa görünür sıra ile router branch indeksi
 /// kayar → eski `branchIndexes` eşleme desenini git geçmişinden geri getir.

@@ -61,6 +61,17 @@ void main() {
       final w = Worker.fromDoc('id6', {'name': 'X', 'active': false});
       expect(w.active, false);
     });
+
+    test('mesai saat ücreti okunur (double → int kuruş)', () {
+      final w = Worker.fromDoc('id9', {'overtimeHourlyKurus': 10000.0});
+      expect(w.overtimeHourlyKurus, 10000);
+      expect(w.overtimeHourlyKurus, isA<int>());
+    });
+
+    test('mesai saat ücreti yoksa null (mesai kullanılmıyor)', () {
+      final w = Worker.fromDoc('id10', {'name': 'X'});
+      expect(w.overtimeHourlyKurus, isNull);
+    });
   });
 
   group('Worker.toMap round-trip', () {
@@ -84,6 +95,20 @@ void main() {
         gender: Gender.male,
       );
       expect(Worker.fromDoc('e', w.toMap()), w);
+    });
+
+    test('mesai saat ücreti round-trip korunur', () {
+      const w = Worker(
+        id: 'a2',
+        name: 'Ali',
+        type: WorkerType.gundelik,
+        gender: Gender.male,
+        dailyWageOverrideKurus: 200000,
+        overtimeHourlyKurus: 10000,
+      );
+      final back = Worker.fromDoc('a2', w.toMap());
+      expect(back, w);
+      expect(back.overtimeHourlyKurus, 10000);
     });
 
     test('elebaşı kişi sayısı round-trip korunur', () {

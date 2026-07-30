@@ -8,10 +8,19 @@ void main() {
         'defaultWageMaleKurus': 200000,
         'defaultWageFemaleKurus': 180000,
         'defaultCrewRateKurus': 150000,
+        'overtimeHourlyKurus': 10000,
       });
       expect(s.defaultWageMaleKurus, 200000);
       expect(s.defaultWageFemaleKurus, 180000);
       expect(s.defaultCrewRateKurus, 150000);
+      expect(s.overtimeHourlyKurus, 10000);
+    });
+
+    // Mesai ücreti sonradan eklendi: alanı olmayan ESKİ config dokümanı
+    // okunabilir kalmalı (0 = girilmemiş), çökmemeli.
+    test('mesai alanı olmayan eski doküman => 0', () {
+      final s = AppSettings.fromMap({'defaultWageMaleKurus': 200000});
+      expect(s.overtimeHourlyKurus, 0);
     });
 
     test('null veri => hepsi 0 (empty)', () {
@@ -38,6 +47,7 @@ void main() {
         defaultWageMaleKurus: 200000,
         defaultWageFemaleKurus: 180050,
         defaultCrewRateKurus: 150000,
+        overtimeHourlyKurus: 12550,
       );
       expect(AppSettings.fromMap(s.toMap()), s);
     });

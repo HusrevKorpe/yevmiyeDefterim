@@ -17,8 +17,20 @@ mixin _$Worker {
  String get id; String get name; WorkerType get type; Gender get gender;/// İşçinin günlük ücreti (kuruş). Sabit/varsayılan yevmiye kaldırıldı →
 /// bireysel işçide bu alan TEK ücret kaynağıdır (ekle/düzenlede zorunlu).
 /// Null yalnız eski ya da kısıtlı-hesap kayıtlarında olur → yoklamada 0 sayılır.
-/// Elebaşı için anlamsız (ödeme toplu, kişi bazlı ücret yok).
- int? get dailyWageOverrideKurus;/// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
+///
+/// Elebaşıda bu alan KİŞİ BAŞI günlük yevmiyedir (isteğe bağlı): yoklamada
+/// gelen kişi sayısıyla çarpılıp o günün kazancı olur (örn. 20 kişi × ₺1.000
+/// = ₺20.000). Girilmemişse (null) elebaşı yalnız kişi sayısı takip edilir.
+ int? get dailyWageOverrideKurus;/// Mesai (fazla çalışma) SAAT ücreti (kuruş) — isteğe bağlı, yalnız bireysel
+/// işçide anlamlı. Yoklamada girilen mesai saatiyle çarpılır (örn. 2 saat ×
+/// ₺100 = ₺200) ve o günün kazancına eklenir.
+///
+/// Yevmiyeden TÜRETİLMEZ (yevmiye ÷ 8 gibi bir varsayım yok): sahada mesai
+/// saati genelde ayrı, yuvarlak bir sayıdır → otomatik bölme sessizce yanlış
+/// para üretirdi. Girilmemişse (null) mesai saati girilse bile tutar ₺0 olur
+/// ve yoklama satırı "mesai saat ücreti girilmemiş" uyarısı gösterir
+/// (yevmiyenin 0 olduğu durumun aynı deseni).
+ int? get overtimeHourlyKurus;/// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
 /// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para
 /// hesabına GİRMEZ (günlük kişi sayısı yoklamada ayrıca tutulur). Yalnız
 /// elebaşı için anlamlı; bireysel işçide null. Null/0 => gösterilmez.
@@ -34,16 +46,16 @@ $WorkerCopyWith<Worker> get copyWith => _$WorkerCopyWithImpl<Worker>(this as Wor
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is Worker&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.type, type) || other.type == type)&&(identical(other.gender, gender) || other.gender == gender)&&(identical(other.dailyWageOverrideKurus, dailyWageOverrideKurus) || other.dailyWageOverrideKurus == dailyWageOverrideKurus)&&(identical(other.defaultHeadcount, defaultHeadcount) || other.defaultHeadcount == defaultHeadcount)&&(identical(other.active, active) || other.active == active));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is Worker&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.type, type) || other.type == type)&&(identical(other.gender, gender) || other.gender == gender)&&(identical(other.dailyWageOverrideKurus, dailyWageOverrideKurus) || other.dailyWageOverrideKurus == dailyWageOverrideKurus)&&(identical(other.overtimeHourlyKurus, overtimeHourlyKurus) || other.overtimeHourlyKurus == overtimeHourlyKurus)&&(identical(other.defaultHeadcount, defaultHeadcount) || other.defaultHeadcount == defaultHeadcount)&&(identical(other.active, active) || other.active == active));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,type,gender,dailyWageOverrideKurus,defaultHeadcount,active);
+int get hashCode => Object.hash(runtimeType,id,name,type,gender,dailyWageOverrideKurus,overtimeHourlyKurus,defaultHeadcount,active);
 
 @override
 String toString() {
-  return 'Worker(id: $id, name: $name, type: $type, gender: $gender, dailyWageOverrideKurus: $dailyWageOverrideKurus, defaultHeadcount: $defaultHeadcount, active: $active)';
+  return 'Worker(id: $id, name: $name, type: $type, gender: $gender, dailyWageOverrideKurus: $dailyWageOverrideKurus, overtimeHourlyKurus: $overtimeHourlyKurus, defaultHeadcount: $defaultHeadcount, active: $active)';
 }
 
 
@@ -54,7 +66,7 @@ abstract mixin class $WorkerCopyWith<$Res>  {
   factory $WorkerCopyWith(Worker value, $Res Function(Worker) _then) = _$WorkerCopyWithImpl;
 @useResult
 $Res call({
- String id, String name, WorkerType type, Gender gender, int? dailyWageOverrideKurus, int? defaultHeadcount, bool active
+ String id, String name, WorkerType type, Gender gender, int? dailyWageOverrideKurus, int? overtimeHourlyKurus, int? defaultHeadcount, bool active
 });
 
 
@@ -71,13 +83,14 @@ class _$WorkerCopyWithImpl<$Res>
 
 /// Create a copy of Worker
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? type = null,Object? gender = null,Object? dailyWageOverrideKurus = freezed,Object? defaultHeadcount = freezed,Object? active = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? type = null,Object? gender = null,Object? dailyWageOverrideKurus = freezed,Object? overtimeHourlyKurus = freezed,Object? defaultHeadcount = freezed,Object? active = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as WorkerType,gender: null == gender ? _self.gender : gender // ignore: cast_nullable_to_non_nullable
 as Gender,dailyWageOverrideKurus: freezed == dailyWageOverrideKurus ? _self.dailyWageOverrideKurus : dailyWageOverrideKurus // ignore: cast_nullable_to_non_nullable
+as int?,overtimeHourlyKurus: freezed == overtimeHourlyKurus ? _self.overtimeHourlyKurus : overtimeHourlyKurus // ignore: cast_nullable_to_non_nullable
 as int?,defaultHeadcount: freezed == defaultHeadcount ? _self.defaultHeadcount : defaultHeadcount // ignore: cast_nullable_to_non_nullable
 as int?,active: null == active ? _self.active : active // ignore: cast_nullable_to_non_nullable
 as bool,
@@ -165,10 +178,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  WorkerType type,  Gender gender,  int? dailyWageOverrideKurus,  int? defaultHeadcount,  bool active)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String name,  WorkerType type,  Gender gender,  int? dailyWageOverrideKurus,  int? overtimeHourlyKurus,  int? defaultHeadcount,  bool active)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Worker() when $default != null:
-return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverrideKurus,_that.defaultHeadcount,_that.active);case _:
+return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverrideKurus,_that.overtimeHourlyKurus,_that.defaultHeadcount,_that.active);case _:
   return orElse();
 
 }
@@ -186,10 +199,10 @@ return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverr
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  WorkerType type,  Gender gender,  int? dailyWageOverrideKurus,  int? defaultHeadcount,  bool active)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String name,  WorkerType type,  Gender gender,  int? dailyWageOverrideKurus,  int? overtimeHourlyKurus,  int? defaultHeadcount,  bool active)  $default,) {final _that = this;
 switch (_that) {
 case _Worker():
-return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverrideKurus,_that.defaultHeadcount,_that.active);case _:
+return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverrideKurus,_that.overtimeHourlyKurus,_that.defaultHeadcount,_that.active);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -206,10 +219,10 @@ return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverr
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  WorkerType type,  Gender gender,  int? dailyWageOverrideKurus,  int? defaultHeadcount,  bool active)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String name,  WorkerType type,  Gender gender,  int? dailyWageOverrideKurus,  int? overtimeHourlyKurus,  int? defaultHeadcount,  bool active)?  $default,) {final _that = this;
 switch (_that) {
 case _Worker() when $default != null:
-return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverrideKurus,_that.defaultHeadcount,_that.active);case _:
+return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverrideKurus,_that.overtimeHourlyKurus,_that.defaultHeadcount,_that.active);case _:
   return null;
 
 }
@@ -221,7 +234,7 @@ return $default(_that.id,_that.name,_that.type,_that.gender,_that.dailyWageOverr
 
 
 class _Worker extends Worker {
-  const _Worker({required this.id, required this.name, required this.type, required this.gender, this.dailyWageOverrideKurus, this.defaultHeadcount, this.active = true}): super._();
+  const _Worker({required this.id, required this.name, required this.type, required this.gender, this.dailyWageOverrideKurus, this.overtimeHourlyKurus, this.defaultHeadcount, this.active = true}): super._();
   
 
 @override final  String id;
@@ -231,8 +244,21 @@ class _Worker extends Worker {
 /// İşçinin günlük ücreti (kuruş). Sabit/varsayılan yevmiye kaldırıldı →
 /// bireysel işçide bu alan TEK ücret kaynağıdır (ekle/düzenlede zorunlu).
 /// Null yalnız eski ya da kısıtlı-hesap kayıtlarında olur → yoklamada 0 sayılır.
-/// Elebaşı için anlamsız (ödeme toplu, kişi bazlı ücret yok).
+///
+/// Elebaşıda bu alan KİŞİ BAŞI günlük yevmiyedir (isteğe bağlı): yoklamada
+/// gelen kişi sayısıyla çarpılıp o günün kazancı olur (örn. 20 kişi × ₺1.000
+/// = ₺20.000). Girilmemişse (null) elebaşı yalnız kişi sayısı takip edilir.
 @override final  int? dailyWageOverrideKurus;
+/// Mesai (fazla çalışma) SAAT ücreti (kuruş) — isteğe bağlı, yalnız bireysel
+/// işçide anlamlı. Yoklamada girilen mesai saatiyle çarpılır (örn. 2 saat ×
+/// ₺100 = ₺200) ve o günün kazancına eklenir.
+///
+/// Yevmiyeden TÜRETİLMEZ (yevmiye ÷ 8 gibi bir varsayım yok): sahada mesai
+/// saati genelde ayrı, yuvarlak bir sayıdır → otomatik bölme sessizce yanlış
+/// para üretirdi. Girilmemişse (null) mesai saati girilse bile tutar ₺0 olur
+/// ve yoklama satırı "mesai saat ücreti girilmemiş" uyarısı gösterir
+/// (yevmiyenin 0 olduğu durumun aynı deseni).
+@override final  int? overtimeHourlyKurus;
 /// Elebaşının getirdiği kişi sayısı — YALNIZCA bilgi amaçlı gösterilir.
 /// Listede/detayda "N kişilik ekip" olarak görünür; yoklama ve para
 /// hesabına GİRMEZ (günlük kişi sayısı yoklamada ayrıca tutulur). Yalnız
@@ -251,16 +277,16 @@ _$WorkerCopyWith<_Worker> get copyWith => __$WorkerCopyWithImpl<_Worker>(this, _
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Worker&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.type, type) || other.type == type)&&(identical(other.gender, gender) || other.gender == gender)&&(identical(other.dailyWageOverrideKurus, dailyWageOverrideKurus) || other.dailyWageOverrideKurus == dailyWageOverrideKurus)&&(identical(other.defaultHeadcount, defaultHeadcount) || other.defaultHeadcount == defaultHeadcount)&&(identical(other.active, active) || other.active == active));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _Worker&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.type, type) || other.type == type)&&(identical(other.gender, gender) || other.gender == gender)&&(identical(other.dailyWageOverrideKurus, dailyWageOverrideKurus) || other.dailyWageOverrideKurus == dailyWageOverrideKurus)&&(identical(other.overtimeHourlyKurus, overtimeHourlyKurus) || other.overtimeHourlyKurus == overtimeHourlyKurus)&&(identical(other.defaultHeadcount, defaultHeadcount) || other.defaultHeadcount == defaultHeadcount)&&(identical(other.active, active) || other.active == active));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,type,gender,dailyWageOverrideKurus,defaultHeadcount,active);
+int get hashCode => Object.hash(runtimeType,id,name,type,gender,dailyWageOverrideKurus,overtimeHourlyKurus,defaultHeadcount,active);
 
 @override
 String toString() {
-  return 'Worker(id: $id, name: $name, type: $type, gender: $gender, dailyWageOverrideKurus: $dailyWageOverrideKurus, defaultHeadcount: $defaultHeadcount, active: $active)';
+  return 'Worker(id: $id, name: $name, type: $type, gender: $gender, dailyWageOverrideKurus: $dailyWageOverrideKurus, overtimeHourlyKurus: $overtimeHourlyKurus, defaultHeadcount: $defaultHeadcount, active: $active)';
 }
 
 
@@ -271,7 +297,7 @@ abstract mixin class _$WorkerCopyWith<$Res> implements $WorkerCopyWith<$Res> {
   factory _$WorkerCopyWith(_Worker value, $Res Function(_Worker) _then) = __$WorkerCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String name, WorkerType type, Gender gender, int? dailyWageOverrideKurus, int? defaultHeadcount, bool active
+ String id, String name, WorkerType type, Gender gender, int? dailyWageOverrideKurus, int? overtimeHourlyKurus, int? defaultHeadcount, bool active
 });
 
 
@@ -288,13 +314,14 @@ class __$WorkerCopyWithImpl<$Res>
 
 /// Create a copy of Worker
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? type = null,Object? gender = null,Object? dailyWageOverrideKurus = freezed,Object? defaultHeadcount = freezed,Object? active = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? type = null,Object? gender = null,Object? dailyWageOverrideKurus = freezed,Object? overtimeHourlyKurus = freezed,Object? defaultHeadcount = freezed,Object? active = null,}) {
   return _then(_Worker(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,type: null == type ? _self.type : type // ignore: cast_nullable_to_non_nullable
 as WorkerType,gender: null == gender ? _self.gender : gender // ignore: cast_nullable_to_non_nullable
 as Gender,dailyWageOverrideKurus: freezed == dailyWageOverrideKurus ? _self.dailyWageOverrideKurus : dailyWageOverrideKurus // ignore: cast_nullable_to_non_nullable
+as int?,overtimeHourlyKurus: freezed == overtimeHourlyKurus ? _self.overtimeHourlyKurus : overtimeHourlyKurus // ignore: cast_nullable_to_non_nullable
 as int?,defaultHeadcount: freezed == defaultHeadcount ? _self.defaultHeadcount : defaultHeadcount // ignore: cast_nullable_to_non_nullable
 as int?,active: null == active ? _self.active : active // ignore: cast_nullable_to_non_nullable
 as bool,

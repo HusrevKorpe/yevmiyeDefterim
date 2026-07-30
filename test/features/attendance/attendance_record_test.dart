@@ -172,6 +172,86 @@ void main() {
     });
   });
 
+  group('mesai (overtime) — saat × dondurulmuş saat ücreti', () {
+    AttendanceRecord withOvertime(
+      AttendanceStatus status, {
+      int wage = 200000,
+      int hours = 0,
+      int rate = 0,
+    }) =>
+        AttendanceRecord.individual(
+          id: '2026-07-18_w1',
+          date: '2026-07-18',
+          workerId: 'w1',
+          workerName: 'Ahmet',
+          workerType: WorkerType.gundelik,
+          status: status,
+          wageSnapshotKurus: wage,
+          overtimeHours: hours,
+          overtimeRateSnapshotKurus: rate,
+        );
+
+    test('varsayılan mesai yok (0 saat, 0 tutar)', () {
+      final r = ind(AttendanceStatus.full, 200000);
+      expect(r.overtimeKurus, 0);
+      expect(r.overtimeHoursCounted, 0);
+      expect(r.earningKurus, 200000);
+    });
+
+    test('tam gün + 2 saat mesai = yevmiye + saat × ücret', () {
+      final r = withOvertime(AttendanceStatus.full, hours: 2, rate: 10000);
+      expect(r.overtimeKurus, 20000);
+      expect(r.earningKurus, 220000);
+    });
+
+    test('yarım gün + mesai: yarım yevmiye üstüne mesai eklenir', () {
+      final r = withOvertime(AttendanceStatus.half, hours: 3, rate: 10000);
+      expect(r.earningKurus, 100000 + 30000);
+    });
+
+    test('"Yok" günde mesai sayılmaz (gelmeyen işçinin mesaisi olamaz)', () {
+      final r = withOvertime(AttendanceStatus.absent, hours: 3, rate: 10000);
+      expect(r.overtimeKurus, 0);
+      expect(r.overtimeHoursCounted, 0);
+      expect(r.earningKurus, 0);
+    });
+
+    test('saat ücreti girilmemişse (0) mesai tutarı 0 kalır', () {
+      final r = withOvertime(AttendanceStatus.full, hours: 4);
+      expect(r.overtimeKurus, 0);
+      expect(r.earningKurus, 200000);
+      // Saat bilgisi yine durur (kullanıcı ücreti sonradan girebilir).
+      expect(r.overtimeHoursCounted, 4);
+    });
+
+    test('elebaşıda mesai yoktur → her zaman 0', () {
+      expect(crew(5, 150000).overtimeKurus, 0);
+      expect(crew(5, 150000).overtimeHoursCounted, 0);
+    });
+
+    test('round-trip (mesai dolu)', () {
+      final r = withOvertime(AttendanceStatus.full, hours: 2, rate: 10000);
+      expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
+    });
+
+    test('toMap mesai 0 iken de alanları YAZAR (merge:true altında temizler)',
+        () {
+      final m = ind(AttendanceStatus.full, 200000).toMap();
+      expect(m['overtimeHours'], 0);
+      expect(m['overtimeRateSnapshotKurus'], 0);
+    });
+
+    test('mesai alanı olmayan eski doküman sorunsuz okunur (0 saat)', () {
+      final r = AttendanceRecord.fromDoc('x', {
+        'workerType': 'gundelik',
+        'status': 'full',
+        'wageSnapshotKurus': 200000,
+      });
+      expect(r.overtimeKurus, 0);
+      expect(r.earningKurus, 200000);
+    });
+  });
+
   group('paidPayrollId / isPaid (çifte ödeme engeli — kural §6)', () {
     test('varsayılan ödenmemiş', () {
       expect(ind(AttendanceStatus.full, 200000).isPaid, isFalse);

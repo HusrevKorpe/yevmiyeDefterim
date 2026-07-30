@@ -171,6 +171,20 @@ class _IndividualTile extends ConsumerWidget {
       fieldName: record?.fieldName,
       onFieldChanged: (f) =>
           _confirmPastEdit(context, ref, () => vm.setField(worker, f)),
+      // Mesai (isteğe bağlı): Tam/Yarım seçilince saat çipleri görünür.
+      overtimeHours: record?.overtimeHours ?? 0,
+      // Kayıtta mesai varsa DONDURULMUŞ saat ücreti okunur (kural §4 — yevmiye
+      // snapshot'ıyla aynı); yoksa güncel ücret önden gösterilir: Yönetim'deki
+      // genel mesai ücreti, işçinin kendi istisnası varsa o (hiçbiri yoksa 0 →
+      // şeritte uyarı çıkar).
+      overtimeRateKurus: (record != null && record.overtimeRateSnapshotKurus > 0)
+          ? record.overtimeRateSnapshotKurus
+          : resolveOvertimeRateKurus(
+              workerHourlyKurus: worker.overtimeHourlyKurus,
+              defaultHourlyKurus: settings.overtimeHourlyKurus,
+            ),
+      onOvertimeChanged: (h) =>
+          _confirmPastEdit(context, ref, () => vm.setOvertimeHours(worker, h)),
     );
   }
 }

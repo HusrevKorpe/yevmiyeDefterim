@@ -646,4 +646,304 @@ void main() {
       expect(r.fieldName, 'Aşağı Tarla');
     });
   });
+
+  // --- Mesai (setOvertimeHours) — saat girilir, saat ücreti dondurulur ---
+
+  group('mesai (setOvertimeHours)', () {
+    /// Mesai saat ücreti ₺100 olan işçi (kişi başı yevmiye ₺2.000).
+    const withRate = Worker(
+      id: 'w1',
+      name: 'Ahmet',
+      type: WorkerType.gundelik,
+      gender: Gender.male,
+      dailyWageOverrideKurus: 200000,
+      overtimeHourlyKurus: 10000,
+    );
+
+    /// Seçili günde [withRate] için Tam gün kaydı açar ve sağlayıcıya yansımasını
+    /// bekler (ViewModel mevcut kaydı senkron okur).
+    Future<void> seedFullDay([Worker worker = withRate]) async {
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+      await vm().setStatus(worker, AttendanceStatus.full);
+      await waitUntil(() => container
+          .read(attendanceByWorkerForDateProvider)
+          .containsKey(worker.id));
+    }
+
+    test('saat yazılır, saat ücreti dondurulur, kazanç yevmiye + mesai olur',
+        () async {
+      await boot(settings);
+      await seedFullDay();
+
+      await vm().setOvertimeHours(withRate, 2);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeHours, 2);
+      expect(r.overtimeRateSnapshotKurus, 10000); // donduruldu
+      expect(r.earningKurus, 200000 + 20000);
+      expect(attendance.count, 1); // çift kayıt yok
+    });
+
+    /// Mesai saat ücreti GİRİLMEMİŞ işçi — ücreti Yönetim'deki genel ayardan
+    /// gelmelidir (tek yerden girilen ortak ücret).
+    const noRate = Worker(
+      id: 'w1',
+      name: 'Ahmet',
+      type: WorkerType.gundelik,
+      gender: Gender.male,
+      dailyWageOverrideKurus: 200000,
+    );
+
+    /// Genel mesai ücreti ₺100 olan ayar (Yönetim ekranından girilen değer).
+    const withGlobalRate = AppSettings(
+      defaultWageMaleKurus: 200000,
+      defaultWageFemaleKurus: 180000,
+      defaultCrewRateKurus: 150000,
+      overtimeHourlyKurus: 10000,
+    );
+
+    test('işçide ücret yoksa Yönetim\'deki genel mesai ücreti donar', () async {
+      await boot(withGlobalRate);
+      await seedFullDay(noRate);
+
+      await vm().setOvertimeHours(noRate, 2);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeRateSnapshotKurus, 10000);
+      expect(r.earningKurus, 200000 + 20000);
+    });
+
+    test('işçinin kendi mesai ücreti genel ücreti EZER', () async {
+      // Genel ₺100 iken işçinin kendi ücreti ₺150 (istisna).
+      await boot(withGlobalRate);
+      const different = Worker(
+        id: 'w1',
+        name: 'Ahmet',
+        type: WorkerType.gundelik,
+        gender: Gender.male,
+        dailyWageOverrideKurus: 200000,
+        overtimeHourlyKurus: 15000,
+      );
+      await seedFullDay(different);
+
+      await vm().setOvertimeHours(different, 2);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeRateSnapshotKurus, 15000);
+      expect(r.earningKurus, 200000 + 30000);
+    });
+
+    // Genel ücret sonradan değişse bile GEÇMİŞ gün oynamaz (kural §4) — ayar
+    // yolundan gelen ücret de yoklama anında donar.
+    test('genel ücret değişse de dondurulmuş mesai tutarı korunur', () async {
+      await boot(withGlobalRate);
+      await seedFullDay(noRate);
+      await vm().setOvertimeHours(noRate, 2); // ₺100/saat dondu
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[noRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeRateSnapshotKurus ==
+          10000);
+
+      // Yönetim'den genel ücret ₺100 → ₺200 yapıldı, sonra aynı gün düzeltildi.
+      await settingsRepo
+          .save(withGlobalRate.copyWith(overtimeHourlyKurus: 20000));
+      await waitUntil(() =>
+          container.read(settingsStreamProvider).asData?.value
+              .overtimeHourlyKurus ==
+          20000);
+      await vm().setOvertimeHours(noRate, 3);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeHours, 3);
+      expect(r.overtimeRateSnapshotKurus, 10000,
+          reason: 'geçmiş gün eski (dondurulmuş) ücretle kalmalı');
+      expect(r.earningKurus, 200000 + 30000);
+    });
+
+    test('kaydı olmayan işçide no-op (mesai tek başına gün yaratmaz)', () async {
+      await boot(settings);
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+
+      await vm().setOvertimeHours(withRate, 3);
+
+      expect(attendance.count, 0);
+    });
+
+    test('0 saat mesaiyi kaldırır ve dondurulmuş ücreti sıfırlar', () async {
+      await boot(settings);
+      await seedFullDay();
+      await vm().setOvertimeHours(withRate, 2);
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[withRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeHours ==
+          2);
+
+      await vm().setOvertimeHours(withRate, 0);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeHours, 0);
+      expect(r.overtimeRateSnapshotKurus, 0);
+      expect(r.earningKurus, 200000); // yalnız yevmiye
+    });
+
+    test('üst sınır: $kMaxOvertimeHours saatten fazlası kırpılır', () async {
+      await boot(settings);
+      await seedFullDay();
+
+      await vm().setOvertimeHours(withRate, 99);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeHours, kMaxOvertimeHours);
+    });
+
+    test('negatif saat 0 sayılır', () async {
+      await boot(settings);
+      await seedFullDay();
+
+      await vm().setOvertimeHours(withRate, -3);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeHours, 0);
+    });
+
+    // REGRESYON (kural §4): mesai saat ücreti de yoklama ANINDA donar; sonradan
+    // işçinin saat ücretini değiştirmek geçmiş günün mesai tutarını oynatmamalı.
+    test('zamdan sonra saat düzeltmek dondurulmuş saat ücretini KORUR',
+        () async {
+      await boot(settings);
+      await seedFullDay();
+      await vm().setOvertimeHours(withRate, 2); // ₺100/saat dondu
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[withRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeRateSnapshotKurus ==
+          10000);
+
+      // Saat ücretine zam (₺100 → ₺150) ve AYNI günde saati düzelt.
+      const raised = Worker(
+        id: 'w1',
+        name: 'Ahmet',
+        type: WorkerType.gundelik,
+        gender: Gender.male,
+        dailyWageOverrideKurus: 200000,
+        overtimeHourlyKurus: 15000,
+      );
+      await vm().setOvertimeHours(raised, 3);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeHours, 3);
+      expect(r.overtimeRateSnapshotKurus, 10000,
+          reason: 'düzenleme dondurulmuş saat ücretini korumalı (15000 değil)');
+      expect(r.earningKurus, 200000 + 30000);
+    });
+
+    // Saat ücreti girilmemişken mesai girildiyse tutar 0'dır; ücret sonradan
+    // girilince SONRAKİ dokunuş güncel ücreti dondurur (kilitlenip kalmaz).
+    test('ücret sonradan girilirse sonraki dokunuş güncel ücreti dondurur',
+        () async {
+      // Genel ücret de girilmemiş (settings.overtimeHourlyKurus == 0).
+      await boot(settings);
+      await seedFullDay(noRate);
+      await vm().setOvertimeHours(noRate, 2); // ücret yok → tutar 0
+      var r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeRateSnapshotKurus, 0);
+      expect(r.earningKurus, 200000);
+
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[noRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeHours ==
+          2);
+      await vm().setOvertimeHours(withRate, 2); // artık ₺100/saat girili
+
+      r = attendance.all.single as IndividualAttendance;
+      expect(r.overtimeRateSnapshotKurus, 10000);
+      expect(r.earningKurus, 200000 + 20000);
+    });
+
+    test('durum Tam → Yarım değişince mesai korunur', () async {
+      await boot(settings);
+      await seedFullDay();
+      await vm().setOvertimeHours(withRate, 2);
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[withRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeHours ==
+          2);
+
+      await vm().setStatus(withRate, AttendanceStatus.half);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.status, AttendanceStatus.half);
+      expect(r.overtimeHours, 2);
+      expect(r.overtimeRateSnapshotKurus, 10000);
+      expect(r.earningKurus, 100000 + 20000);
+    });
+
+    // "Yok" işaretlenince mesai TEMİZLENİR: mesai şeridi ekranda kapanır, kalan
+    // saat görünmeyen bir hayalet gider olurdu.
+    test('durum "Yok" olunca mesai temizlenir', () async {
+      await boot(settings);
+      await seedFullDay();
+      await vm().setOvertimeHours(withRate, 2);
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[withRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeHours ==
+          2);
+
+      await vm().setStatus(withRate, AttendanceStatus.absent);
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.status, AttendanceStatus.absent);
+      expect(r.overtimeHours, 0);
+      expect(r.overtimeRateSnapshotKurus, 0);
+      expect(r.earningKurus, 0);
+    });
+
+    test('tarla seçimi mesaiyi bozmaz', () async {
+      await boot(settings);
+      await seedFullDay();
+      await vm().setOvertimeHours(withRate, 2);
+      await waitUntil(() =>
+          (container.read(attendanceByWorkerForDateProvider)[withRate.id]
+                  as IndividualAttendance?)
+              ?.overtimeHours ==
+          2);
+
+      await vm().setField(withRate, const Field(id: 't1', name: 'Aşağı Tarla'));
+
+      final r = attendance.all.single as IndividualAttendance;
+      expect(r.fieldId, 't1');
+      expect(r.overtimeHours, 2);
+      expect(r.overtimeRateSnapshotKurus, 10000);
+    });
+
+    test('elebaşı kaydında mesai no-op (elebaşıda mesai yok)', () async {
+      await boot(settings);
+      const boss = Worker(
+        id: 'e1',
+        name: 'Usta',
+        type: WorkerType.elebasi,
+        gender: Gender.male,
+        dailyWageOverrideKurus: 100000,
+      );
+      container.read(selectedDateProvider.notifier).set('2026-07-20');
+      await loadSelectedDate();
+      await vm().setHeadcount(boss, 4);
+      await waitUntil(() => container
+          .read(attendanceByWorkerForDateProvider)
+          .containsKey(boss.id));
+
+      await vm().setOvertimeHours(boss, 3);
+
+      final r = attendance.all.single as CrewAttendance;
+      expect(r.headcount, 4);
+      expect(r.earningKurus, 4 * 100000); // mesai eklenmedi
+    });
+  });
 }

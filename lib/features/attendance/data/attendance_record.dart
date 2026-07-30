@@ -12,6 +12,11 @@ import '../../workers/data/worker.dart';
 
 part 'attendance_record.freezed.dart';
 
+/// Bir günde girilebilecek en fazla mesai saati. Hazır çipler (1–4 saat) dışında
+/// elle girilen ("Diğer") saat de bu sınırla kırpılır → yanlış basımla 100 saat
+/// mesai yazılıp kazancın şişmesi engellenir.
+const int kMaxOvertimeHours = 16;
+
 /// Bireysel işçi günlük durumu.
 enum AttendanceStatus { full, half, absent }
 
@@ -35,6 +40,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
   /// [fieldId]/[fieldName]: o gün çalışılan tarla (İSTEĞE BAĞLI seçim — "kim
   /// nerede çalıştı"). Ad denormalize saklanır (kural §5): tarla sonradan
   /// silinse/adı değişse bile geçmiş kayıt okunur kalır.
+  ///
+  /// [overtimeHours]/[overtimeRateSnapshotKurus]: o gün kalınan mesai (fazla
+  /// çalışma) saati + o günkü SAAT ücreti dondurulmuş (kural §4 — yevmiye
+  /// snapshot'ıyla aynı mantık). Mesai isteğe bağlıdır; 0 saat = mesai yok.
   const factory AttendanceRecord.individual({
     required String id,
     required String date,
@@ -43,6 +52,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
     required WorkerType workerType,
     required AttendanceStatus status,
     required int wageSnapshotKurus,
+    @Default(0) int overtimeHours,
+    @Default(0) int overtimeRateSnapshotKurus,
     String? paidPayrollId,
     String? fieldId,
     String? fieldName,
@@ -69,16 +80,43 @@ sealed class AttendanceRecord with _$AttendanceRecord {
   /// katılmaz (çifte ödeme engeli — kural §6).
   bool get isPaid => paidPayrollId != null;
 
+  /// O günkü mesai tutarı (kuruş) = saat × dondurulmuş saat ücreti.
+  ///
+  /// "Yok" işaretli günde 0'dır: gelmeyen işçinin mesaisi olamaz. (Yoklama
+  /// ekranı "Yok" seçilince mesai saatini de temizler; bu koruma başka bir
+  /// cihazdan gelen tutarsız kayıtta hayalet mesai ücreti oluşmasını engeller.)
+  /// Elebaşıda mesai YOK → her zaman 0.
+  int get overtimeKurus => switch (this) {
+        IndividualAttendance(
+          :final status,
+          :final overtimeHours,
+          :final overtimeRateSnapshotKurus,
+        ) =>
+          status == AttendanceStatus.absent
+              ? 0
+              : overtimeHours * overtimeRateSnapshotKurus,
+        CrewAttendance() => 0,
+      };
+
+  /// Kazanca giren mesai saati. "Yok" günde 0, elebaşıda 0 ([overtimeKurus] ile
+  /// aynı kural) → rapor saat toplamı ile mesai tutarı hep tutarlıdır.
+  int get overtimeHoursCounted => switch (this) {
+        IndividualAttendance(:final status, :final overtimeHours) =>
+          status == AttendanceStatus.absent ? 0 : overtimeHours,
+        CrewAttendance() => 0,
+      };
+
   /// O günkü kazanç (kuruş). Geçmiş ücret asla yeniden türetilmez; snapshot okunur
-  /// (kural §4). Bireysel: tam=ücret, yarım=ücret~/2, yok=0.
-  /// Elebaşı: agreedPay ?? kişi × kişiücret.
+  /// (kural §4). Bireysel: tam=ücret, yarım=ücret~/2, yok=0 — üstüne mesai
+  /// ([overtimeKurus]) eklenir. Elebaşı: agreedPay ?? kişi × kişiücret.
   int get earningKurus => switch (this) {
         IndividualAttendance(:final status, :final wageSnapshotKurus) =>
           switch (status) {
             AttendanceStatus.full => wageSnapshotKurus,
             AttendanceStatus.half => halfWage(wageSnapshotKurus),
             AttendanceStatus.absent => 0,
-          },
+          } +
+              overtimeKurus,
         CrewAttendance(
           :final headcount,
           :final crewRateSnapshotKurus,
@@ -98,6 +136,8 @@ sealed class AttendanceRecord with _$AttendanceRecord {
           :final workerType,
           :final status,
           :final wageSnapshotKurus,
+          :final overtimeHours,
+          :final overtimeRateSnapshotKurus,
           :final fieldId,
           :final fieldName,
         ) =>
@@ -108,6 +148,11 @@ sealed class AttendanceRecord with _$AttendanceRecord {
             'workerType': workerType.name,
             'status': status.name,
             'wageSnapshotKurus': wageSnapshotKurus,
+            // 0 olsa da yazılır: merge:true altında mesaiyi kaldırmak (0 saat)
+            // Firestore'daki eski saati de temizlemeli (tarla alanlarıyla aynı
+            // gerekçe).
+            'overtimeHours': overtimeHours,
+            'overtimeRateSnapshotKurus': overtimeRateSnapshotKurus,
             // Bilerek null'ken de yazılır: merge:true altında tarla seçimini
             // kaldırmak (null) Firestore'daki eski değeri de temizlemeli.
             'fieldId': fieldId,
@@ -166,6 +211,9 @@ sealed class AttendanceRecord with _$AttendanceRecord {
       workerType: _typeFromName(m['workerType']),
       status: _statusFromName(m['status']),
       wageSnapshotKurus: _asInt(m['wageSnapshotKurus']),
+      // Eski kayıtlarda alan yok → 0 (mesai yok).
+      overtimeHours: _asInt(m['overtimeHours']),
+      overtimeRateSnapshotKurus: _asInt(m['overtimeRateSnapshotKurus']),
       paidPayrollId: m['paidPayrollId'] as String?,
       fieldId: m['fieldId'] as String?,
       fieldName: m['fieldName'] as String?,

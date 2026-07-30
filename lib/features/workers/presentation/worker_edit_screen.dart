@@ -11,6 +11,8 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
+import '../../auth/application/user_access.dart';
+import '../../settings/application/settings_providers.dart';
 import '../application/worker_edit_view_model.dart';
 import '../data/worker.dart';
 
@@ -28,6 +30,7 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _overrideCtrl;
+  late final TextEditingController _overtimeCtrl;
   late final TextEditingController _headcountCtrl;
   late WorkerType _type;
 
@@ -49,6 +52,11 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
           ? ''
           : formatKurusPlain(w!.dailyWageOverrideKurus!),
     );
+    _overtimeCtrl = TextEditingController(
+      text: (w?.overtimeHourlyKurus == null)
+          ? ''
+          : formatKurusPlain(w!.overtimeHourlyKurus!),
+    );
     _headcountCtrl = TextEditingController(
       text: (w == null || w.crewSize == 0) ? '' : '${w.crewSize}',
     );
@@ -61,6 +69,7 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _overrideCtrl.dispose();
+    _overtimeCtrl.dispose();
     _headcountCtrl.dispose();
     super.dispose();
   }
@@ -89,6 +98,12 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
       // (isteğe bağlı → boşsa null, yoklamada yalnız kişi sayısı tutulur).
       gender: _type.isCrew ? Gender.male : _gender!,
       dailyWageOverrideKurus: parseTlToKurus(_overrideCtrl.text.trim()),
+      // Mesai saat ücreti yalnız bireysel işçide anlamlı (elebaşıda mesai yok);
+      // boş bırakılırsa null → mesai girilse bile tutar 0 kalır ve yoklama
+      // satırı uyarır.
+      overtimeHourlyKurus: _type.isIndividual
+          ? parseTlToKurus(_overtimeCtrl.text.trim())
+          : null,
       // Kişi sayısı yalnız elebaşıda saklanır; bireysele geçilirse temizlenir.
       defaultHeadcount: _type.isCrew ? _parseHeadcount() : null,
       active: widget.worker?.active ?? true,
@@ -133,6 +148,22 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
     final w = widget.worker;
 
     final cs = Theme.of(context).colorScheme;
+
+    // Alanı boş bırakınca ne olacağını SOMUT söyle: Yönetim'de girilmiş genel
+    // mesai ücreti varsa tutarını göster. Tutar yalnız para görebilen hesaba
+    // yazılır (kısıtlı hesap kendi yazdığı dışında para görmez).
+    final globalOvertime = ref
+            .watch(settingsStreamProvider)
+            .asData
+            ?.value
+            .overtimeHourlyKurus ??
+        0;
+    // Metin KISA tutulur: yardım satırı iki satırla sınırlı (helperMaxLines: 2)
+    // → büyük sistem yazısında kırpılmasın. "Yalnız farklıysa" bilgisi zaten
+    // alan başlığında ("Mesai saat ücreti (farklıysa)") duruyor.
+    final overtimeHelper = (globalOvertime > 0 && ref.watch(canSeeMoneyProvider))
+        ? 'Boş bırakın → genel ücret ${formatKurus(globalOvertime)}/saat.'
+        : 'Boş bırakın → Yönetim’deki genel mesai ücreti geçerli.';
 
     return Scaffold(
       appBar: GradientAppBar(title: _isNew ? 'Yeni İşçi' : 'İşçiyi Düzenle'),
@@ -223,6 +254,22 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
                   helperText: 'Bu işçinin günlük yevmiyesi.',
                   enabled: !saving,
                   allowEmpty: false,
+                  filled: true,
+                  textInputAction: TextInputAction.next,
+                ),
+                // Mesai saat ücreti — YALNIZ İSTİSNA içindir. Genel ücret
+                // Yönetim ekranında tek yerden girilir ve herkese uygulanır;
+                // burası yalnız "bu işçinin mesaisi farklı" durumu için. Boş
+                // bırakılırsa genel ücret geçerlidir (resolveOvertimeRateKurus).
+                // Yevmiyeden türetilmez: sahada mesai saati ayrı bir sayıdır.
+                const SizedBox(height: 24),
+                const FieldLabel('Mesai saat ücreti (farklıysa)'),
+                MoneyField(
+                  controller: _overtimeCtrl,
+                  label: 'Saat ücreti',
+                  helperText: overtimeHelper,
+                  enabled: !saving,
+                  allowEmpty: true,
                   filled: true,
                   textInputAction: TextInputAction.done,
                   onSubmitted: _save,

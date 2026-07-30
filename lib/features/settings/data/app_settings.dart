@@ -16,6 +16,17 @@ abstract class AppSettings with _$AppSettings {
     required int defaultWageMaleKurus,
     required int defaultWageFemaleKurus,
     required int defaultCrewRateKurus,
+
+    /// HERKES için geçerli mesai (fazla çalışma) SAAT ücreti (kuruş).
+    ///
+    /// Sahada mesai ücreti işçiden işçiye değişmez → tek yerden (Yönetim
+    /// ekranı) girilir; yoklamada girilen mesai saatiyle çarpılır. Bir işçinin
+    /// mesaisi farklıysa `Worker.overtimeHourlyKurus` bunu EZER (bkz.
+    /// `resolveOvertimeRateKurus`). 0 => girilmemiş (yoklama satırı uyarır).
+    ///
+    /// Not: yevmiye varsayılanları (yukarıdaki üç alan) rafta — yevmiye tek tek
+    /// işçiden okunur. Mesai bilerek tersi yönde: ortak değer, tek giriş.
+    @Default(0) int overtimeHourlyKurus,
   }) = _AppSettings;
 
   /// Ayar dokümanı henüz yokken kullanılan sıfır varsayılan.
@@ -34,6 +45,7 @@ abstract class AppSettings with _$AppSettings {
       defaultWageMaleKurus: _asInt(m['defaultWageMaleKurus']),
       defaultWageFemaleKurus: _asInt(m['defaultWageFemaleKurus']),
       defaultCrewRateKurus: _asInt(m['defaultCrewRateKurus']),
+      overtimeHourlyKurus: _asInt(m['overtimeHourlyKurus']),
     );
   }
 
@@ -42,6 +54,7 @@ abstract class AppSettings with _$AppSettings {
         'defaultWageMaleKurus': defaultWageMaleKurus,
         'defaultWageFemaleKurus': defaultWageFemaleKurus,
         'defaultCrewRateKurus': defaultCrewRateKurus,
+        'overtimeHourlyKurus': overtimeHourlyKurus,
       };
 }
 

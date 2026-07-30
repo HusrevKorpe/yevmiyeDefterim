@@ -18,6 +18,10 @@ class WorkerEarningTile extends StatelessWidget {
     final parts = <String>[];
     if (earning.fullDays > 0) parts.add('${earning.fullDays} tam');
     if (earning.halfDays > 0) parts.add('${earning.halfDays} yarım');
+    // Mesai brütün içinde; burada yalnız saat olarak görünür.
+    if (earning.overtimeHours > 0) {
+      parts.add('${earning.overtimeHours} saat mesai');
+    }
     return parts.isEmpty ? '—' : parts.join(' • ');
   }
 

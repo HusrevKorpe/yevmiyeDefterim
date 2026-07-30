@@ -157,6 +157,8 @@ class _Legend extends StatelessWidget {
           item('✓', _fullColor(context), 'Tam'),
           item('½', _halfColor(context), 'Yarım'),
           item('3', _crewColor(context), 'kişi (elebaşı)'),
+          // Mesai: işaretin yanındaki küçük sayı (örn. ✓2 = tam gün + 2 saat).
+          item('²', theme.colorScheme.tertiary, 'mesai saati'),
         ],
       ),
     );

@@ -1,7 +1,7 @@
 /// Rol/erişim — hangi hesap para bilgisi GÖREMEZ (arayüzde gizleme).
 ///
 /// Uygulama e-posta/şifre ile giriş yapar. Belirli e-posta(lar) ile giriş
-/// yapılınca uygulama "para göremez" moduna geçer: Rapor ve Ayarlar sekme
+/// yapılınca uygulama "para göremez" moduna geçer: Rapor ve Yönetim sekme
 /// ve ekranları gizlenir; yevmiye/özel ücret tutarları hiçbir ekranda görünmez.
 /// Yoklama açık kalır (kimin geldiği işaretlenir) ama tutarları gizlidir.
 /// Giderler (Kasa) BİLEREK AÇIK: kısıtlı hesap gider girip görebilir.
@@ -32,7 +32,7 @@ bool isMoneyRestricted(String? email) {
 
 /// Oturumdaki kullanıcı para bilgisini görebilir mi?
 ///
-/// `false` → Rapor/Ayarlar gizlenir, yevmiye tutarları maskelenir (Giderler
+/// `false` → Rapor/Yönetim gizlenir, yevmiye tutarları maskelenir (Giderler
 /// ve Avans ekranları açık kalır — bkz. main_shell/router). Tek gerçek
 /// kaynak burasıdır; ekranlar ve router bunu izler. Akış henüz değeri
 /// vermeden (ilk kare) senkron `currentUser`'a düşer → kısıtlı hesabın para

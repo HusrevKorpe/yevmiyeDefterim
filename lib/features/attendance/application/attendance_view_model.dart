@@ -70,6 +70,12 @@ class AttendanceViewModel extends Notifier<String?> {
             maleWageKurus: _settings.defaultWageMaleKurus,
             femaleWageKurus: _settings.defaultWageFemaleKurus,
           );
+    // Mesai de durum değişiminde KORUNUR (tarla gibi) — ama "Yok" işaretlenirse
+    // TEMİZLENİR: gelmeyen işçinin mesaisi olamaz. Aksi halde ekranda görünmeyen
+    // (mesai şeridi yalnız Tam/Yarım'da açık) bir mesai ücreti kazançta kalır →
+    // hayalet para.
+    final keepOvertime =
+        status != AttendanceStatus.absent && existing is IndividualAttendance;
     // Durum değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
     await _save(AttendanceRecord.individual(
       id: attendanceDocId(date, worker.id),
@@ -79,8 +85,45 @@ class AttendanceViewModel extends Notifier<String?> {
       workerType: worker.type,
       status: status,
       wageSnapshotKurus: wage,
+      overtimeHours: keepOvertime ? existing.overtimeHours : 0,
+      overtimeRateSnapshotKurus:
+          keepOvertime ? existing.overtimeRateSnapshotKurus : 0,
       fieldId: existing?.fieldId,
       fieldName: existing?.fieldName,
+    ));
+  }
+
+  /// O günün kaydına mesai (fazla çalışma) saatini yazar; `hours == 0` mesaiyi
+  /// kaldırır. Saat ücreti (Yönetim'deki genel ücret ya da işçinin kendi
+  /// istisnası — bkz. [resolveOvertimeRateKurus]) yoklama ANINDA dondurulur
+  /// (kural §4, yevmiyeyle aynı mantık): sonradan ücreti değiştirmek geçmiş
+  /// günün mesai tutarını oynatmaz.
+  ///
+  /// Mesai şeridi ekranda yalnız Tam/Yarım seçiliyken görünür → kayıt yoksa (ya
+  /// da elebaşı kaydıysa) sessiz no-op; mesai tek başına gün yaratmaz.
+  Future<void> setOvertimeHours(Worker worker, int hours) async {
+    final existing = _existing(worker.id);
+    if (existing is! IndividualAttendance) return;
+    final h =
+        hours < 0 ? 0 : (hours > kMaxOvertimeHours ? kMaxOvertimeHours : hours);
+    // Mesai kaldırıldıysa dondurulmuş saat ücretini de sıfırla: yeniden mesai
+    // girilirse o an YENİ bir dondurma anıdır (güncel ücret okunur).
+    //
+    // Ücret zaten donmuşsa (>0) korunur. 0 ise (mesai ilk kez giriliyor ya da o
+    // sırada işçinin saat ücreti henüz girilmemişti) güncel ücret çözülür →
+    // "önce mesai girdim, sonra saat ücretini yazdım" akışında sonraki dokunuş
+    // doğru tutarı dondurur.
+    final rate = h == 0
+        ? 0
+        : (existing.overtimeRateSnapshotKurus > 0
+            ? existing.overtimeRateSnapshotKurus
+            : resolveOvertimeRateKurus(
+                workerHourlyKurus: worker.overtimeHourlyKurus,
+                defaultHourlyKurus: _settings.overtimeHourlyKurus,
+              ));
+    await _save(existing.copyWith(
+      overtimeHours: h,
+      overtimeRateSnapshotKurus: rate,
     ));
   }
 

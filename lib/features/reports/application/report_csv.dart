@@ -39,6 +39,11 @@ String buildReportCsv(PeriodReport report) {
     '',
     _row(['İŞÇİLİK']),
     _row(['Tahakkuk eden brüt', formatKurusPlain(report.grossLaborKurus)]),
+    // Mesai brütün içindedir; kırılım satırı yalnız mesai girildiyse yazılır.
+    if (report.hasOvertime) ...[
+      _row(['Bunun mesaisi', formatKurusPlain(report.overtimeKurus)]),
+      _row(['Mesai saati', '${report.overtimeHours}']),
+    ],
     _row(['Verilen avans', formatKurusPlain(report.advancesGivenKurus)]),
     // Tarla kırılımı yalnız tarla seçimi kullanıldıysa yazılır (boş bölüm yok).
     if (report.hasFieldCosts) ...[
@@ -63,6 +68,8 @@ String buildReportCsv(PeriodReport report) {
       'Yarım gün',
       'Elebaşı gün',
       'Kişi-gün',
+      'Mesai saati',
+      'Mesai (TL)',
       'Brüt (TL)',
     ]),
     for (final e in report.workerEarnings)
@@ -73,6 +80,9 @@ String buildReportCsv(PeriodReport report) {
         '${e.halfDays}',
         '${e.crewDays}',
         '${e.crewHeadcountTotal}',
+        '${e.overtimeHours}',
+        formatKurusPlain(e.overtimeKurus),
+        // Brüt mesai DAHİL toplamdır (mesai kolonu yalnız kırılım).
         formatKurusPlain(e.grossKurus),
       ]),
   ];

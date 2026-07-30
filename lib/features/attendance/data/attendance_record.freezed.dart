@@ -156,10 +156,10 @@ return crew(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String date,  String workerId,  String workerName,  WorkerType workerType,  AttendanceStatus status,  int wageSnapshotKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  individual,TResult Function( String id,  String date,  String workerId,  String workerName,  int headcount,  int crewRateSnapshotKurus,  int? agreedPayKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  crew,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function( String id,  String date,  String workerId,  String workerName,  WorkerType workerType,  AttendanceStatus status,  int wageSnapshotKurus,  int overtimeHours,  int overtimeRateSnapshotKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  individual,TResult Function( String id,  String date,  String workerId,  String workerName,  int headcount,  int crewRateSnapshotKurus,  int? agreedPayKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  crew,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case IndividualAttendance() when individual != null:
-return individual(_that.id,_that.date,_that.workerId,_that.workerName,_that.workerType,_that.status,_that.wageSnapshotKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case CrewAttendance() when crew != null:
+return individual(_that.id,_that.date,_that.workerId,_that.workerName,_that.workerType,_that.status,_that.wageSnapshotKurus,_that.overtimeHours,_that.overtimeRateSnapshotKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case CrewAttendance() when crew != null:
 return crew(_that.id,_that.date,_that.workerId,_that.workerName,_that.headcount,_that.crewRateSnapshotKurus,_that.agreedPayKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case _:
   return orElse();
 
@@ -178,10 +178,10 @@ return crew(_that.id,_that.date,_that.workerId,_that.workerName,_that.headcount,
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String date,  String workerId,  String workerName,  WorkerType workerType,  AttendanceStatus status,  int wageSnapshotKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)  individual,required TResult Function( String id,  String date,  String workerId,  String workerName,  int headcount,  int crewRateSnapshotKurus,  int? agreedPayKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)  crew,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function( String id,  String date,  String workerId,  String workerName,  WorkerType workerType,  AttendanceStatus status,  int wageSnapshotKurus,  int overtimeHours,  int overtimeRateSnapshotKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)  individual,required TResult Function( String id,  String date,  String workerId,  String workerName,  int headcount,  int crewRateSnapshotKurus,  int? agreedPayKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)  crew,}) {final _that = this;
 switch (_that) {
 case IndividualAttendance():
-return individual(_that.id,_that.date,_that.workerId,_that.workerName,_that.workerType,_that.status,_that.wageSnapshotKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case CrewAttendance():
+return individual(_that.id,_that.date,_that.workerId,_that.workerName,_that.workerType,_that.status,_that.wageSnapshotKurus,_that.overtimeHours,_that.overtimeRateSnapshotKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case CrewAttendance():
 return crew(_that.id,_that.date,_that.workerId,_that.workerName,_that.headcount,_that.crewRateSnapshotKurus,_that.agreedPayKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);}
 }
 /// A variant of `when` that fallback to returning `null`
@@ -196,10 +196,10 @@ return crew(_that.id,_that.date,_that.workerId,_that.workerName,_that.headcount,
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String date,  String workerId,  String workerName,  WorkerType workerType,  AttendanceStatus status,  int wageSnapshotKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  individual,TResult? Function( String id,  String date,  String workerId,  String workerName,  int headcount,  int crewRateSnapshotKurus,  int? agreedPayKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  crew,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function( String id,  String date,  String workerId,  String workerName,  WorkerType workerType,  AttendanceStatus status,  int wageSnapshotKurus,  int overtimeHours,  int overtimeRateSnapshotKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  individual,TResult? Function( String id,  String date,  String workerId,  String workerName,  int headcount,  int crewRateSnapshotKurus,  int? agreedPayKurus,  String? paidPayrollId,  String? fieldId,  String? fieldName)?  crew,}) {final _that = this;
 switch (_that) {
 case IndividualAttendance() when individual != null:
-return individual(_that.id,_that.date,_that.workerId,_that.workerName,_that.workerType,_that.status,_that.wageSnapshotKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case CrewAttendance() when crew != null:
+return individual(_that.id,_that.date,_that.workerId,_that.workerName,_that.workerType,_that.status,_that.wageSnapshotKurus,_that.overtimeHours,_that.overtimeRateSnapshotKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case CrewAttendance() when crew != null:
 return crew(_that.id,_that.date,_that.workerId,_that.workerName,_that.headcount,_that.crewRateSnapshotKurus,_that.agreedPayKurus,_that.paidPayrollId,_that.fieldId,_that.fieldName);case _:
   return null;
 
@@ -212,7 +212,7 @@ return crew(_that.id,_that.date,_that.workerId,_that.workerName,_that.headcount,
 
 
 class IndividualAttendance extends AttendanceRecord {
-  const IndividualAttendance({required this.id, required this.date, required this.workerId, required this.workerName, required this.workerType, required this.status, required this.wageSnapshotKurus, this.paidPayrollId, this.fieldId, this.fieldName}): super._();
+  const IndividualAttendance({required this.id, required this.date, required this.workerId, required this.workerName, required this.workerType, required this.status, required this.wageSnapshotKurus, this.overtimeHours = 0, this.overtimeRateSnapshotKurus = 0, this.paidPayrollId, this.fieldId, this.fieldName}): super._();
   
 
 @override final  String id;
@@ -222,6 +222,8 @@ class IndividualAttendance extends AttendanceRecord {
  final  WorkerType workerType;
  final  AttendanceStatus status;
  final  int wageSnapshotKurus;
+@JsonKey() final  int overtimeHours;
+@JsonKey() final  int overtimeRateSnapshotKurus;
 @override final  String? paidPayrollId;
 @override final  String? fieldId;
 @override final  String? fieldName;
@@ -236,16 +238,16 @@ $IndividualAttendanceCopyWith<IndividualAttendance> get copyWith => _$Individual
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is IndividualAttendance&&(identical(other.id, id) || other.id == id)&&(identical(other.date, date) || other.date == date)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName)&&(identical(other.workerType, workerType) || other.workerType == workerType)&&(identical(other.status, status) || other.status == status)&&(identical(other.wageSnapshotKurus, wageSnapshotKurus) || other.wageSnapshotKurus == wageSnapshotKurus)&&(identical(other.paidPayrollId, paidPayrollId) || other.paidPayrollId == paidPayrollId)&&(identical(other.fieldId, fieldId) || other.fieldId == fieldId)&&(identical(other.fieldName, fieldName) || other.fieldName == fieldName));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is IndividualAttendance&&(identical(other.id, id) || other.id == id)&&(identical(other.date, date) || other.date == date)&&(identical(other.workerId, workerId) || other.workerId == workerId)&&(identical(other.workerName, workerName) || other.workerName == workerName)&&(identical(other.workerType, workerType) || other.workerType == workerType)&&(identical(other.status, status) || other.status == status)&&(identical(other.wageSnapshotKurus, wageSnapshotKurus) || other.wageSnapshotKurus == wageSnapshotKurus)&&(identical(other.overtimeHours, overtimeHours) || other.overtimeHours == overtimeHours)&&(identical(other.overtimeRateSnapshotKurus, overtimeRateSnapshotKurus) || other.overtimeRateSnapshotKurus == overtimeRateSnapshotKurus)&&(identical(other.paidPayrollId, paidPayrollId) || other.paidPayrollId == paidPayrollId)&&(identical(other.fieldId, fieldId) || other.fieldId == fieldId)&&(identical(other.fieldName, fieldName) || other.fieldName == fieldName));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,date,workerId,workerName,workerType,status,wageSnapshotKurus,paidPayrollId,fieldId,fieldName);
+int get hashCode => Object.hash(runtimeType,id,date,workerId,workerName,workerType,status,wageSnapshotKurus,overtimeHours,overtimeRateSnapshotKurus,paidPayrollId,fieldId,fieldName);
 
 @override
 String toString() {
-  return 'AttendanceRecord.individual(id: $id, date: $date, workerId: $workerId, workerName: $workerName, workerType: $workerType, status: $status, wageSnapshotKurus: $wageSnapshotKurus, paidPayrollId: $paidPayrollId, fieldId: $fieldId, fieldName: $fieldName)';
+  return 'AttendanceRecord.individual(id: $id, date: $date, workerId: $workerId, workerName: $workerName, workerType: $workerType, status: $status, wageSnapshotKurus: $wageSnapshotKurus, overtimeHours: $overtimeHours, overtimeRateSnapshotKurus: $overtimeRateSnapshotKurus, paidPayrollId: $paidPayrollId, fieldId: $fieldId, fieldName: $fieldName)';
 }
 
 
@@ -256,7 +258,7 @@ abstract mixin class $IndividualAttendanceCopyWith<$Res> implements $AttendanceR
   factory $IndividualAttendanceCopyWith(IndividualAttendance value, $Res Function(IndividualAttendance) _then) = _$IndividualAttendanceCopyWithImpl;
 @override @useResult
 $Res call({
- String id, String date, String workerId, String workerName, WorkerType workerType, AttendanceStatus status, int wageSnapshotKurus, String? paidPayrollId, String? fieldId, String? fieldName
+ String id, String date, String workerId, String workerName, WorkerType workerType, AttendanceStatus status, int wageSnapshotKurus, int overtimeHours, int overtimeRateSnapshotKurus, String? paidPayrollId, String? fieldId, String? fieldName
 });
 
 
@@ -273,7 +275,7 @@ class _$IndividualAttendanceCopyWithImpl<$Res>
 
 /// Create a copy of AttendanceRecord
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? date = null,Object? workerId = null,Object? workerName = null,Object? workerType = null,Object? status = null,Object? wageSnapshotKurus = null,Object? paidPayrollId = freezed,Object? fieldId = freezed,Object? fieldName = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? date = null,Object? workerId = null,Object? workerName = null,Object? workerType = null,Object? status = null,Object? wageSnapshotKurus = null,Object? overtimeHours = null,Object? overtimeRateSnapshotKurus = null,Object? paidPayrollId = freezed,Object? fieldId = freezed,Object? fieldName = freezed,}) {
   return _then(IndividualAttendance(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as String,date: null == date ? _self.date : date // ignore: cast_nullable_to_non_nullable
@@ -282,6 +284,8 @@ as String,workerName: null == workerName ? _self.workerName : workerName // igno
 as String,workerType: null == workerType ? _self.workerType : workerType // ignore: cast_nullable_to_non_nullable
 as WorkerType,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as AttendanceStatus,wageSnapshotKurus: null == wageSnapshotKurus ? _self.wageSnapshotKurus : wageSnapshotKurus // ignore: cast_nullable_to_non_nullable
+as int,overtimeHours: null == overtimeHours ? _self.overtimeHours : overtimeHours // ignore: cast_nullable_to_non_nullable
+as int,overtimeRateSnapshotKurus: null == overtimeRateSnapshotKurus ? _self.overtimeRateSnapshotKurus : overtimeRateSnapshotKurus // ignore: cast_nullable_to_non_nullable
 as int,paidPayrollId: freezed == paidPayrollId ? _self.paidPayrollId : paidPayrollId // ignore: cast_nullable_to_non_nullable
 as String?,fieldId: freezed == fieldId ? _self.fieldId : fieldId // ignore: cast_nullable_to_non_nullable
 as String?,fieldName: freezed == fieldName ? _self.fieldName : fieldName // ignore: cast_nullable_to_non_nullable

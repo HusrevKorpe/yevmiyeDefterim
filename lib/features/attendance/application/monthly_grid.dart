@@ -16,11 +16,15 @@ import '../data/attendance_record.dart';
 /// Bireysel işçide [status] dolu, elebaşıda [crewHeadcount] dolu; ikisi de null
 /// ise o gün kayıt yok (boş hücre). "Yok" (absent) bir kayıttır → boş değildir.
 class MonthlyGridCell {
-  const MonthlyGridCell.individual(AttendanceStatus this.status, this.earningKurus)
-      : crewHeadcount = null;
+  const MonthlyGridCell.individual(
+    AttendanceStatus this.status,
+    this.earningKurus, {
+    this.overtimeHours = 0,
+  }) : crewHeadcount = null;
 
   const MonthlyGridCell.crew(int this.crewHeadcount, this.earningKurus)
-      : status = null;
+      : status = null,
+        overtimeHours = 0;
 
   /// Bireysel gün durumu (null → elebaşı hücresi).
   final AttendanceStatus? status;
@@ -28,8 +32,12 @@ class MonthlyGridCell {
   /// Elebaşı kişi sayısı (null → bireysel hücre).
   final int? crewHeadcount;
 
-  /// O günkü kazanç (kuruş) — kayıttan okunan snapshot.
+  /// O günkü kazanç (kuruş) — kayıttan okunan snapshot (mesai dahil).
   final int earningKurus;
+
+  /// O günkü mesai saati (0 → mesai yok). Hücrede küçük üst simge olarak
+  /// gösterilir → tutarın neden yüksek olduğu tabloda da görünür.
+  final int overtimeHours;
 
   bool get isCrew => crewHeadcount != null;
 }
@@ -144,7 +152,11 @@ MonthlyAttendanceGrid buildMonthlyGrid({
       gross += r.earningKurus;
       switch (r) {
         case IndividualAttendance(:final status):
-          cells[r.date] = MonthlyGridCell.individual(status, r.earningKurus);
+          cells[r.date] = MonthlyGridCell.individual(
+            status,
+            r.earningKurus,
+            overtimeHours: r.overtimeHoursCounted,
+          );
           switch (status) {
             case AttendanceStatus.full:
               fullDays++;

@@ -18,6 +18,7 @@ import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart
 import 'package:yevmiye_defterim/features/attendance/data/field.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/attendance_screen.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/widgets/field_chips.dart';
+import 'package:yevmiye_defterim/features/attendance/presentation/widgets/overtime_chips.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/application/fields_providers.dart';
 import 'package:yevmiye_defterim/features/auth/application/user_access.dart';
@@ -36,17 +37,23 @@ void main() {
     await initializeDateFormatting('tr_TR', null);
   });
 
-  Worker worker(String id, String name, Gender gender) => Worker(
+  Worker worker(String id, String name, Gender gender,
+          {int? overtimeHourlyKurus}) =>
+      Worker(
         id: id,
         name: name,
         type: WorkerType.gundelik,
         gender: gender,
+        overtimeHourlyKurus: overtimeHourlyKurus,
       );
 
-  Future<(Widget, FakeAttendanceRepository)> buildApp(
-      {List<Field> fields = const []}) async {
+  Future<(Widget, FakeAttendanceRepository)> buildApp({
+    List<Field> fields = const [],
+    int? overtimeHourlyKurus,
+  }) async {
     final workerRepo = FakeWorkerRepository();
-    await workerRepo.add(worker('m1', 'Ahmet', Gender.male));
+    await workerRepo.add(worker('m1', 'Ahmet', Gender.male,
+        overtimeHourlyKurus: overtimeHourlyKurus));
     await workerRepo.add(worker('f1', 'Ayşe', Gender.female));
 
     final attRepo = FakeAttendanceRepository();
@@ -193,6 +200,106 @@ void main() {
     final rec = attRepo.all.single as IndividualAttendance;
     expect(rec.status, AttendanceStatus.absent);
     expect(rec.fieldId, 't1');
+    expect(tester.takeException(), isNull);
+  });
+
+  // --- Mesai çipleri (fazla çalışma — isteğe bağlı) ---
+
+  testWidgets('yoklama alınmadan mesai şeridi görünmez; Tam seçilince çıkar',
+      (tester) async {
+    final (app, _) = await buildApp(overtimeHourlyKurus: 10000);
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OvertimeChips), findsNothing);
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OvertimeChips), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('"2 s" çipi: saat ve dondurulmuş saat ücreti kayda yazılır',
+      (tester) async {
+    final (app, attRepo) = await buildApp(overtimeHourlyKurus: 10000);
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 s'));
+    await tester.pumpAndSettle();
+
+    expect(attRepo.count, 1); // mesai çift kayıt açmaz
+    final rec = attRepo.all.single as IndividualAttendance;
+    expect(rec.overtimeHours, 2);
+    expect(rec.overtimeRateSnapshotKurus, 10000);
+    expect(rec.earningKurus, 200000 + 20000);
+    // Özet satırı tutarı gösterir (para görebilen hesap).
+    expect(find.textContaining('2 saat mesai'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('seçili saat çipine tekrar dokunmak mesaiyi kaldırır',
+      (tester) async {
+    final (app, attRepo) = await buildApp(overtimeHourlyKurus: 10000);
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 s'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 s'));
+    await tester.pumpAndSettle();
+
+    final rec = attRepo.all.single as IndividualAttendance;
+    expect(rec.overtimeHours, 0);
+    expect(rec.status, AttendanceStatus.full); // durum bozulmadı
+    expect(rec.earningKurus, 200000);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('saat ücreti girilmemişse şerit uyarır, tutar eklenmez',
+      (tester) async {
+    final (app, attRepo) = await buildApp(); // mesai saat ücreti yok
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3 s'));
+    await tester.pumpAndSettle();
+
+    final rec = attRepo.all.single as IndividualAttendance;
+    expect(rec.overtimeHours, 3);
+    expect(rec.earningKurus, 200000); // mesai ₺0
+    expect(find.textContaining('saat ücreti girilmemiş'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('"Yok" seçilince mesai şeridi gizlenir ve mesai temizlenir',
+      (tester) async {
+    final (app, attRepo) = await buildApp(overtimeHourlyKurus: 10000);
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2 s'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Yok'));
+    await tester.pumpAndSettle();
+
+    // Gelmeyen işçinin mesaisi olamaz → saat sıfırlanır (görünmeyen hayalet
+    // mesai ücreti kazançta kalmaz).
+    expect(find.byType(OvertimeChips), findsNothing);
+    final rec = attRepo.all.single as IndividualAttendance;
+    expect(rec.status, AttendanceStatus.absent);
+    expect(rec.overtimeHours, 0);
+    expect(rec.earningKurus, 0);
     expect(tester.takeException(), isNull);
   });
 

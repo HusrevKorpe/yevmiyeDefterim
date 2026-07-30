@@ -33,6 +33,20 @@ class ReportLaborCard extends StatelessWidget {
               label: 'Tahakkuk eden brüt',
               value: report.grossLaborKurus,
             ),
+            // Mesai brütün İÇİNDEDİR; ayrı satır yalnız "bunun ne kadarı mesai"
+            // sorusunu yanıtlar. Hiç mesai girilmediyse satır çıkmaz.
+            if (report.hasOvertime) ...[
+              const SizedBox(height: 10),
+              _Row(
+                icon: Icons.more_time,
+                // Etiket bilerek kısa: büyük sistem yazısında (2x) uzun etiket
+                // üç satıra sarıp tutarla sıkışıyordu. "Brütün içinde" anlamı
+                // girinti + soluk stille veriliyor.
+                label: 'Mesai (${report.overtimeHours} saat)',
+                value: report.overtimeKurus,
+                muted: true,
+              ),
+            ],
             const SizedBox(height: 10),
             _Row(
               icon: Icons.account_balance_wallet,
@@ -51,29 +65,49 @@ class _Row extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.muted = false,
   });
 
   final IconData icon;
   final String label;
   final int value;
 
+  /// Ana satırın altındaki kırılım satırı (mesai): daha küçük/soluk yazılır ve
+  /// içeri girintili durur → brütün içinde olduğu görsel olarak da anlaşılır.
+  final bool muted;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: theme.colorScheme.outline),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(label, style: theme.textTheme.bodyLarge),
-        ),
-        Text(
-          formatKurus(value),
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
+    final color = muted ? theme.colorScheme.onSurfaceVariant : null;
+    return Padding(
+      padding: EdgeInsets.only(left: muted ? 18 : 0),
+      child: Row(
+        children: [
+          Icon(icon,
+              size: muted ? 17 : 20,
+              color: muted ? color : theme.colorScheme.outline),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: muted
+                  ? theme.textTheme.bodyMedium?.copyWith(color: color)
+                  : theme.textTheme.bodyLarge,
+            ),
           ),
-        ),
-      ],
+          // Etiket büyük yazıda sarınca tutara yapışmasın.
+          const SizedBox(width: 8),
+          Text(
+            formatKurus(value),
+            style: muted
+                ? theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600, color: color)
+                : theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -214,4 +214,102 @@ void main() {
     ]);
     expect(r.grossLaborKurus, 200000);
   });
+
+  group('mesai kırılımı (brütün içinde, ayrıca gösterilir)', () {
+    AttendanceRecord withOvertime(
+      String worker,
+      String date, {
+      AttendanceStatus status = AttendanceStatus.full,
+      int hours = 0,
+      int rate = 10000,
+    }) =>
+        AttendanceRecord.individual(
+          id: '${date}_$worker',
+          date: date,
+          workerId: worker,
+          workerName: worker,
+          workerType: WorkerType.gundelik,
+          status: status,
+          wageSnapshotKurus: 200000,
+          overtimeHours: hours,
+          overtimeRateSnapshotKurus: rate,
+        );
+
+    test('mesai brüte eklenir ve ayrı toplamda da görünür', () {
+      final r = build(attendance: [
+        withOvertime('a', '2026-07-02', hours: 2), // 200000 + 20000
+        withOvertime('b', '2026-07-02', hours: 3), // 200000 + 30000
+      ]);
+      expect(r.grossLaborKurus, 450000);
+      expect(r.overtimeKurus, 50000);
+      expect(r.overtimeHours, 5);
+      expect(r.hasOvertime, isTrue);
+    });
+
+    test('işçi dökümünde mesai saati/tutarı işçi bazında toplanır', () {
+      final r = build(attendance: [
+        withOvertime('a', '2026-07-02', hours: 2),
+        withOvertime('a', '2026-07-03', hours: 1),
+        ind('b', '2026-07-02', AttendanceStatus.full),
+      ]);
+      final a = r.workerEarnings.firstWhere((e) => e.workerId == 'a');
+      final b = r.workerEarnings.firstWhere((e) => e.workerId == 'b');
+      expect(a.overtimeHours, 3);
+      expect(a.overtimeKurus, 30000);
+      expect(a.grossKurus, 400000 + 30000); // brüt mesai dahil
+      expect(b.overtimeHours, 0);
+      expect(b.overtimeKurus, 0);
+    });
+
+    test('"Yok" günündeki mesai sayılmaz', () {
+      final r = build(attendance: [
+        withOvertime('a', '2026-07-02',
+            status: AttendanceStatus.absent, hours: 4),
+      ]);
+      expect(r.grossLaborKurus, 0);
+      expect(r.overtimeKurus, 0);
+      expect(r.overtimeHours, 0);
+      expect(r.hasOvertime, isFalse);
+    });
+
+    test('dönem dışı mesai süzülür', () {
+      final r = build(attendance: [
+        withOvertime('a', '2026-06-30', hours: 5), // dönem dışı
+        withOvertime('a', '2026-07-02', hours: 1),
+      ]);
+      expect(r.overtimeHours, 1);
+      expect(r.overtimeKurus, 10000);
+    });
+
+    test('mesai girilmemişse hasOvertime false (kırılım satırı gizlenir)', () {
+      final r = build(attendance: [
+        ind('a', '2026-07-02', AttendanceStatus.full),
+        crew('e', '2026-07-02', 4),
+      ]);
+      expect(r.hasOvertime, isFalse);
+      expect(r.overtimeKurus, 0);
+    });
+
+    test('mesai tarla maliyetine de girer (tarla toplamı brüte eşit kalır)', () {
+      final r = build(attendance: [
+        AttendanceRecord.individual(
+          id: '2026-07-02_a',
+          date: '2026-07-02',
+          workerId: 'a',
+          workerName: 'a',
+          workerType: WorkerType.gundelik,
+          status: AttendanceStatus.full,
+          wageSnapshotKurus: 200000,
+          overtimeHours: 2,
+          overtimeRateSnapshotKurus: 10000,
+          fieldId: 't1',
+          fieldName: 'Aşağı Tarla',
+        ),
+      ]);
+      final toplam =
+          r.fieldCosts.fold<int>(0, (sum, f) => sum + f.grossKurus);
+      expect(toplam, r.grossLaborKurus);
+      expect(toplam, 220000);
+    });
+  });
 }

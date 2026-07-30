@@ -85,6 +85,10 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
 
         _title(t('İşçilik')),
         _kv(t('Tahakkuk eden brüt'), money(report.grossLaborKurus)),
+        // Mesai brütün içindedir; kırılım satırı yalnız mesai girildiyse basılır.
+        if (report.hasOvertime)
+          _kv(t('Bunun mesaisi (${report.overtimeHours} saat)'),
+              money(report.overtimeKurus)),
         _kv(t('Verilen avans'), money(report.advancesGivenKurus)),
         pw.SizedBox(height: 14),
 
@@ -136,7 +140,8 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
               2: pw.Alignment.center,
               3: pw.Alignment.center,
               4: pw.Alignment.center,
-              5: pw.Alignment.centerRight,
+              5: pw.Alignment.center,
+              6: pw.Alignment.centerRight,
             },
             headers: [
               t('İşçi'),
@@ -144,6 +149,7 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
               t('Tam'),
               t('Yarım'),
               t('Kişi-gün'),
+              t('Mesai'),
               t('Brüt (TL)'),
             ],
             data: [
@@ -154,6 +160,8 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
                   e.isCrew ? '-' : '${e.fullDays}',
                   e.isCrew ? '-' : '${e.halfDays}',
                   e.isCrew ? '${e.crewHeadcountTotal}' : '-',
+                  // Mesai saati (mesai yoksa '-'); tutarı brütün içindedir.
+                  e.overtimeHours > 0 ? t('${e.overtimeHours} sa') : '-',
                   formatKurusPlain(e.grossKurus),
                 ],
             ],

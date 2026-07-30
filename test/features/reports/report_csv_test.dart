@@ -68,7 +68,43 @@ void main() {
         grossKurus: 700000,
       ),
     ]));
-    expect(csv, contains('Ahmet;Gündelik;3;1;0;0;7.000,00'));
+    // Mesaisiz işçide mesai kolonları 0 (brüt yine mesai dahil toplam).
+    expect(csv, contains('Ahmet;Gündelik;3;1;0;0;0;0,00;7.000,00'));
+  });
+
+  test('işçi satırı: mesai saati ve tutarı ayrı kolonlarda', () {
+    final csv = buildReportCsv(report(earnings: [
+      const WorkerEarning(
+        workerId: 'w1',
+        workerName: 'Ahmet',
+        type: WorkerType.gundelik,
+        fullDays: 3,
+        overtimeHours: 5,
+        overtimeKurus: 50000,
+        // Brüt mesai DAHİL: 3 gün yevmiye + ₺500 mesai.
+        grossKurus: 650000,
+      ),
+    ]));
+    expect(csv, contains('Ahmet;Gündelik;3;0;0;0;5;500,00;6.500,00'));
+  });
+
+  test('mesai girildiyse işçilik bölümüne kırılım satırı eklenir', () {
+    final csv = buildReportCsv(PeriodReport(
+      startIso: '2026-07-01',
+      endIso: '2026-07-31',
+      grossLaborKurus: 950000,
+      overtimeKurus: 50000,
+      overtimeHours: 5,
+    ));
+    expect(csv, contains('Bunun mesaisi;500,00'));
+    expect(csv, contains('Mesai saati;5'));
+  });
+
+  test('mesai hiç girilmediyse kırılım satırı yazılmaz', () {
+    final csv = buildReportCsv(report());
+    expect(csv.contains('Bunun mesaisi'), isFalse);
+    // Satır BAŞINDA "Mesai saati" yok (kolon başlığındaki geçiş sayılmaz).
+    expect(csv.contains('\r\nMesai saati;'), isFalse);
   });
 
   test('noktalı virgül içeren isim tırnaklanır', () {

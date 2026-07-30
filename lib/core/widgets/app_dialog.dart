@@ -275,6 +275,7 @@ Future<String?> showInputDialog(
   String cancelLabel = 'Vazgeç',
   TextCapitalization textCapitalization = TextCapitalization.sentences,
   Color? accent,
+  TextInputType? keyboardType,
 }) {
   return showDialog<String>(
     context: context,
@@ -289,6 +290,7 @@ Future<String?> showInputDialog(
       cancelLabel: cancelLabel,
       textCapitalization: textCapitalization,
       accent: accent,
+      keyboardType: keyboardType,
     ),
   );
 }
@@ -305,6 +307,7 @@ class _InputDialog extends StatefulWidget {
     required this.cancelLabel,
     required this.textCapitalization,
     required this.accent,
+    this.keyboardType,
   });
 
   final String title;
@@ -317,6 +320,9 @@ class _InputDialog extends StatefulWidget {
   final String cancelLabel;
   final TextCapitalization textCapitalization;
   final Color? accent;
+
+  /// Sayısal giriş (mesai saati gibi) için klavye türü; null → normal metin.
+  final TextInputType? keyboardType;
 
   @override
   State<_InputDialog> createState() => _InputDialogState();
@@ -349,6 +355,7 @@ class _InputDialogState extends State<_InputDialog> {
         controller: _controller,
         autofocus: true,
         textCapitalization: widget.textCapitalization,
+        keyboardType: widget.keyboardType,
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _submit(),
         decoration: InputDecoration(

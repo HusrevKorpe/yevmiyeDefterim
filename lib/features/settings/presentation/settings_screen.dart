@@ -1,7 +1,10 @@
-/// Ayarlar ekranı — görünüm (koyu tema) + veri yedeği.
+/// Yönetim ekranı — mesai saat ücreti + görünüm (koyu tema) + veri yedeği.
 ///
-/// Sabit/varsayılan yevmiye ARTIK YOK: her işçinin yevmiyesi İşçiler ekranından
-/// tek tek elle girilir (yoklamada o işçinin kendi yevmiyesi kullanılır).
+/// Sabit/varsayılan YEVMİYE burada YOK: her işçinin yevmiyesi İşçiler
+/// ekranından tek tek elle girilir (yoklamada o işçinin kendi yevmiyesi
+/// kullanılır). MESAİ saat ücreti bilerek tersi yönde: sahada herkes için aynı
+/// olduğundan tek yerden burada girilir, tüm işçilere uygulanır; bir işçininki
+/// farklıysa işçi kartındaki alan bunu ezer (bkz. `resolveOvertimeRateKurus`).
 library;
 
 import 'package:flutter/material.dart';
@@ -10,8 +13,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/theme_mode.dart';
 import '../../../core/diagnostics/app_log.dart';
 import '../../../core/firestore/firestore_providers.dart';
+import '../../../core/firestore/write_ack.dart';
+import '../../../core/money/money.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../../core/widgets/money_field.dart';
 import '../application/backup_service.dart';
+import '../application/settings_providers.dart';
+import '../data/app_settings.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -59,12 +67,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const GradientAppBar(title: 'Ayarlar'),
+      appBar: const GradientAppBar(title: 'Yönetim'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SectionTitle('Mesai'),
+            const SizedBox(height: 8),
+            const _OvertimeRateSection(),
+            const SizedBox(height: 28),
             const SectionTitle('Görünüm'),
             const SizedBox(height: 10),
             const _DarkModeSwitch(),
@@ -93,6 +105,171 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Mesai saat ücreti — HERKES için tek giriş.
+///
+/// Ücret [AppSettings.overtimeHourlyKurus] alanında tek config dokümanında
+/// tutulur; yoklamada mesai saatiyle çarpılır. Kaydedilen ücret GEÇMİŞ günleri
+/// oynatmaz: her yoklama kaydı kendi saat ücretini o an dondurur (kural §4) →
+/// buradaki değişiklik yalnız bundan SONRA girilen mesailere işler.
+class _OvertimeRateSection extends ConsumerStatefulWidget {
+  const _OvertimeRateSection();
+
+  @override
+  ConsumerState<_OvertimeRateSection> createState() =>
+      _OvertimeRateSectionState();
+}
+
+class _OvertimeRateSectionState extends ConsumerState<_OvertimeRateSection> {
+  final _formKey = GlobalKey<FormState>();
+  final _ctrl = TextEditingController();
+
+  /// Alan kayıtlı değerle BİR KEZ doldurulur. Sonraki akış olayları (başka
+  /// cihazdan yazma) alanı EZMEZ — kullanıcı o sırada yazıyor olabilir.
+  bool _seeded = false;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Doldurma build'de DEĞİL dinleyicide yapılır: build sırasında controller
+    // metnini değiştirmek, çoktan çizilmiş TextField'ı build içinde yeniden
+    // çizmeye zorlar (markNeedsBuild hatası).
+    ref.listenManual<AsyncValue<AppSettings>>(
+      settingsStreamProvider,
+      (_, next) {
+        final s = next.asData?.value;
+        if (s == null || _seeded) return;
+        _seeded = true;
+        _ctrl.text = s.overtimeHourlyKurus == 0
+            ? ''
+            : formatKurusPlain(s.overtimeHourlyKurus);
+      },
+      fireImmediately: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(AppSettings current) async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    // Boş bırakmak "ücret girilmemiş" demektir (0) → mesai girilse bile tutar
+    // 0 kalır ve yoklama satırı uyarır (yevmiyesi girilmemiş işçiyle aynı desen).
+    final kurus = parseTlToKurus(_ctrl.text.trim()) ?? 0;
+    try {
+      // Offline'da yazım yerel kuyruğa girer; onayı sonsuza dek bekleyip
+      // düğmeyi kilitlemeyiz (awaitWriteAck deseni).
+      await awaitWriteAck(
+        ref
+            .read(settingsRepositoryProvider)
+            .save(current.copyWith(overtimeHourlyKurus: kurus)),
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(kurus == 0
+              ? 'Mesai saat ücreti temizlendi.'
+              : 'Mesai saat ücreti kaydedildi: ${formatKurus(kurus)}'),
+        ),
+      );
+    } catch (e, s) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Kaydedilemedi. İnternet bağlantınızı kontrol edin.'),
+        ),
+      );
+      await logHandledError(e, s, reason: 'mesai-ucreti-kaydet');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Ayarlar henüz yüklenmediyse (null) kayda izin verme: mevcut dokümanı
+    // okumadan yazmak diğer alanları (yevmiye varsayılanları) ezme riski taşır.
+    final settingsAsync = ref.watch(settingsStreamProvider);
+    final settings = settingsAsync.asData?.value;
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Mesaiye kalınan her saat için ödenecek ücret. Bir kez burada '
+            'girilir, TÜM işçilere uygulanır — yoklamada yalnız saat basılır. '
+            'Bir işçininki farklıysa o işçinin kartındaki ücret geçerli olur.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          MoneyField(
+            controller: _ctrl,
+            label: 'Mesai saat ücreti',
+            // İki satırla sınırlı (MoneyField helperMaxLines: 2) → büyük sistem
+            // yazısında kırpılmasın diye KISA tutulur; kalan bilgi alttaki nota.
+            helperText: 'Örn. 100 → 2 saat mesai ₺200.',
+            enabled: !_saving && settings != null,
+            allowEmpty: true,
+            filled: true,
+            textInputAction: TextInputAction.done,
+            onSubmitted: settings == null ? null : () => _save(settings),
+          ),
+          // Ayar okunamadıysa alan/düğme kapalı kalır → sebebini söyle ve
+          // yeniden denemeyi sun (diğer ekranlardaki AsyncRetry deseni).
+          if (settings == null && settingsAsync.hasError) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Ayar yüklenemedi. İnternet bağlantınızı kontrol edin.',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => ref.invalidate(settingsStreamProvider),
+                  child: const Text('Tekrar Dene'),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed:
+                (_saving || settings == null) ? null : () => _save(settings),
+            icon: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.check),
+            label: Text(_saving ? 'Kaydediliyor…' : 'Kaydet'),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Boş bırakırsanız mesai tutarı hesaplanmaz. Ücreti değiştirmek '
+            'geçmiş günleri etkilemez — her gün kendi ücretini kaydedildiği '
+            'anda dondurur.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }

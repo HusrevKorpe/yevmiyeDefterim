@@ -19,6 +19,7 @@ import 'package:yevmiye_defterim/core/date/app_date.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/monthly_attendance_screen.dart';
+import 'package:yevmiye_defterim/features/auth/application/user_access.dart';
 import 'package:yevmiye_defterim/features/workers/application/workers_providers.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
@@ -41,7 +42,8 @@ void main() {
         defaultHeadcount: headcount,
       );
 
-  AttendanceRecord ind(Worker worker, int d, AttendanceStatus status) =>
+  AttendanceRecord ind(Worker worker, int d, AttendanceStatus status,
+          {int overtimeHours = 0}) =>
       AttendanceRecord.individual(
         id: '${day(d)}_${worker.id}',
         date: day(d),
@@ -50,6 +52,9 @@ void main() {
         workerType: worker.type,
         status: status,
         wageSnapshotKurus: 200000,
+        // Mesai girilen gün hücrede küçük saat üst simgesiyle çıkar ("✓2").
+        overtimeHours: overtimeHours,
+        overtimeRateSnapshotKurus: overtimeHours > 0 ? 10000 : 0,
       );
 
   AttendanceRecord crew(Worker worker, int d, int headcount) =>
@@ -87,7 +92,10 @@ void main() {
         final status = (d % 7 == 0)
             ? AttendanceStatus.absent
             : (d % 3 == 0 ? AttendanceStatus.half : AttendanceStatus.full);
-        await attRepo.save(ind(ind0, d, status));
+        // Bazı günlerde mesai: hücredeki saat üst simgesi ve ay toplamına etkisi
+        // yoğun tabloda da okunaklı kalmalı.
+        final overtime = (d % 5 == 0 && status != AttendanceStatus.absent) ? 2 : 0;
+        await attRepo.save(ind(ind0, d, status, overtimeHours: overtime));
       }
     }
     for (final d in const [2, 3, 5, 9, 12, 16, 19]) {
@@ -99,6 +107,10 @@ void main() {
       overrides: [
         workerRepositoryProvider.overrideWithValue(workerRepo),
         attendanceRepositoryProvider.overrideWithValue(attRepo),
+        // Tablo tutarları bu sağlayıcıya bağlı; override'sız kalınca auth →
+        // Firebase'e uzanıp ekran hata durumuna düşüyor (bu test o yüzden
+        // kırıktı). Testte "para görebilir" olarak sabitlenir.
+        canSeeMoneyProvider.overrideWithValue(true),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
