@@ -45,7 +45,7 @@ class DashboardScreen extends ConsumerWidget {
         padding: EdgeInsets.zero,
         children: [
           _HeroHeader(
-            // Rapor ve Ayarlar para/gider içerir → kısıtlı hesapta gizli.
+            // Rapor ve Yönetim para/gider içerir → kısıtlı hesapta gizli.
             canSeeMoney: canSeeMoney,
             onReport: () => context.push(AppRoutes.report),
             onSettings: () => context.push(AppRoutes.settings),
@@ -91,7 +91,7 @@ class _HeroHeader extends StatelessWidget {
     required this.onTakeAttendance,
   });
 
-  /// Para/gider görebilir mi? false → Rapor + Ayarlar ikonları gizlenir.
+  /// Para/gider görebilir mi? false → Rapor + Yönetim ikonları gizlenir.
   final bool canSeeMoney;
   final VoidCallback onReport;
   final VoidCallback onSettings;
@@ -169,8 +169,8 @@ class _HeroHeader extends StatelessWidget {
                           onPressed: onReport,
                         ),
                         _HeaderIcon(
-                          icon: Icons.settings_outlined,
-                          tooltip: 'Ayarlar',
+                          icon: Icons.space_dashboard_outlined,
+                          tooltip: 'Yönetim',
                           onPressed: onSettings,
                         ),
                       ],
