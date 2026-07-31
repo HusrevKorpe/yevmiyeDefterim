@@ -8,14 +8,23 @@ bildirimi gider. Uygulama kapalıyken bile telefonun bildirim çubuğuna düşer
 
 1. Girişten sonra her cihaz FCM token'ını `workspaces/main/fcmTokens/{token}`
    altına yazar (uid ile) — `lib/core/notifications/push_notifications.dart`.
+   Çıkış yapılırken kayıt **silinir** (oturum hâlâ açıkken — `releasePushToken`),
+   böylece elden çıkarılan cihaza bildirim gitmez.
 2. "Kaydet" → `workspaces/main/attendanceDays/{tarih}` işaret dokümanı yazılır
-   (`markDaySaved`). Günde tek doküman; 60 sn içindeki tekrar basışlar tek
-   bildirim sayılır.
+   (`markDaySaved`). Günde tek doküman; **aynı kişinin** 60 sn içindeki tekrar
+   basışları tek bildirim sayılır (ölçü sunucu damgası `updatedAt`; cihaz saati
+   kullanılsaydı offline kuyrukta bekleyen kayıt "geçmişten geliyor" görünüp
+   bildirimi sessizce yutardı).
 3. Cloud Function (`functions/index.js` → `yoklamaBildirimi`) bu yazımı dinler,
    `fcmTokens` listesinden **kaydedenin uid'sine ait cihazları eleyip** kalanına
-   bildirim gönderir. Geçersizleşen token kayıtlarını otomatik siler.
+   bildirim gönderir. Token kaydını yalnız token'a özgü hatalarda siler
+   (`registration-token-not-registered` / `invalid-registration-token`);
+   diğer hatalar günlüğe düşer — tek bir payload hatası bütün kayıtları
+   süpürmesin.
 4. Uygulama AÇIKKEN gelen bildirim: iOS sistem bandında, Android'de SnackBar
-   olarak görünür. Kapalıyken: normal push bildirimi.
+   olarak görünür. Kapalıyken: normal push bildirimi. **Bildirime dokununca**
+   uygulama o günün yoklamasını açar (push'taki `data.tarih` → `pushTappedDate`
+   → `MainShell`).
 
 Firestore kuralı DEĞİŞMEDİ — mevcut `match /{document=**}` kuralı yeni
 koleksiyonları zaten kapsıyor; Console'dan kural yayınlamak GEREKMEZ.
@@ -67,12 +76,35 @@ Yeni sürümü derleyip dağıt (TestFlight / APK). İlk açılışta bildirim i
 ## Kod tarafında yapılanlar (bilgi)
 
 - `pubspec.yaml`: `firebase_messaging` eklendi.
-- `lib/core/notifications/push_notifications.dart`: token kaydı + ön plan gösterimi.
+- `lib/core/notifications/push_notifications.dart`: token kaydı + ön plan
+  gösterimi + dokunma yönlendirmesi + çıkışta kayıt bırakma.
 - `lib/main.dart`: `initPushNotifications()` (await'siz, açılışı geciktirmez).
 - `lib/app/app.dart`: kök `scaffoldMessengerKey` (Android ön plan SnackBar'ı).
+- `lib/app/main_shell.dart`: `pushTappedDate` dinleyicisi → bildirimin günü
+  seçilip Yoklama açılır.
+- `lib/features/dashboard/...`: çıkıştan ÖNCE `releasePushToken()`.
+- `lib/features/settings/...`: Yönetim'de "Bildirimler açık/kapalı" satırı.
 - `attendance_repository.markDaySaved` + VM + Kaydet düğmesi bağlantısı.
-- Android: `POST_NOTIFICATIONS` izni. iOS: `Runner.entitlements`
-  (aps-environment) + `UIBackgroundModes: remote-notification` + Xcode
-  `CODE_SIGN_ENTITLEMENTS` (3 config).
+- Android: `POST_NOTIFICATIONS` izni; bildirim ikonu
+  (`res/drawable/ic_stat_yevmiye.xml`), rengi ve `yoklama` kanalı
+  (manifest meta-data + `MainActivity.onCreate`) — bunlar olmadan durum
+  çubuğunda beyaz kare çıkıyordu. iOS: `Runner.entitlements` (aps-environment)
+  + `UIBackgroundModes: remote-notification` + Xcode `CODE_SIGN_ENTITLEMENTS`
+  (3 config).
 - `functions/`: `yoklamaBildirimi` Cloud Function; `firebase.json`'a
   `functions` bölümü eklendi.
+
+## Bildirim gelmiyorsa (kontrol sırası)
+
+1. **iOS'ta hiç gelmiyor** → APNs .p8 anahtarı yüklendi mi (yukarıdaki adım 2)?
+   Yüklenmeden iOS'a push gitmez.
+2. **Debug'da geliyor, TestFlight'ta gelmiyor** → `ios/Runner/Runner.entitlements`
+   içindeki `aps-environment` `development`. Xcode dağıtım için dışa aktarırken
+   bunu normalde `production`'a çevirir; çevirmediyse (ör. elle imzalama)
+   sandbox token'ıyla üretim APNs'e gidilir ve bildirim düşmez.
+3. **Hiçbir cihaza gitmiyor** → Console → Functions → `yoklamaBildirimi`
+   günlükleri: "hiçbir cihaza bildirim gitmedi" satırı varsa token'lar ölmüş
+   demektir; cihazlar yeniden giriş yapınca kaydolur.
+4. **Cihazın kaydı yok** → Firestore `workspaces/main/fcmTokens` altında o
+   cihazın satırı var mı? Yoksa uygulamada Yönetim ekranındaki "Bildirimler"
+   satırına bakın: kapalıysa telefon ayarlarından izin verin.

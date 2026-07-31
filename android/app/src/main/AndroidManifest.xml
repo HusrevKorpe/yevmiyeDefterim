@@ -28,6 +28,19 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Push bildirimi görünümü (FCM). Bunlar verilmezse Android launcher
+             ikonunu siluete indirger → durum çubuğunda BEYAZ KARE çıkar ve
+             bildirim adsız "Diğer" kanalına düşer.
+             Kanal `MainActivity.onCreate` içinde oluşturulur (aynı kimlik). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_yevmiye" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/bildirim_rengi" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="yoklama" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

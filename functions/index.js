@@ -9,9 +9,16 @@
  * Notlar:
  * - Kaydedenin kendi cihaz(lar)ı `uid` karşılaştırmasıyla elenir → kendi
  *   bastığın Kaydet için sana bildirim gelmez, diğer cihazlara gider.
- * - Aynı güne 60 sn içinde art arda basılan Kaydet'ler tek bildirim sayılır
- *   (clientUpdatedAt farkı ile susturulur).
- * - Geçersiz/eskimiş token'lar gönderim cevabına göre silinir (kayıt temiz kalır).
+ * - AYNI kişinin aynı güne 60 sn içinde art arda bastığı Kaydet'ler tek
+ *   bildirim sayılır. Ölçü SUNUCU damgasıdır (`updatedAt`), cihaz saati değil:
+ *   `clientUpdatedAt` yazan telefonun saatidir, offline kuyrukta bekleyen bir
+ *   yazım sonradan sunucuya düştüğünde ondan ÖNCEKİ kayıttan daha "eski"
+ *   görünür (fark negatif) → susturma koşulu yanlışlıkla tutar ve bildirim
+ *   sessizce yutulurdu. Farklı kişinin kaydı da hiç susturulmaz.
+ * - Geçersiz/eskimiş token'lar gönderim cevabına göre silinir (kayıt temiz
+ *   kalır). Silme YALNIZ token'a özgü hata kodlarında yapılır: `invalid-argument`
+ *   bozuk MESAJ gövdesi için de dönebilir → onunla silinseydi tek bir payload
+ *   hatası bütün cihaz kayıtlarını süpürürdü.
  * - Bölge: europe-west1. Deploy "trigger location must match database" hatası
  *   verirse Firestore veritabanının bölgesini yazın (Console > Firestore).
  */
@@ -21,6 +28,15 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 
 initializeApp();
+
+/** Aynı kişinin art arda basışlarını tek bildirime indiren pencere. */
+const SUSTURMA_MS = 60_000;
+
+/** Token kaydını silmeyi hak eden hatalar (yalnız token'a özgü olanlar). */
+const OLU_TOKEN_KODLARI = new Set([
+  "messaging/registration-token-not-registered",
+  "messaging/invalid-registration-token",
+]);
 
 /** TR ay adları (index 1-12). */
 const AYLAR = ["", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
@@ -38,6 +54,12 @@ function trTarih(iso) {
   return `${+d} ${AYLAR[+mo]} ${gun}`;
 }
 
+/** Dokümanın SUNUCU yazma damgası (ms). Yoksa/çözülmemişse null. */
+function sunucuDamgasiMs(data) {
+  const t = data && data.updatedAt;
+  return t && typeof t.toMillis === "function" ? t.toMillis() : null;
+}
+
 exports.yoklamaBildirimi = onDocumentWritten(
     {
       document: "workspaces/main/attendanceDays/{date}",
@@ -47,16 +69,21 @@ exports.yoklamaBildirimi = onDocumentWritten(
       const after = event.data && event.data.after && event.data.after.data();
       if (!after) return; // doküman silindi → bildirim yok
 
-      // Aynı güne art arda Kaydet: 60 sn içindeki tekrarı sustur.
+      const savedByUid = after.updatedByUid || null;
+
+      // AYNI kişinin aynı güne art arda Kaydet'i: 60 sn içindeki tekrarı sustur.
+      // Ölçü sunucu damgası; damga okunamıyorsa SUSTURMA (bildirimi kaçırmaktansa
+      // fazladan göndermek yeğdir).
       const before = event.data.before && event.data.before.data();
-      if (before &&
-          typeof before.clientUpdatedAt === "number" &&
-          typeof after.clientUpdatedAt === "number" &&
-          after.clientUpdatedAt - before.clientUpdatedAt < 60_000) {
+      const oncekiMs = sunucuDamgasiMs(before);
+      const simdikiMs = sunucuDamgasiMs(after);
+      if (oncekiMs !== null &&
+          simdikiMs !== null &&
+          simdikiMs - oncekiMs < SUSTURMA_MS &&
+          (before.updatedByUid || null) === savedByUid) {
         return;
       }
 
-      const savedByUid = after.updatedByUid || null;
       const db = getFirestore();
       const snap = await db.collection("workspaces/main/fcmTokens").get();
 
@@ -76,18 +103,29 @@ exports.yoklamaBildirimi = onDocumentWritten(
           body: `${trTarih(event.params.date)} yoklaması kaydedildi` +
               (kim ? ` (${kim})` : ""),
         },
+        // Bildirime dokununca uygulama o günün yoklamasını açsın (uygulama
+        // tarafı `message.data['tarih']`i okur — push_notifications.dart).
+        data: {tip: "yoklama", tarih: event.params.date},
         apns: {payload: {aps: {sound: "default"}}},
         android: {notification: {sound: "default"}},
       });
 
       // Eskimiş/geçersiz token kayıtlarını sil (cihaz silindi / app kaldırıldı).
+      // Diğer hatalar (payload/kimlik bilgisi vb.) kaydı SİLDİRMEZ, günlüğe düşer.
       const silinecek = [];
       cevap.responses.forEach((r, i) => {
         const kod = r.error && r.error.code;
-        if (kod === "messaging/registration-token-not-registered" ||
-            kod === "messaging/invalid-argument") {
+        if (!kod) return;
+        if (OLU_TOKEN_KODLARI.has(kod)) {
           silinecek.push(hedefler[i].ref.delete());
+        } else {
+          console.warn(`bildirim gönderilemedi (kayıt korundu): ${kod}`);
         }
       });
       await Promise.all(silinecek);
+
+      if (cevap.successCount === 0) {
+        console.error(
+            `hiçbir cihaza bildirim gitmedi (${tokens.length} token denendi)`);
+      }
     });

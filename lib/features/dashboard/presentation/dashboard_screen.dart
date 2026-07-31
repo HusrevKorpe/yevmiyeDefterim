@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/theme.dart';
 import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
+import '../../../core/notifications/push_notifications.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
@@ -31,6 +32,9 @@ class DashboardScreen extends ConsumerWidget {
       icon: Icons.logout,
     );
     if (ok) {
+      // ÖNCE cihazın push kaydını bırak (oturum hâlâ açıkken — çıkıştan sonra
+      // silme yetkisi kalmaz), SONRA çık. Bu cihaz artık bildirim almamalı.
+      await releasePushToken();
       await ref.read(authRepositoryProvider).signOut();
     }
   }

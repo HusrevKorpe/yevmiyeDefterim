@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#2E7D32</color>
+    <!-- Bildirim vurgu rengi (küçük ikonun tonu + uygulama adı) — marka yeşili. -->
+    <color name="bildirim_rengi">#2E7D32</color>
 </resources>

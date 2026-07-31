@@ -10,11 +10,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/theme.dart';
 import '../../../app/theme_mode.dart';
 import '../../../core/diagnostics/app_log.dart';
 import '../../../core/firestore/firestore_providers.dart';
 import '../../../core/firestore/write_ack.dart';
 import '../../../core/money/money.dart';
+import '../../../core/notifications/push_notifications.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
 import '../application/backup_service.dart';
@@ -80,6 +82,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const SectionTitle('Görünüm'),
             const SizedBox(height: 10),
             const _DarkModeSwitch(),
+            const _NotificationStatus(),
             const SizedBox(height: 28),
             const SectionTitle('Veri Yedeği'),
             const SizedBox(height: 8),
@@ -271,6 +274,73 @@ class _OvertimeRateSectionState extends ConsumerState<_OvertimeRateSection> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Bildirim izni durumu — yalnız durum BİLİNİYORSA görünür.
+///
+/// Sistem izin diyaloğu bir kez reddedilince bir daha çıkmaz: kullanıcı
+/// bildirimlerin neden gelmediğini anlayamaz. Bu satır durumu söyler ve
+/// kapalıysa nereden açacağını tarif eder. [pushPermissionGranted] yalnız
+/// gerçek cihazda (push kurulumu çalışınca) dolar; testlerde/masaüstünde `null`
+/// kalır → hiçbir şey çizilmez, ekranın mevcut düzeni değişmez.
+class _NotificationStatus extends StatelessWidget {
+  const _NotificationStatus();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ValueListenableBuilder<bool?>(
+      valueListenable: pushPermissionGranted,
+      builder: (context, granted, _) {
+        if (granted == null) return const SizedBox.shrink();
+        final ok = granted;
+        final renk = ok ? theme.colorScheme.primary : StatusColors.half;
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: renk.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  ok ? Icons.notifications_active : Icons.notifications_off,
+                  color: renk,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ok ? 'Bildirimler açık' : 'Bildirimler kapalı',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        ok
+                            ? 'Başka bir cihazda yoklama kaydedilince '
+                                'haberiniz olur.'
+                            : 'Yoklama kaydedildiğinde haberiniz olmaz. '
+                                'Telefon Ayarları → Bildirimler → Yevmiye '
+                                'Defterim yolundan açabilirsiniz.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

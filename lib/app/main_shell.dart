@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/constants/routes.dart';
 import '../core/date/app_date.dart';
+import '../core/notifications/push_notifications.dart';
 import '../core/widgets/app_dialog.dart';
 import '../features/attendance/application/attendance_providers.dart';
 import '../features/auth/application/user_access.dart';
@@ -45,12 +47,29 @@ class _MainShellState extends ConsumerState<MainShell>
     super.initState();
     _lastKnownDay = todayIso();
     WidgetsBinding.instance.addObserver(this);
+    // Push bildirimine dokunuldu → o günün yoklamasını aç. Uygulama kapalıyken
+    // gelen dokunuş bu kabuk kurulmadan ÖNCE okunmuş olabilir (getInitialMessage)
+    // → dinleyiciye ek olarak mevcut değeri de bir kez yokla.
+    pushTappedDate.addListener(_onPushTapped);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onPushTapped());
   }
 
   @override
   void dispose() {
+    pushTappedDate.removeListener(_onPushTapped);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// Bildirimden gelen günü seçip Yoklama'yı açar; gün BİR KEZ tüketilir.
+  /// `go` (goBranch değil) bilinçli: kullanıcı Rapor gibi üste itilmiş bir
+  /// sayfadayken bildirime dokunduğunda o sayfa da kapanıp yoklama görünsün.
+  void _onPushTapped() {
+    final date = pushTappedDate.value;
+    if (date == null || !mounted) return;
+    pushTappedDate.value = null;
+    ref.read(selectedDateProvider.notifier).set(date);
+    context.go(AppRoutes.attendance);
   }
 
   /// Gece yarısı devri: telefon arka planda kalıp ertesi gün öne alınınca
