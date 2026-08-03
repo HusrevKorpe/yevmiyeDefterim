@@ -1,14 +1,14 @@
 /// Kasa Riverpod sağlayıcıları (kural §7).
 ///
-/// Dönem seçimi → o dönemin kayıtları (aralık sorgusu). Dönem özeti ekranda,
-/// veri hazır olunca saf `summarizeLedger` ile türetilir (yükleniyor/hata
-/// durumunda ₺0 boş özet gösterilmez). Kategori ekranları (Mazot/Tamir/Bakkal)
-/// için kategorinin tüm kayıtları ayrıca sunulur.
+/// Giderler ekranı TÜM kayıtları gösterir (ekranda ay ay gruplanır) — dönem
+/// süzgeci yoktur, dönem raporu Rapor ekranındadır. Toplam ekranda, veri hazır
+/// olunca saf `summarizeLedger` ile türetilir (yükleniyor/hata durumunda ₺0 boş
+/// özet gösterilmez). Kategori ekranları (Mazot/Tamir/Bakkal) için kategorinin
+/// kayıtları ayrıca sunulur.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/date/app_date.dart';
 import '../../../core/firestore/firestore_providers.dart';
 import '../data/ledger_entry.dart';
 import '../data/ledger_repository.dart';
@@ -25,57 +25,12 @@ final StreamProvider<List<LedgerEntry>> ledgerStreamProvider =
   (ref) => ref.watch(ledgerRepositoryProvider).watchAll(),
 );
 
-/// Seçili Kasa dönemi (uçlar dahil, `'yyyy-MM-dd'`).
-class LedgerPeriod {
-  const LedgerPeriod(this.start, this.end);
-
-  final String start;
-  final String end;
-
-  @override
-  bool operator ==(Object other) =>
-      other is LedgerPeriod && other.start == start && other.end == end;
-
-  @override
-  int get hashCode => Object.hash(start, end);
-}
-
-/// Dönem seçimi. Varsayılan: içinde bulunulan ayın 1'i → bugün.
-class LedgerPeriodNotifier extends Notifier<LedgerPeriod> {
-  @override
-  LedgerPeriod build() => LedgerPeriod(firstDayOfMonthIso(), todayIso());
-
-  void setStart(String iso) {
-    // Başlangıç bitişten sonra olamaz.
-    final end = iso.compareTo(state.end) > 0 ? iso : state.end;
-    state = LedgerPeriod(iso, end);
-  }
-
-  void setEnd(String iso) {
-    final start = iso.compareTo(state.start) < 0 ? iso : state.start;
-    state = LedgerPeriod(start, iso);
-  }
-
-  /// Preset: içinde bulunulan ay (1'i → bugün).
-  void thisMonth() => state = LedgerPeriod(firstDayOfMonthIso(), todayIso());
-
-  /// Preset: içinde bulunulan hafta (Pazartesi → bugün).
-  void thisWeek() => state = LedgerPeriod(startOfWeekIso(), todayIso());
-}
-
-final NotifierProvider<LedgerPeriodNotifier, LedgerPeriod> ledgerPeriodProvider =
-    NotifierProvider<LedgerPeriodNotifier, LedgerPeriod>(
-  LedgerPeriodNotifier.new,
-);
-
-/// Seçili dönemin kayıtları (aralık sorgusu), tarihe göre yeni→eski sıralı.
-final StreamProvider<List<LedgerEntry>> ledgerInPeriodProvider =
-    StreamProvider<List<LedgerEntry>>((ref) {
-  final period = ref.watch(ledgerPeriodProvider);
-  return ref
-      .watch(ledgerRepositoryProvider)
-      .watchByRange(period.start, period.end)
-      .map((entries) {
+/// Giderler ekranının listesi: tüm kayıtlar, yeni→eski sıralı (ekranda ay ay
+/// gruplanır). Yükleniyor/hata durumu olduğu gibi geçer — ekran spinner ya da
+/// "Yeniden Dene" gösterir, boş sanılmaz (kural §8).
+final Provider<AsyncValue<List<LedgerEntry>>> ledgerSortedProvider =
+    Provider<AsyncValue<List<LedgerEntry>>>((ref) {
+  return ref.watch(ledgerStreamProvider).whenData((entries) {
     final sorted = [...entries]..sort((a, b) => b.date.compareTo(a.date));
     return sorted;
   });

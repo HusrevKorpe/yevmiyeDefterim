@@ -1,12 +1,11 @@
-/// Kasa ekranı widget testi — özet kartının (₺ "Toplam Gider") YALNIZ veri
-/// hazırken gösterildiğini sabitler (kural §8).
+/// Kasa (Giderler) ekranı widget testi — iki davranışı sabitler:
 ///
-/// Regresyon: özet eskiden [ledgerInPeriodProvider]'ı `.asData?.value ?? []` ile
-/// yutan ayrı bir sağlayıcıdan okunuyordu; bu yüzden yükleniyor/hata durumunda
-/// bile ₺0'lık "boş özet" görünüyor, kullanıcı "hiç gider yok" sanıyordu. Artık
-/// özet AsyncRetry'nin veri closure'ında `summarizeLedger(entries)` ile türetilir.
-/// Bu test o davranışı kilitler: yükleniyor/hata → özet YOK; yüklenmiş-boş → ₺0
-/// özet VAR (gerçekten boş dönem, hata değil).
+/// 1. Özet kartı (₺ "Toplam Gider") YALNIZ veri hazırken görünür (kural §8).
+///    Regresyon: özet eskiden akışı `.asData?.value ?? []` ile yutan ayrı bir
+///    sağlayıcıdan okunuyordu; yükleniyor/hata durumunda bile ₺0'lık "boş özet"
+///    görünüyor, kullanıcı "hiç gider yok" sanıyordu.
+/// 2. Liste tüm geçmişi gösterir ve ay değişince araya ay ayracı girer
+///    ("Temmuz 2026 · −₺X" — ayraçtaki tutar O AYIN toplamı).
 library;
 
 import 'dart:async';
@@ -18,21 +17,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:yevmiye_defterim/core/constants/categories.dart';
+import 'package:yevmiye_defterim/core/money/money.dart';
 import 'package:yevmiye_defterim/features/ledger/application/ledger_providers.dart';
 import 'package:yevmiye_defterim/features/ledger/data/ledger_entry.dart';
 import 'package:yevmiye_defterim/features/ledger/presentation/ledger_screen.dart';
 import 'package:yevmiye_defterim/features/ledger/presentation/widgets/ledger_entry_tile.dart';
+import 'package:yevmiye_defterim/features/ledger/presentation/widgets/month_header_row.dart';
 
 void main() {
   setUpAll(() async {
     await initializeDateFormatting('tr_TR', null);
   });
 
-  /// [ledgerInPeriodProvider]'ı verilen akışla değiştirip Kasa ekranını kurar.
+  /// Kayıt akışını değiştirip Giderler ekranını kurar.
   Widget buildApp(Stream<List<LedgerEntry>> entries) {
     return ProviderScope(
       overrides: [
-        ledgerInPeriodProvider.overrideWith((ref) => entries),
+        ledgerStreamProvider.overrideWith((ref) => entries),
       ],
       child: const MaterialApp(
         locale: Locale('tr', 'TR'),
@@ -90,15 +91,47 @@ void main() {
     expect(find.text('Yeniden Dene'), findsNothing);
   });
 
-  testWidgets('YÜKLENMİŞ-BOŞ: ₺0 özet VAR (gerçekten boş dönem, hata değil)',
+  testWidgets('YÜKLENMİŞ-BOŞ: ₺0 özet VAR (gerçekten boş, hata değil)',
       (tester) async {
     await tester.pumpWidget(buildApp(Stream.value(const [])));
     await tester.pumpAndSettle();
 
     // Veri geldi ve gerçekten boş → özet gösterilir (yükleniyor/hatadan farkı bu).
     expect(find.text('Toplam Gider'), findsOneWidget);
-    expect(find.text('Bu dönemde kayıt yok'), findsOneWidget);
+    expect(find.text('Henüz gider kaydı yok'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('Yeniden Dene'), findsNothing);
+  });
+
+  testWidgets('GEÇMİŞ: eski aylar da listede, ay değişince ayraç girer',
+      (tester) async {
+    LedgerEntry at(String id, String date, int amountKurus) => LedgerEntry(
+          id: id,
+          category: LedgerCategory.genel,
+          amountKurus: amountKurus,
+          date: date,
+          source: LedgerSource.manual,
+        );
+
+    await tester.pumpWidget(buildApp(Stream.value([
+      at('a1', '2026-08-01', 100000), // Ağustos: ₺1.000
+      at('t1', '2026-07-20', 250000), // Temmuz: ₺2.500 + ₺500
+      at('t2', '2026-07-05', 50000),
+    ])));
+    await tester.pumpAndSettle();
+
+    // Üç kayıt da tek listede; ay değişince ayraç satırı girer.
+    expect(find.byType(LedgerEntryTile), findsNWidgets(3));
+    expect(find.byType(MonthHeaderRow), findsNWidgets(2));
+    expect(find.text('Ağustos 2026'), findsOneWidget);
+    expect(find.text('Temmuz 2026'), findsOneWidget);
+
+    // Ayraçtaki tutar O AYIN toplamı (tüm zamanların değil).
+    Finder inHeader(String text) => find.descendant(
+          of: find.byType(MonthHeaderRow),
+          matching: find.text(text),
+        );
+    expect(inHeader('−${formatKurus(100000)}'), findsOneWidget);
+    expect(inHeader('−${formatKurus(300000)}'), findsOneWidget);
   });
 }

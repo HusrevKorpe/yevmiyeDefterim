@@ -1,4 +1,4 @@
-/// Regresyon: Kasa'daki dönem seçiciden açılan Material takvim diyaloğu,
+/// Regresyon: Giderler'deki gider formundan açılan Material takvim diyaloğu,
 /// uygulamanın GERÇEK MediaQuery yapılandırması (app.dart, tavansız min 1.10x)
 /// altında AÇILDIĞINDA taşmamalı/assert atmamalı.
 ///
@@ -62,20 +62,19 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // Dönemi geçmişe sabitle (showDatePicker'ın lastDate=bugün asserti için).
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(YevmiyeApp)),
-      listen: false,
-    );
-    container.read(ledgerPeriodProvider.notifier).setStart('2026-06-01');
-    container.read(ledgerPeriodProvider.notifier).setEnd('2026-06-30');
+    await tester.tap(find.text('Giderler').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Kasa').last);
+    // Gider ekleme formunu aç (Giderler listesinde artık dönem pili yok;
+    // aynı `pickAppDate` takvimi buradaki "Tarih" alanından açılır).
+    await tester.tap(find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text('Ekle'),
+    ));
     await tester.pumpAndSettle();
 
-    // Dönem başlangıç segmentine dokun → takvim diyaloğu açılır.
-    await tester.tap(find.text('1 Haziran').first);
+    // "Tarih" alanına dokun → takvim diyaloğu açılır.
+    await tester.tap(find.byIcon(Icons.event));
     await tester.pumpAndSettle();
 
     // Takvim gerçekten açıldı mı?

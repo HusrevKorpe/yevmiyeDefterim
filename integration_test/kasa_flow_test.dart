@@ -112,15 +112,6 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // Dönemi deterministik yap (makine saatinden bağımsız).
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(YevmiyeApp)),
-      listen: false,
-    );
-    container.read(ledgerPeriodProvider.notifier).setStart('2026-07-01');
-    container.read(ledgerPeriodProvider.notifier).setEnd('2026-07-31');
-    await tester.pumpAndSettle();
-
     await binding.takeScreenshot('01-ana-sayfa');
 
     // Kasa sekmesine geç.

@@ -109,6 +109,12 @@ List<String> daysOfMonthIso(String monthIso) {
   ];
 }
 
-/// Gösterim için TR ay başlığı: "Temmuz 2026".
-String formatMonthTitle(String monthIso) =>
-    _monthTitle.format(_monthKey.parseStrict(monthIso));
+/// Gösterim için TR ay başlığı: "Temmuz 2026". Bozuk/eksik ay anahtarında
+/// (kayıt tarihi elle bozulmuşsa) ham değer gösterilir — ekran çökmez.
+String formatMonthTitle(String monthIso) {
+  try {
+    return _monthTitle.format(_monthKey.parseStrict(monthIso));
+  } on FormatException {
+    return monthIso;
+  }
+}

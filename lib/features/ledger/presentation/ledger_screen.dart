@@ -1,12 +1,15 @@
-/// Kasa — dönem gider listesi + toplam + kategori ekranları (plan §5, kural §8).
+/// Kasa — gider listesi + toplam + kategori ekranları (plan §5, kural §8).
 ///
-/// Otomatik hakediş kayıtları salt-okunur; elle kayıtlar dokununca düzenlenir.
-/// Avanslar Kasa'da YOK (ayrı akış, kural §6) → çifte sayım olmaz.
+/// Liste TÜM kayıtları geçmişiyle beraber gösterir; ay değişince araya
+/// "Temmuz 2026 · −₺X" ayracı girer (dönem süzgeci yok — dönem raporu Rapor
+/// ekranında). Otomatik hakediş kayıtları salt-okunur; elle kayıtlar dokununca
+/// düzenlenir. Avanslar Kasa'da YOK (ayrı akış, kural §6) → çifte sayım olmaz.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/ledger_month_groups.dart';
 import '../application/ledger_providers.dart';
 import '../application/ledger_summary.dart';
 import '../data/ledger_entry.dart';
@@ -15,11 +18,11 @@ import '../../../core/constants/categories.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/gradient_header.dart';
-import '../../../core/widgets/period_range_selector.dart';
 import 'category_screen.dart';
 import 'ledger_edit_screen.dart';
 import 'widgets/ledger_entry_tile.dart';
 import 'widgets/ledger_summary_card.dart';
+import 'widgets/month_header_row.dart';
 
 class LedgerScreen extends ConsumerStatefulWidget {
   const LedgerScreen({super.key});
@@ -47,9 +50,7 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final period = ref.watch(ledgerPeriodProvider);
-    final periodNotifier = ref.read(ledgerPeriodProvider.notifier);
-    final async = ref.watch(ledgerInPeriodProvider);
+    final async = ref.watch(ledgerSortedProvider);
 
     return Scaffold(
       appBar: GradientAppBar(
@@ -68,63 +69,105 @@ class _LedgerScreenState extends ConsumerState<LedgerScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          PeriodRangeSelector(
-            startIso: period.start,
-            endIso: period.end,
-            onSetStart: periodNotifier.setStart,
-            onSetEnd: periodNotifier.setEnd,
-          ),
-          Expanded(
-            child: AsyncRetry(
-              value: async,
-              onRetry: () => ref.invalidate(ledgerInPeriodProvider),
-              message: 'Giderler yüklenemedi. İnternet bağlantınızı kontrol edin.',
-              // Özet kartı da yalnız veri hazır olunca (data closure) türetilir.
-              // Yükleniyor/hata durumunda ₺0'lık "boş özet" GÖSTERİLMEZ; bunun
-              // yerine spinner ya da "Yeniden Dene" çıkar (kural §8 — rapor ve
-              // işçi geçmişi ekranlarıyla aynı: hata yutulmaz, boş sanılmaz).
-              data: (entries) {
-                final summary = summarizeLedger(entries);
-                return Column(
-                  children: [
-                    LedgerSummaryCard(
-                      summary: summary,
-                      showBreakdown: false,
-                    ),
-                    Expanded(
-                      child: entries.isEmpty
-                          ? const _EmptyView()
-                          : ListView.separated(
-                              padding: const EdgeInsets.only(bottom: 20),
-                              itemCount: entries.length,
-                              separatorBuilder: (context, i) => const Divider(
-                                height: 1,
-                                thickness: 1,
-                                indent: 16,
-                                endIndent: 16,
-                              ),
-                              itemBuilder: (context, i) {
-                                final e = entries[i];
-                                return LedgerEntryTile(
-                                  entry: e,
-                                  onTap: e.isManual
-                                      ? () => _openEdit(context, entry: e)
-                                      : null,
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+      body: AsyncRetry(
+        value: async,
+        onRetry: () => ref.invalidate(ledgerStreamProvider),
+        message: 'Giderler yüklenemedi. İnternet bağlantınızı kontrol edin.',
+        // Özet kartı da yalnız veri hazır olunca (data closure) türetilir.
+        // Yükleniyor/hata durumunda ₺0'lık "boş özet" GÖSTERİLMEZ; bunun
+        // yerine spinner ya da "Yeniden Dene" çıkar (kural §8 — rapor ve
+        // işçi geçmişi ekranlarıyla aynı: hata yutulmaz, boş sanılmaz).
+        data: (entries) {
+          final summary = summarizeLedger(entries);
+          return Column(
+            children: [
+              LedgerSummaryCard(
+                summary: summary,
+                showBreakdown: false,
+              ),
+              Expanded(
+                child: entries.isEmpty
+                    ? const _EmptyView()
+                    : _MonthGroupedList(
+                        groups: groupLedgerByMonth(entries),
+                        onEdit: (e) => _openEdit(context, entry: e),
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+}
+
+/// Ay ay gruplanmış gider listesi: her ayın başında [MonthHeaderRow] ayracı,
+/// altında o ayın kayıtları (yeni→eski).
+class _MonthGroupedList extends StatelessWidget {
+  const _MonthGroupedList({required this.groups, required this.onEdit});
+
+  final List<LedgerMonthGroup> groups;
+
+  /// Elle kayda dokunulunca düzenleme ekranı.
+  final ValueChanged<LedgerEntry> onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    // Başlık + kayıt satırları tek düz listeye açılır → ListView.builder yalnız
+    // görünen satırları çizer (uzun geçmişte de akıcı kalır).
+    final rows = <_Row>[];
+    for (final g in groups) {
+      rows.add(_HeaderRow(g));
+      for (final (i, e) in g.entries.indexed) {
+        rows.add(_EntryRow(e, divider: i > 0));
+      }
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 20),
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final row = rows[i];
+        return switch (row) {
+          _HeaderRow(:final group) => MonthHeaderRow(group: group),
+          _EntryRow(:final entry, :final divider) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (divider)
+                  const Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                LedgerEntryTile(
+                  entry: entry,
+                  onTap: entry.isManual ? () => onEdit(entry) : null,
+                ),
+              ],
+            ),
+        };
+      },
+    );
+  }
+}
+
+/// Düz listedeki satır: ay başlığı ya da gider kaydı.
+sealed class _Row {
+  const _Row();
+}
+
+class _HeaderRow extends _Row {
+  const _HeaderRow(this.group);
+  final LedgerMonthGroup group;
+}
+
+class _EntryRow extends _Row {
+  const _EntryRow(this.entry, {required this.divider});
+  final LedgerEntry entry;
+
+  /// Ay içindeki ilk kayıt hariç satır arası çizgi.
+  final bool divider;
 }
 
 /// Başlıktaki küçük beyaz "Ekle" hapı — degrade üzerinde güçlü kontrast.
@@ -188,13 +231,13 @@ class _EmptyView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Bu dönemde kayıt yok',
+              'Henüz gider kaydı yok',
               style: theme.textTheme.titleLarge
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Üstteki “Ekle” ile gider girin ya da dönemi değiştirin.',
+              'Üstteki “Ekle” ile ilk gideri girin.',
               style: theme.textTheme.bodyMedium
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
