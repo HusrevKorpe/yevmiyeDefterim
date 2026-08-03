@@ -64,7 +64,7 @@ class _WorkerTile extends ConsumerWidget {
 
   /// Kaydırma silme davranışı işçinin durumuna göre değişir:
   /// - Aktif işçi → [_deactivate]: soft-delete, "Pasif İşçiler"e taşınır (geri alınır).
-  /// - Pasif işçi → [_purge]: uygulamadan KALICI silinir (geri alınamaz).
+  /// - Pasif işçi → [_purge]: işçi VE tüm kayıtları KALICI silinir (geri alınamaz).
   Future<void> _delete(BuildContext context, WidgetRef ref) =>
       worker.active ? _deactivate(context, ref) : _purge(context, ref);
 
@@ -97,30 +97,53 @@ class _WorkerTile extends ConsumerWidget {
     );
   }
 
-  /// Zaten pasif olan işçiyi uygulamadan KALICI siler (geri alınamaz). Geçmiş
-  /// yoklama/avans kayıtları işçi adını denormalize sakladığından raporlarda
-  /// görünmeye devam eder; işçi yalnız listeden kaybolur.
+  /// Zaten pasif olan işçiyi uygulamadan KALICI siler: işçi dokümanı + TÜM
+  /// yoklama ve avans kayıtları (bkz. [purgeWorkerRecords]). Kayıtlar işçinin
+  /// adını denormalize sakladığından yalnız dokümanı silmek yetmezdi — işçi
+  /// aylık tabloda (Excel), raporlarda ve CSV/PDF çıktılarında satır bırakırdı.
+  /// Her şey kayıtlardan türediği için kayıtlar gidince işçi HER YERDEN kalkar.
+  /// Geri alınamaz → çağrı öncesi onay alınır.
   Future<void> _purge(BuildContext context, WidgetRef ref) async {
+    final theme = Theme.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    final repo = ref.read(workerRepositoryProvider);
     final ok = await showConfirmDialog(
       context,
       title: 'Kalıcı olarak sil',
-      message: '${worker.name} uygulamadan kalıcı olarak silinsin mi? '
-          'Bu işlem geri alınamaz. Geçmiş yoklama ve avans kayıtları '
-          'raporlarda kalır.',
+      message: '${worker.name} ve bu işçiye ait TÜM kayıtlar (tüm aylardaki '
+          'yoklamalar ve avanslar) kalıcı olarak silinsin mi? İşçi aylık '
+          'tablodan ve raporlardan da kalkar. Bu işlem geri alınamaz.',
       confirmLabel: 'Kalıcı Sil',
       icon: Icons.delete_forever,
+      accent: theme.colorScheme.error,
     );
     if (!ok) return;
-    await repo.delete(worker.id);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
+    try {
+      final result = await purgeWorkerRecords(
+        attendance: ref.read(attendanceRepositoryProvider),
+        advances: ref.read(advanceRepositoryProvider),
+        workers: ref.read(workerRepositoryProvider),
+        workerId: worker.id,
+      );
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            result.isEmpty
+                ? '${worker.name} kalıcı olarak silindi'
+                : '${worker.name} silindi — ${result.summary}',
+          ),
+        ),
+      );
+    } catch (e, s) {
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(const SnackBar(
         behavior: SnackBarBehavior.floating,
-        content: Text('${worker.name} kalıcı olarak silindi'),
-      ),
-    );
+        content: Text('İşçi silinemedi. Tekrar deneyin.'),
+      ));
+      await logHandledError(e, s,
+          reason: 'isci-kalici-silme', info: {'workerId': worker.id});
+    }
   }
 
   String _subtitleText(bool canSeeMoney) {
@@ -204,9 +227,14 @@ class _WorkerTile extends ConsumerWidget {
       ),
     );
 
+    // Kalıcı silme TÜM yoklama + avans geçmişini yok eder → para göremeyen
+    // hesapta kapalıdır (aylık tablodaki temizlikle aynı kural). Aktif işçiyi
+    // pasife alma herkese açık kalır: geri alınabilir, veri silmez.
+    final bool showSwipe = canDelete && (worker.active || canSeeMoney);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      child: canDelete
+      child: showSwipe
           ? Slidable(
               key: ValueKey('worker-${worker.id}'),
               // Sola kaydırınca sağdan açılan çöp kutusu butonu; SİLME yalnız

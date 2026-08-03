@@ -7,11 +7,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../advances/application/advance_providers.dart';
+import '../../attendance/application/attendance_providers.dart';
 import '../../auth/application/user_access.dart';
+import '../application/worker_purge.dart';
 import '../application/worker_search.dart';
 import '../application/workers_providers.dart';
 import '../data/worker.dart';
