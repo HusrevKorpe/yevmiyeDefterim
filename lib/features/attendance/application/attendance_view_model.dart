@@ -62,7 +62,12 @@ class AttendanceViewModel extends Notifier<String?> {
     // değildir. İşçinin yevmiyesi bu arada değiştirilmiş olsa bile geçmiş günün
     // kazancı sabit kalmalı (aksi halde eski günü düzenlemek kazancı sessizce
     // güncel orana çekerdi). İlk kayıtta güncel ücret çözülüp dondurulur.
-    final wage = existing is IndividualAttendance
+    //
+    // Dondurulmuş ₺0 İSTİSNA (mesai ücretiyle aynı mantık): yevmiyesi HİÇ
+    // girilmemişken alınan yoklama ₺0 dondurur — bu bir ücret değil, eksik
+    // veridir. Korunsaydı "önce yoklama aldım, sonra yevmiyeyi girdim"
+    // akışında gün sonsuza dek ₺0 kalırdı. 0 ise güncel ücret çözülür.
+    final wage = existing is IndividualAttendance && existing.wageSnapshotKurus > 0
         ? existing.wageSnapshotKurus
         : resolveWageKurus(
             gender: worker.gender,
@@ -159,7 +164,12 @@ class AttendanceViewModel extends Notifier<String?> {
     // düzeltmek YENİ bir dondurma anı değildir. İşçinin kişi-başı yevmiyesi bu
     // arada değiştirilmiş olsa bile geçmiş günün oranı sabit kalmalı. İlk kayıtta
     // güncel oran dondurulur (commitCrewDefaults'un önden-dolu yazımı dahil).
-    final rate = existing is CrewAttendance
+    //
+    // Dondurulmuş ₺0 İSTİSNA: elebaşı kişi-başı yevmiyesi İSTEĞE BAĞLI (işçi
+    // kartında boş bırakılabilir) → ücretsiz açılan elebaşının günleri ₺0
+    // dondurur. Ücret sonradan girilince o 0 korunsaydı sayacı oynatmak bile
+    // günü ₺0'da bırakırdı ("fiyat ekledim, görünmüyor"). 0 = fiyatlanmamış.
+    final rate = existing is CrewAttendance && existing.crewRateSnapshotKurus > 0
         ? existing.crewRateSnapshotKurus
         : _crewRate(worker);
     // Sayı değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.

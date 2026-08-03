@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/diagnostics/app_log.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
+import '../../attendance/application/attendance_providers.dart';
+import '../../attendance/application/wage_backfill.dart';
+import '../../attendance/data/attendance_record.dart';
 import '../../auth/application/user_access.dart';
 import '../../settings/application/settings_providers.dart';
 import '../application/worker_edit_view_model.dart';
@@ -108,9 +112,75 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
       defaultHeadcount: _type.isCrew ? _parseHeadcount() : null,
       active: widget.worker?.active ?? true,
     );
+    // Yevmiye İLK KEZ giriliyorsa (boş/₺0 → tutar), o işçinin ücretsiz
+    // kaydedilmiş geçmiş günlerini de fiyatlamayı teklif et. Kaydetmeden ÖNCE
+    // sorulur: kayıt başarılı olunca ekran kapanır (ref.listen → pop), sonrası
+    // için ekran hayatta olmaz. Yoklama kayıtlarının ücreti işçi dokümanından
+    // türetilmediği (dondurulduğu) için sıralamanın veri açısından önemi yok.
+    final oldWage = widget.worker?.dailyWageOverrideKurus ?? 0;
+    final newWage = worker.dailyWageOverrideKurus ?? 0;
+    if (!_isNew && oldWage <= 0 && newWage > 0) {
+      await _offerBackfill(workerId: worker.id, rateKurus: newWage);
+      if (!mounted) return;
+    }
     await ref
         .read(workerEditViewModelProvider.notifier)
         .submit(worker: worker, isNew: _isNew);
+  }
+
+  /// Ücreti girilmeden (₺0) kaydedilmiş geçmiş yoklama günlerini yeni yevmiyeyle
+  /// güncellemeyi teklif eder (bkz. `wage_backfill.dart`). Sessiz değil ONAYLI:
+  /// geçmiş kazancı değiştirmek kullanıcının kararı. Okuma/yazma hatası akışı
+  /// kesmez — işçi yine kaydedilir, gün fiyatlaması yapılmaz.
+  Future<void> _offerBackfill({
+    required String workerId,
+    required int rateKurus,
+  }) async {
+    final repo = ref.read(attendanceRepositoryProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    final canSeeMoney = ref.read(canSeeMoneyProvider);
+    List<AttendanceRecord> pending;
+    try {
+      pending = await findUnpricedDays(
+        attendance: repo,
+        workerId: workerId,
+        rateKurus: rateKurus,
+      );
+    } catch (e, s) {
+      await logHandledError(e, s,
+          reason: 'yevmiye-geri-doldur-oku', info: {'id': workerId});
+      return;
+    }
+    if (pending.isEmpty || !mounted) return;
+    final isCrew = _type.isCrew;
+    final amount = canSeeMoney
+        ? (isCrew
+            ? 'kişi başı ${formatKurus(rateKurus)}'
+            : formatKurus(rateKurus))
+        : 'yeni yevmiye';
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Geçmiş günler',
+      message: '${_nameCtrl.text.trim()} için ücretsiz (₺0) kaydedilmiş '
+          '${pending.length} gün var. Bu günler $amount ile güncellensin mi? '
+          'Ücreti girilmiş günlere dokunulmaz.',
+      confirmLabel: 'Güncelle',
+      icon: Icons.event_repeat_outlined,
+    );
+    if (!ok || !mounted) return;
+    try {
+      await applyRepricedDays(attendance: repo, records: pending);
+    } catch (e, s) {
+      await logHandledError(e, s,
+          reason: 'yevmiye-geri-doldur-yaz', info: {'id': workerId});
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Geçmiş günler güncellenemedi.')),
+      );
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text('${pending.length} gün güncellendi.')),
+    );
   }
 
   Future<void> _toggleActive() async {

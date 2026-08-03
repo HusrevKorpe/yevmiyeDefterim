@@ -520,6 +520,67 @@ void main() {
     expect(r.earningKurus, 11 * 100000);
   });
 
+  // Dondurulmuş ₺0 bir ÜCRET değil, EKSİK VERİdir (saha hatası 2026-08-03:
+  // elebaşı kişi-başı yevmiyesiz açıldı, günler ₺0 donduruldu, ücret sonradan
+  // girilince "görünmüyor" kaldı). Korunsaydı sayacı oynatmak bile günü ₺0'da
+  // bırakırdı → 0 ise sonraki dokunuşta güncel ücret çözülür.
+  test('elebaşı: dondurulmuş ₺0 oran KORUNMAZ, sonradan girilen ücret yazılır',
+      () async {
+    await boot(AppSettings.empty);
+    const bossNoWage = Worker(
+      id: 'e9',
+      name: 'Usta',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+    );
+    container.read(selectedDateProvider.notifier).set('2026-07-17');
+    await loadSelectedDate();
+    await vm().setHeadcount(bossNoWage, 10); // ücretsiz → ₺0 donar
+    expect((attendance.all.single as CrewAttendance).crewRateSnapshotKurus, 0);
+    await waitUntil(() =>
+        container.read(attendanceByWorkerForDateProvider)[bossNoWage.id]
+            is CrewAttendance);
+
+    // Kullanıcı işçi kartından kişi başı yevmiyeyi girdi.
+    const bossPriced = Worker(
+      id: 'e9',
+      name: 'Usta',
+      type: WorkerType.elebasi,
+      gender: Gender.male,
+      dailyWageOverrideKurus: 100000,
+    );
+    await vm().setHeadcount(bossPriced, 11);
+
+    final r = attendance.all.single as CrewAttendance;
+    expect(r.crewRateSnapshotKurus, 100000, reason: '₺0 gerçek bir dondurma değil');
+    expect(r.earningKurus, 11 * 100000);
+  });
+
+  test('bireysel: dondurulmuş ₺0 yevmiye KORUNMAZ, güncel ücret çözülür',
+      () async {
+    await boot(AppSettings.empty);
+    container.read(selectedDateProvider.notifier).set('2026-07-17');
+    await loadSelectedDate();
+    await vm().setStatus(male, AttendanceStatus.full); // yevmiyesiz → ₺0 donar
+    expect((attendance.all.single as IndividualAttendance).wageSnapshotKurus, 0);
+    await waitUntil(() =>
+        container.read(attendanceByWorkerForDateProvider)[male.id]
+            is IndividualAttendance);
+
+    const malePriced = Worker(
+      id: 'w1',
+      name: 'Ahmet',
+      type: WorkerType.gundelik,
+      gender: Gender.male,
+      dailyWageOverrideKurus: 200000,
+    );
+    await vm().setStatus(malePriced, AttendanceStatus.full);
+
+    final r = attendance.all.single as IndividualAttendance;
+    expect(r.wageSnapshotKurus, 200000);
+    expect(r.earningKurus, 200000);
+  });
+
   // --- Tarla seçimi (setField) — "kim nerede çalıştı" (isteğe bağlı) ---
 
   group('tarla seçimi (setField)', () {

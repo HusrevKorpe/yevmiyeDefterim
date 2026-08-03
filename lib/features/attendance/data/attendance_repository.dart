@@ -21,6 +21,12 @@ abstract class AttendanceRepository {
   /// Bir işçinin tüm yoklama kayıtları — işçi geçmişi (Faz 4).
   Stream<List<AttendanceRecord>> watchByWorker(String workerId);
 
+  /// Bir işçinin tüm yoklama kayıtlarını TEK SEFERLİK okur (dinlemez).
+  /// Ücreti girilmeden (₺0) kaydedilmiş günleri sonradan fiyatlamak gibi tek
+  /// atımlık işler içindir (bkz. `application/wage_backfill.dart`) — kalıcı bir
+  /// abonelik açmaz.
+  Future<List<AttendanceRecord>> getByWorker(String workerId);
+
   /// Kaydı yazar. ID deterministik ({date}_{workerId}), `merge:true` →
   /// aynı işçi-gün çift kayıt olmaz (kural §3).
   Future<void> save(AttendanceRecord record);
@@ -74,6 +80,17 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
           .map((snap) => snap.docs
               .map((d) => AttendanceRecord.fromDoc(d.id, d.data()))
               .toList());
+
+  @override
+  Future<List<AttendanceRecord>> getByWorker(String workerId) async {
+    // Varsayılan kaynak (sunucu + önbellek): çevrimdışıyken Firestore yerel
+    // önbellekten döner → uçakta da geçmiş günler fiyatlanabilir.
+    final snap =
+        await attendanceCol(_db).where('workerId', isEqualTo: workerId).get();
+    return snap.docs
+        .map((d) => AttendanceRecord.fromDoc(d.id, d.data()))
+        .toList();
+  }
 
   @override
   Future<void> save(AttendanceRecord record) =>

@@ -54,6 +54,10 @@ class FakeAttendanceRepository implements AttendanceRepository {
       _watch(() => _forWorker(workerId));
 
   @override
+  Future<List<AttendanceRecord>> getByWorker(String workerId) async =>
+      _forWorker(workerId);
+
+  @override
   Future<void> save(AttendanceRecord record) async {
     _store[record.id] = record;
     _tick.add(null);
