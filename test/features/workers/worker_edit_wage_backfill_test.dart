@@ -1,6 +1,10 @@
-/// Yevmiye SONRADAN girilince ücretsiz (₺0) kaydedilmiş geçmiş günleri
-/// fiyatlama akışı (saha hatası 2026-08-03: elebaşı ücretsiz açıldı, sonra
-/// fiyat eklendi ama günlerde görünmedi).
+/// Yevmiye değişince geçmiş günlerin güncellenmesi — işçi düzenleme akışı.
+///
+/// Müşteri kuralı (2026-08-07): zam "o günden sonrasına" değil, hesabı
+/// görülmemiş TÜM günlere işler. Son "Hesap görüldü" tarihi ve öncesi kapanmış
+/// sayılır → dokunulmaz. Ayrıca ücretsiz (₺0) kalmış günler her hâlükârda
+/// fiyatlanır (saha hatası 2026-08-03: elebaşı ücretsiz açıldı, fiyat sonradan
+/// eklenince günlerde görünmedi).
 library;
 
 import 'package:flutter/material.dart';
@@ -9,6 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:yevmiye_defterim/features/advances/application/advance_providers.dart';
+import 'package:yevmiye_defterim/features/advances/data/advance.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
 import 'package:yevmiye_defterim/features/auth/application/user_access.dart';
@@ -18,6 +24,7 @@ import 'package:yevmiye_defterim/features/workers/application/workers_providers.
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 import 'package:yevmiye_defterim/features/workers/presentation/worker_edit_screen.dart';
 
+import '../../support/fake_advance_repository.dart';
 import '../../support/fake_attendance_repository.dart';
 import '../../support/fake_settings_repository.dart';
 import '../../support/fake_worker_repository.dart';
@@ -44,20 +51,38 @@ void main() {
         crewRateSnapshotKurus: rate,
       );
 
+  /// [settledDate] verilirse o tarihli "Hesap görüldü" kapanışı olan bir avans.
+  Advance advance({String? settledDate}) => Advance(
+        id: 'a1',
+        workerId: 'eA',
+        workerName: 'Usta Ali',
+        amountKurus: 50000,
+        date: '2026-08-01',
+        settledPayrollId: settledDate == null
+            ? null
+            : Advance.manualSettlementId(settledDate),
+      );
+
   late FakeAttendanceRepository attendance;
   late FakeWorkerRepository workers;
 
-  Future<Widget> buildApp(List<AttendanceRecord> records) async {
+  Future<Widget> buildApp(
+    List<AttendanceRecord> records, {
+    Worker worker = boss,
+    List<Advance> advances = const [],
+  }) async {
     attendance = FakeAttendanceRepository();
     for (final r in records) {
       await attendance.save(r);
     }
     workers = FakeWorkerRepository();
-    await workers.add(boss);
+    await workers.add(worker);
 
     return ProviderScope(
       overrides: [
         attendanceRepositoryProvider.overrideWithValue(attendance),
+        advanceRepositoryProvider
+            .overrideWithValue(FakeAdvanceRepository(advances)),
         workerRepositoryProvider.overrideWithValue(workers),
         settingsRepositoryProvider
             .overrideWithValue(FakeSettingsRepository(AppSettings.empty)),
@@ -77,7 +102,7 @@ void main() {
             builder: (context) => TextButton(
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const WorkerEditScreen(worker: boss),
+                  builder: (_) => WorkerEditScreen(worker: worker),
                 ),
               ),
               child: const Text('Aç'),
@@ -101,30 +126,82 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('onaylanınca ücretsiz geçmiş günler yeni ücretle fiyatlanır',
-      (tester) async {
-    await tester.pumpWidget(await buildApp([
-      crew('2026-07-20'),
-      crew('2026-07-21', headcount: 8),
-      crew('2026-07-22', rate: 90000), // ücreti girilmiş → dokunulmamalı
-    ]));
+  testWidgets('hesap hiç görülmediyse zam TÜM geçmişe işler', (tester) async {
+    await tester.pumpWidget(await buildApp(
+      [
+        crew('2026-07-20'), // ücretsiz kalmış gün
+        crew('2026-07-21', headcount: 8, rate: 90000),
+        crew('2026-07-22', rate: 90000),
+      ],
+      worker: boss.copyWith(dailyWageOverrideKurus: 90000),
+    ));
     await tester.pumpAndSettle();
 
     await enterWage(tester, '1.000');
 
-    // 2 gün fiyatlanacak → onay sorulur.
-    expect(find.textContaining('2 gün'), findsWidgets);
+    // 3 gün güncellenecek → onay sorulur.
+    expect(find.textContaining('3 çalışma günü'), findsWidgets);
     await tester.tap(find.text('Güncelle'));
     await tester.pumpAndSettle();
 
     final byId = {for (final r in attendance.all) r.id: r as CrewAttendance};
     expect(byId['2026-07-20_eA']!.crewRateSnapshotKurus, 100000);
-    expect(byId['2026-07-20_eA']!.earningKurus, 10 * 100000);
     expect(byId['2026-07-21_eA']!.crewRateSnapshotKurus, 100000);
-    expect(byId['2026-07-22_eA']!.crewRateSnapshotKurus, 90000, // korundu
-        reason: 'ücreti dondurulmuş gün değişmemeli (kural §4)');
+    expect(byId['2026-07-22_eA']!.crewRateSnapshotKurus, 100000);
+    expect(byId['2026-07-20_eA']!.earningKurus, 10 * 100000);
     // İşçinin kendisi de kaydedildi.
     expect(workers.all.single.dailyWageOverrideKurus, 100000);
+  });
+
+  testWidgets('hesap görüldükten SONRAKİ günler zamlanır, öncesi korunur',
+      (tester) async {
+    await tester.pumpWidget(await buildApp(
+      [
+        crew('2026-08-01', rate: 90000), // kapanış öncesi
+        crew('2026-08-02', rate: 90000), // kapanış GÜNÜ
+        crew('2026-08-03', rate: 90000),
+        crew('2026-08-17', rate: 90000),
+      ],
+      worker: boss.copyWith(dailyWageOverrideKurus: 90000),
+      advances: [advance(settledDate: '2026-08-02')],
+    ));
+    await tester.pumpAndSettle();
+
+    await enterWage(tester, '1.200');
+
+    expect(find.textContaining('2 Ağustos 2026'), findsWidgets);
+    expect(find.textContaining('2 çalışma günü'), findsWidgets);
+    await tester.tap(find.text('Güncelle'));
+    await tester.pumpAndSettle();
+
+    final byId = {for (final r in attendance.all) r.id: r as CrewAttendance};
+    expect(byId['2026-08-03_eA']!.crewRateSnapshotKurus, 120000);
+    expect(byId['2026-08-17_eA']!.crewRateSnapshotKurus, 120000);
+    expect(byId['2026-08-01_eA']!.crewRateSnapshotKurus, 90000,
+        reason: 'hesabı görülmüş gün değişmemeli');
+    expect(byId['2026-08-02_eA']!.crewRateSnapshotKurus, 90000,
+        reason: 'kapanış GÜNÜ de denkleşmiştir');
+  });
+
+  testWidgets('kapanış öncesinde ücretsiz kalmış gün yine fiyatlanır',
+      (tester) async {
+    await tester.pumpWidget(await buildApp(
+      [
+        crew('2026-08-01'), // ₺0 → eksik veri
+        crew('2026-08-02', rate: 90000), // kapanış günü, fiyatlı
+      ],
+      worker: boss.copyWith(dailyWageOverrideKurus: 90000),
+      advances: [advance(settledDate: '2026-08-02')],
+    ));
+    await tester.pumpAndSettle();
+
+    await enterWage(tester, '1.200');
+    await tester.tap(find.text('Güncelle'));
+    await tester.pumpAndSettle();
+
+    final byId = {for (final r in attendance.all) r.id: r as CrewAttendance};
+    expect(byId['2026-08-01_eA']!.crewRateSnapshotKurus, 120000);
+    expect(byId['2026-08-02_eA']!.crewRateSnapshotKurus, 90000);
   });
 
   testWidgets('vazgeçilirse geçmiş günlere dokunulmaz ama işçi kaydedilir',
@@ -140,8 +217,11 @@ void main() {
     expect(workers.all.single.dailyWageOverrideKurus, 100000);
   });
 
-  testWidgets('fiyatlanacak gün yoksa onay sorulmaz', (tester) async {
-    await tester.pumpWidget(await buildApp([crew('2026-07-20', rate: 90000)]));
+  testWidgets('yevmiye değişmediyse onay sorulmaz', (tester) async {
+    await tester.pumpWidget(await buildApp(
+      [crew('2026-07-20', rate: 100000)],
+      worker: boss.copyWith(dailyWageOverrideKurus: 100000),
+    ));
     await tester.pumpAndSettle();
 
     await enterWage(tester, '1.000');

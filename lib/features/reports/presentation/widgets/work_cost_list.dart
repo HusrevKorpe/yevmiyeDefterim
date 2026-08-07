@@ -1,41 +1,42 @@
-/// Tarla maliyeti listesi — her tarla ayrı kart, dokununca işçi dökümü açılır.
+/// Maliyet dökümü listesi — her tarla/iş ayrı kart, dokununca işçi dökümü
+/// açılır. AYNI liste iki kırılım için de kullanılır (bkz. [CostGroupKind]).
 ///
-/// Rapor akışının içinde değil, kendi SAYFASINDA yaşar (bkz.
-/// [FieldCostScreen]): rapor kısa kalsın, tarla dökümü rahat okunsun. Hesap
-/// mantığı saf [buildFieldCosts]'tadır; burada yalnız gösterim var.
+/// Rapor akışının içinde değil, kendi SAYFASINDA yaşar (bkz. [WorkCostScreen]):
+/// rapor kısa kalsın, döküm rahat okunsun. Hesap mantığı saf
+/// [buildWorkCosts]'tadır; burada yalnız gösterim var.
 ///
-/// Satır: sıra rozeti, tarla adı, brüt, "yevmiye • gün • işçi" ve dönem
-/// işçiliği içindeki pay (şerit + yüzde). Tarlası seçilmemiş kayıtlar bir tarla
-/// değil kalıntıdır → nötr tonda ve her zaman en sonda durur.
+/// Satır: sıra rozeti, ad, brüt, "yevmiye • gün • işçi" ve dönem işçiliği
+/// içindeki pay (şerit + yüzde). Seçim yapılmamış kayıtlar bir grup değil
+/// kalıntıdır → nötr tonda ve her zaman en sonda durur.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../../core/money/money.dart';
-import '../../application/field_cost.dart';
+import '../../application/work_cost.dart';
 
-class FieldCostList extends StatefulWidget {
-  const FieldCostList({super.key, required this.costs, this.header});
+class WorkCostList extends StatefulWidget {
+  const WorkCostList({super.key, required this.costs, this.header});
 
-  /// Tarla satırları (brüte göre azalan; "seçilmemiş" en sonda).
-  final List<FieldCost> costs;
+  /// Döküm satırları (brüte göre azalan; "seçilmemiş" en sonda).
+  final List<WorkCost> costs;
 
   /// Listeyle birlikte kayan başlık (dönem özeti kartı). Boş bırakılabilir.
   final Widget? header;
 
   @override
-  State<FieldCostList> createState() => _FieldCostListState();
+  State<WorkCostList> createState() => _WorkCostListState();
 }
 
-class _FieldCostListState extends State<FieldCostList> {
-  /// Dökümü açık satırın anahtarı (tarla id'si; seçilmemiş satır için '').
+class _WorkCostListState extends State<WorkCostList> {
+  /// Dökümü açık satırın anahtarı (tarla/iş id'si; seçilmemiş satır için '').
   String? _openKey;
 
-  static String _keyOf(FieldCost f) => f.fieldId ?? '';
+  static String _keyOf(WorkCost c) => c.groupId ?? '';
 
   @override
   Widget build(BuildContext context) {
-    final total = totalFieldGross(widget.costs);
+    final total = totalWorkGross(widget.costs);
     final hasHeader = widget.header != null;
 
     return ListView.builder(
@@ -45,10 +46,10 @@ class _FieldCostListState extends State<FieldCostList> {
         if (hasHeader && index == 0) return widget.header!;
         final i = hasHeader ? index - 1 : index;
         final f = widget.costs[i];
-        return FieldCostCard(
+        return WorkCostCard(
           cost: f,
           totalKurus: total,
-          // Sıra numarası yalnız gerçek tarlalara verilir (kalıntı satır sayılmaz).
+          // Sıra numarası yalnız gerçek satırlara verilir (kalıntı sayılmaz).
           rank: f.isUnassigned ? null : i + 1,
           expanded: _openKey == _keyOf(f),
           onTap: () => setState(() {
@@ -61,9 +62,9 @@ class _FieldCostListState extends State<FieldCostList> {
   }
 }
 
-/// Tek tarla kartı. Dokununca [expanded] ile işçi dökümü açılır.
-class FieldCostCard extends StatelessWidget {
-  const FieldCostCard({
+/// Tek tarla/iş kartı. Dokununca [expanded] ile işçi dökümü açılır.
+class WorkCostCard extends StatelessWidget {
+  const WorkCostCard({
     super.key,
     required this.cost,
     required this.totalKurus,
@@ -72,12 +73,12 @@ class FieldCostCard extends StatelessWidget {
     this.rank,
   });
 
-  final FieldCost cost;
+  final WorkCost cost;
   final int totalKurus;
   final bool expanded;
   final VoidCallback onTap;
 
-  /// Brüte göre sıra (1 = en pahalı tarla). Kalıntı satırda `null`.
+  /// Brüte göre sıra (1 = en pahalısı). Kalıntı satırda `null`.
   final int? rank;
 
   /// Dönem işçiliği içindeki pay (0..1). Toplam 0 ise pay yok.
@@ -92,7 +93,7 @@ class FieldCostCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Kalıntı satır ("seçilmemiş") bir tarla değil → soluk/nötr ton.
+    // Kalıntı satır ("seçilmemiş") bir grup değil → soluk/nötr ton.
     final accent = cost.isUnassigned
         ? theme.colorScheme.outline
         : theme.colorScheme.primary;
@@ -131,7 +132,7 @@ class FieldCostCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      cost.fieldName,
+                      cost.groupName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -204,11 +205,11 @@ class FieldCostCard extends StatelessWidget {
   }
 }
 
-/// Açılan bölüm: o tarlada kim kaç yevmiye çalıştı, ne tahakkuk etti.
+/// Açılan bölüm: o tarlada/işte kim kaç yevmiye çalıştı, ne tahakkuk etti.
 class _WorkerBreakdown extends StatelessWidget {
   const _WorkerBreakdown({required this.cost});
 
-  final FieldCost cost;
+  final WorkCost cost;
 
   @override
   Widget build(BuildContext context) {
@@ -247,11 +248,11 @@ class _WorkerBreakdown extends StatelessWidget {
   }
 }
 
-/// Tarla dökümü satırı: bir işçinin o tarladaki yevmiyesi ve tutarı.
+/// Döküm satırı: bir işçinin o tarladaki/işteki yevmiyesi ve tutarı.
 class _WorkerLine extends StatelessWidget {
   const _WorkerLine({required this.worker});
 
-  final FieldWorkerCost worker;
+  final WorkerCostShare worker;
 
   @override
   Widget build(BuildContext context) {

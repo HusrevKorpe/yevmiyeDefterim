@@ -23,10 +23,22 @@ class FsCollections {
   /// yarar (kendi kaydettiğin yoklama için sana bildirim gelmez).
   static const String fcmTokens = 'fcmTokens';
 
-  /// Kullanıcı tanımlı tarlalar (doc ID = uuid, soft-delete `active`).
+  /// Kullanıcı tanımlı YAPILAN İŞLER (doc ID = uuid, soft-delete `active`).
+  ///
+  /// DİKKAT — AD TARİHSELDİR: koleksiyonun Firestore adı `fields` ("tarlalar")
+  /// ama içeriği yapılan iştir (çapa, sulama…). 2026-08-07'ye kadar tek liste
+  /// vardı, adı "Tarlalar"dı, içine hep yapılan iş yazılıyordu. Tarla/iş ayrımı
+  /// yapılırken liste yerinde bırakılıp anlamı düzeltildi; gerçek tarlalar
+  /// [plots] koleksiyonuna açıldı. Böylece binlerce yoklama kaydında göç
+  /// yapılmadan tüm geçmiş doğru tarafa geçti (offline cihazlarda veri kaybı
+  /// riski alınmadı). Yoklama kaydındaki karşılığı `fieldId`/`fieldName`.
+  static const String fields = 'fields';
+
+  /// Kullanıcı tanımlı TARLALAR (doc ID = uuid, soft-delete `active`).
+  /// 2026-08-07'de açıldı; yoklama kaydındaki karşılığı `plotId`/`plotName`.
   /// Yoklamada Tam/Yarım (veya elebaşı mevcudu) girilince tarla seçimi bu
   /// listeden çıkar → "kim nerede çalıştı" kayıt altına alınır.
-  static const String fields = 'fields';
+  static const String plots = 'plots';
 }
 
 /// Tek ortak workspace (kural §9 / plan §3): `workspaces/main/...`.

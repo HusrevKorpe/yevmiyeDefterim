@@ -41,6 +41,10 @@ Future<BackupResult> buildBackupJson(
     FsCollections.advances: advancesCol(db),
     FsCollections.ledger: ledgerCol(db),
     FsCollections.payrolls: payrollsCol(db),
+    // Yoklamadaki iki seçim listesi (elle girilir, başka hiçbir yerden
+    // türetilemez): `fields` = YAPILAN İŞLER (tarihsel ad), `plots` = TARLALAR.
+    FsCollections.fields: jobsCol(db),
+    FsCollections.plots: plotsCol(db),
   };
 
   // get() varsayılan kaynak = sunucu+önbellek: çevrimdışıysa hata vermeden

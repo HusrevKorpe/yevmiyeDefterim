@@ -21,6 +21,14 @@ abstract class AttendanceRepository {
   /// Bir işçinin tüm yoklama kayıtları — işçi geçmişi (Faz 4).
   Stream<List<AttendanceRecord>> watchByWorker(String workerId);
 
+  /// TÜM işçilerin TÜM zamanki yoklama kayıtları — "Çalışma Özeti" tablosu
+  /// (kim toplam kaç gün çalıştı, ne kadar kazandı; ay/takvim yok).
+  ///
+  /// Bilerek sınırsız: özet "tüm zaman" toplamıdır, kırpılırsa yanlış olur.
+  /// Ağır olduğundan yalnız o ekran açıkken dinlenir (bkz.
+  /// `worker_totals_providers.dart` — autoDispose).
+  Stream<List<AttendanceRecord>> watchAll();
+
   /// Bir işçinin tüm yoklama kayıtlarını TEK SEFERLİK okur (dinlemez).
   /// Ücreti girilmeden (₺0) kaydedilmiş günleri sonradan fiyatlamak gibi tek
   /// atımlık işler içindir (bkz. `application/wage_backfill.dart`) — kalıcı bir
@@ -45,6 +53,14 @@ abstract class AttendanceRepository {
   /// Cloud Function bu yazımı dinleyip DİĞER cihazlara "yoklama alındı"
   /// push bildirimi gönderir; yoklama verisinin kendisine dokunmaz.
   Future<void> markDaySaved(String date);
+
+  /// O gün için "Kaydet"e basılmış mı (işaret dokümanı var mı) — canlı.
+  ///
+  /// Yoklama ekranı bunu düzenleme koruması için okur: kaydedilmiş bir günde
+  /// yapılan her değişiklik onay diyaloğundan geçer (bkz. attendance_screen).
+  /// İşaret cihazlar arası ortaktır → başka bir telefon o günü kaydettiyse
+  /// burada da kilit devreye girer.
+  Stream<bool> watchDaySaved(String date);
 }
 
 class FirestoreAttendanceRepository implements AttendanceRepository {
@@ -80,6 +96,13 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
           .map((snap) => snap.docs
               .map((d) => AttendanceRecord.fromDoc(d.id, d.data()))
               .toList());
+
+  @override
+  Stream<List<AttendanceRecord>> watchAll() => attendanceCol(_db)
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((d) => AttendanceRecord.fromDoc(d.id, d.data()))
+          .toList());
 
   @override
   Future<List<AttendanceRecord>> getByWorker(String workerId) async {
@@ -118,4 +141,8 @@ class FirestoreAttendanceRepository implements AttendanceRepository {
         'date': date,
         ...writeStamp(),
       }, SetOptions(merge: true));
+
+  @override
+  Stream<bool> watchDaySaved(String date) =>
+      attendanceDaysCol(_db).doc(date).snapshots().map((d) => d.exists);
 }

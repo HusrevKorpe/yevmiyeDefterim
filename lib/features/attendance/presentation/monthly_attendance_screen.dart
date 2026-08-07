@@ -8,8 +8,10 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/constants/routes.dart';
 import '../../../core/date/app_date.dart';
 import '../../../core/diagnostics/app_log.dart';
 import '../../../core/money/money.dart';
@@ -43,7 +45,17 @@ class MonthlyAttendanceScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: const GradientAppBar(title: 'Aylık Yoklama'),
+      appBar: GradientAppBar(
+        title: 'Aylık Yoklama',
+        actions: [
+          // Takvimsiz toplam cetveli: kim toplam kaç gün çalıştı, ne kazandı.
+          IconButton(
+            icon: const Icon(Icons.table_view),
+            tooltip: 'Çalışma özeti',
+            onPressed: () => context.push(AppRoutes.workerTotals),
+          ),
+        ],
+      ),
       body: const Column(
         children: [
           _MonthBar(),

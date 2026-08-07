@@ -16,11 +16,14 @@ import 'package:yevmiye_defterim/app/theme.dart';
 import 'package:yevmiye_defterim/core/date/app_date.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
+import 'package:yevmiye_defterim/features/auth/application/auth_providers.dart';
+import 'package:yevmiye_defterim/features/auth/data/app_user.dart';
 import 'package:yevmiye_defterim/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:yevmiye_defterim/features/workers/application/workers_providers.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
 import '../test/support/fake_attendance_repository.dart';
+import '../test/support/fake_auth_repository.dart';
 import '../test/support/fake_worker_repository.dart';
 
 void main() {
@@ -91,6 +94,11 @@ void main() {
 
     return ProviderScope(
       overrides: [
+        // Başlıktaki kısayollar (Aylık tablo · Rapor · Yönetim) oturuma bakar →
+        // Firebase'siz sahte kullanıcı şart, yoksa ekran hata durumunda çizilir.
+        authRepositoryProvider.overrideWithValue(
+          FakeAuthRepository(const AppUser(uid: 'u1', email: 'patron@ciftlik.tr')),
+        ),
         workerRepositoryProvider.overrideWithValue(workerRepo),
         attendanceRepositoryProvider.overrideWithValue(attRepo),
       ],

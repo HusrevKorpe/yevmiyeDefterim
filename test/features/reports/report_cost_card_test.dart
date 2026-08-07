@@ -10,15 +10,15 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'package:yevmiye_defterim/features/reports/application/field_cost.dart';
-import 'package:yevmiye_defterim/features/reports/presentation/widgets/report_field_card.dart';
+import 'package:yevmiye_defterim/features/reports/application/work_cost.dart';
+import 'package:yevmiye_defterim/features/reports/presentation/widgets/report_cost_card.dart';
 
-import 'field_cost_fixtures.dart';
+import 'work_cost_fixtures.dart';
 
 void main() {
   setUpAll(() async => initializeDateFormatting('tr_TR', null));
 
-  Widget app(List<FieldCost> costs, {VoidCallback? onTap}) => MaterialApp(
+  Widget app(List<WorkCost> costs, {VoidCallback? onTap}) => MaterialApp(
         locale: const Locale('tr', 'TR'),
         supportedLocales: const [Locale('tr', 'TR')],
         localizationsDelegates: const [
@@ -29,7 +29,11 @@ void main() {
         home: Scaffold(
           body: ListView(
             children: [
-              ReportFieldCard(costs: costs, onTap: onTap ?? () {}),
+              ReportCostCard(
+                costs: costs,
+                kind: CostGroupKind.plot,
+                onTap: onTap ?? () {},
+              ),
             ],
           ),
         ),
@@ -38,7 +42,7 @@ void main() {
   testWidgets('özet: toplam tutar, tarla sayısı ve yevmiye', (tester) async {
     await tester.pumpWidget(app(const [dere, bos]));
 
-    expect(find.text('Tarla Maliyeti'), findsOneWidget);
+    expect(find.text('Tarla / İş Maliyeti'), findsOneWidget);
     // Kalıntı satır ("seçilmemiş") tarla sayılmaz; yevmiyesi toplama girer.
     expect(find.text('1 tarla • 3,5 yevmiye'), findsOneWidget);
     // 5.000 + 2.000 = 7.000
@@ -50,7 +54,7 @@ void main() {
 
     expect(find.text('Dere Tarlası'), findsOneWidget);
     expect(find.text('%71'), findsOneWidget); // 5.000 / 7.000
-    expect(find.text(kUnassignedFieldLabel), findsOneWidget);
+    expect(find.text(kUnassignedPlotLabel), findsOneWidget);
   });
 
   testWidgets('oran şeridi gerçekten çizilir', (tester) async {
@@ -59,7 +63,7 @@ void main() {
     // Her tutarlı satır bir dilim. Şeridin yüksekliği 0 olursa (Row'da çapraz
     // eksen gevşek kalırsa) kart sessizce boş görünür → burada kilitli.
     final slices = find.descendant(
-      of: find.byType(ReportFieldCard),
+      of: find.byType(ReportCostCard),
       matching: find.byType(ColoredBox),
     );
     expect(slices, findsNWidgets(2));
@@ -73,7 +77,7 @@ void main() {
     var opened = 0;
     await tester.pumpWidget(app(const [dere, bos], onTap: () => opened++));
 
-    await tester.tap(find.text('Tarla Maliyeti'));
+    await tester.tap(find.text('Tarla / İş Maliyeti'));
     await tester.pumpAndSettle();
 
     expect(opened, 1);

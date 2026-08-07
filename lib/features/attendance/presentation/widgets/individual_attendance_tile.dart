@@ -7,10 +7,11 @@ import '../../../../app/theme.dart';
 import '../../../../core/money/money.dart';
 import '../../../workers/data/worker.dart';
 import '../../data/attendance_record.dart';
-import '../../data/field.dart';
-import 'field_chips.dart';
+import '../../data/job.dart';
+import '../../data/plot.dart';
 import 'overtime_chips.dart';
 import 'paid_lock_badge.dart';
+import 'tag_chips.dart';
 
 class IndividualAttendanceTile extends StatelessWidget {
   const IndividualAttendanceTile({
@@ -22,10 +23,14 @@ class IndividualAttendanceTile extends StatelessWidget {
     required this.onCleared,
     this.locked = false,
     this.showWage = true,
-    this.fields = const [],
-    this.fieldId,
-    this.fieldName,
-    this.onFieldChanged,
+    this.plots = const [],
+    this.plotId,
+    this.plotName,
+    this.onPlotChanged,
+    this.jobs = const [],
+    this.jobId,
+    this.jobName,
+    this.onJobChanged,
     this.overtimeHours = 0,
     this.overtimeRateKurus = 0,
     this.onOvertimeChanged,
@@ -47,12 +52,19 @@ class IndividualAttendanceTile extends StatelessWidget {
   /// Bu gün ödendi (hakedişe girdi) → düzenleme kapalı (kural §3, §6).
   final bool locked;
 
-  /// Aktif tarlalar + bu günün tarla seçimi (isteğe bağlı — "kim nerede
-  /// çalıştı"). Çipler yalnız Tam/Yarım seçiliyken görünür (bkz. [_showFields]).
-  final List<Field> fields;
-  final String? fieldId;
-  final String? fieldName;
-  final ValueChanged<Field?>? onFieldChanged;
+  /// Aktif tarlalar + bu günün tarla seçimi (isteğe bağlı — "kim NEREDE
+  /// çalıştı"). Çipler yalnız Tam/Yarım seçiliyken görünür (bkz. [_showPlots]).
+  final List<Plot> plots;
+  final String? plotId;
+  final String? plotName;
+  final ValueChanged<Plot?>? onPlotChanged;
+
+  /// Aktif işler + bu günün iş seçimi (isteğe bağlı — "NE İŞİ yapıldı").
+  /// Tarladan bağımsız ikinci bir şerittir; ikisi ayrı ayrı seçilir.
+  final List<Job> jobs;
+  final String? jobId;
+  final String? jobName;
+  final ValueChanged<Job?>? onJobChanged;
 
   /// O günün mesai saati + mesai saat ücreti (kuruş). Ücret kayıtta dondurulmuş
   /// değerdir; kayıt yoksa işçinin güncel ücreti önden gösterilir. Mesai
@@ -63,22 +75,29 @@ class IndividualAttendanceTile extends StatelessWidget {
   /// Null ise mesai şeridi hiç çizilmez.
   final ValueChanged<int>? onOvertimeChanged;
 
-  /// Mesai şeridi de tarla çipleriyle aynı koşulda görünür: yalnız Tam/Yarım
+  /// Mesai şeridi de tarla/iş çipleriyle aynı koşulda görünür: yalnız Tam/Yarım
   /// seçiliyken (gelmeyen/boş günde mesai sorusu anlamsız) ve kilitli değilken.
   bool get _showOvertime =>
       onOvertimeChanged != null &&
       !locked &&
       (status == AttendanceStatus.full || status == AttendanceStatus.half);
 
-  /// Tarla çipleri yalnız Tam/Yarım seçiliyken görünür (Yok/boş günde "nerede
-  /// çalıştı" sorusu anlamsız). Tarla tanımlı değilse satır hiç çıkmaz; ama
-  /// silinmiş tarlaya bağlı eski kayıt adıyla gösterilebilsin diye [fieldId]
-  /// doluysa açık kalır.
-  bool get _showFields =>
-      onFieldChanged != null &&
+  /// Çipler yalnız Tam/Yarım seçiliyken görünür (Yok/boş günde "nerede/ne iş"
+  /// sorusu anlamsız).
+  bool get _tagsAllowed =>
       !locked &&
-      (status == AttendanceStatus.full || status == AttendanceStatus.half) &&
-      (fields.isNotEmpty || fieldId != null);
+      (status == AttendanceStatus.full || status == AttendanceStatus.half);
+
+  /// Tarla tanımlı değilse şerit hiç çıkmaz; ama silinmiş tarlaya bağlı eski
+  /// kayıt adıyla gösterilebilsin diye [plotId] doluysa açık kalır.
+  bool get _showPlots =>
+      onPlotChanged != null &&
+      _tagsAllowed &&
+      (plots.isNotEmpty || plotId != null);
+
+  /// Yapılan iş şeridi — [_showPlots] ile aynı kural, kendi listesi üzerinden.
+  bool get _showJobs =>
+      onJobChanged != null && _tagsAllowed && (jobs.isNotEmpty || jobId != null);
 
   /// Durum rengi; seçili değilse (null) null döner → nötr içi boş nokta.
   Color? get _statusColor => switch (status) {
@@ -196,17 +215,36 @@ class IndividualAttendanceTile extends StatelessWidget {
               ),
             ),
           ),
-          if (_showFields) ...[
+          // Önce TARLA ("nerede"), altında YAPILAN İŞ ("ne") — yönetim
+          // ekranındaki sırayla aynı.
+          if (_showPlots) ...[
             const SizedBox(height: 8),
-            FieldChips(
-              fields: fields,
-              selectedFieldId: fieldId,
-              selectedFieldName: fieldName,
-              onChanged: onFieldChanged!,
+            TagChips<Plot>(
+              items: plots,
+              idOf: (p) => p.id,
+              nameOf: (p) => p.name,
+              selectedId: plotId,
+              selectedName: plotName,
+              icon: kPlotIcon,
+              ghostLabel: kPlotGhostLabel,
+              onChanged: onPlotChanged!,
+            ),
+          ],
+          if (_showJobs) ...[
+            SizedBox(height: _showPlots ? 4 : 8),
+            TagChips<Job>(
+              items: jobs,
+              idOf: (j) => j.id,
+              nameOf: (j) => j.name,
+              selectedId: jobId,
+              selectedName: jobName,
+              icon: kJobIcon,
+              ghostLabel: kJobGhostLabel,
+              onChanged: onJobChanged!,
             ),
           ],
           if (_showOvertime) ...[
-            SizedBox(height: _showFields ? 4 : 8),
+            SizedBox(height: (_showPlots || _showJobs) ? 4 : 8),
             OvertimeChips(
               hours: overtimeHours,
               rateKurus: overtimeRateKurus,

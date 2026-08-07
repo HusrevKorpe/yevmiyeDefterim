@@ -4,9 +4,10 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../../../core/money/money.dart';
-import '../../data/field.dart';
-import 'field_chips.dart';
+import '../../data/job.dart';
+import '../../data/plot.dart';
 import 'paid_lock_badge.dart';
+import 'tag_chips.dart';
 
 class CrewAttendanceTile extends StatelessWidget {
   const CrewAttendanceTile({
@@ -19,10 +20,14 @@ class CrewAttendanceTile extends StatelessWidget {
     this.maxHeadcount = 99,
     this.locked = false,
     this.showWage = true,
-    this.fields = const [],
-    this.fieldId,
-    this.fieldName,
-    this.onFieldChanged,
+    this.plots = const [],
+    this.plotId,
+    this.plotName,
+    this.onPlotChanged,
+    this.jobs = const [],
+    this.jobId,
+    this.jobName,
+    this.onJobChanged,
     this.onTap,
   });
 
@@ -50,22 +55,34 @@ class CrewAttendanceTile extends StatelessWidget {
   /// Bu gün ödendi (hakedişe girdi) → düzenleme kapalı (kural §3, §6).
   final bool locked;
 
-  /// Aktif tarlalar + bu günün tarla seçimi (isteğe bağlı — "ekip nerede
+  /// Aktif tarlalar + bu günün tarla seçimi (isteğe bağlı — "ekip NEREDE
   /// çalıştı"). Çipler yalnız kişi sayısı girilmişken görünür.
-  final List<Field> fields;
-  final String? fieldId;
-  final String? fieldName;
-  final ValueChanged<Field?>? onFieldChanged;
+  final List<Plot> plots;
+  final String? plotId;
+  final String? plotName;
+  final ValueChanged<Plot?>? onPlotChanged;
 
-  /// Tarla çipleri yalnız kişi sayısı > 0 iken görünür (önden dolu "pending"
-  /// dahil: tarla seçmek kaydı kesinleştirir — VM `setField`). Tarla tanımlı
-  /// değilse satır hiç çıkmaz; silinmiş tarlalı eski kayıt için [fieldId]
-  /// doluysa açık kalır.
-  bool get _showFields =>
-      onFieldChanged != null &&
-      !locked &&
-      headcount > 0 &&
-      (fields.isNotEmpty || fieldId != null);
+  /// Aktif işler + bu günün iş seçimi (isteğe bağlı — "ekip NE İŞİ yaptı").
+  /// Tarladan bağımsız ikinci bir şerittir.
+  final List<Job> jobs;
+  final String? jobId;
+  final String? jobName;
+  final ValueChanged<Job?>? onJobChanged;
+
+  /// Çipler yalnız kişi sayısı > 0 iken görünür (önden dolu "pending" dahil:
+  /// tarla/iş seçmek kaydı kesinleştirir — VM `setPlot`/`setJob`).
+  bool get _tagsAllowed => !locked && headcount > 0;
+
+  /// Tarla tanımlı değilse şerit hiç çıkmaz; silinmiş tarlalı eski kayıt için
+  /// [plotId] doluysa açık kalır.
+  bool get _showPlots =>
+      onPlotChanged != null &&
+      _tagsAllowed &&
+      (plots.isNotEmpty || plotId != null);
+
+  /// Yapılan iş şeridi — [_showPlots] ile aynı kural, kendi listesi üzerinden.
+  bool get _showJobs =>
+      onJobChanged != null && _tagsAllowed && (jobs.isNotEmpty || jobId != null);
 
   @override
   Widget build(BuildContext context) {
@@ -182,13 +199,31 @@ class CrewAttendanceTile extends StatelessWidget {
               ],
             ],
           ),
-          if (_showFields) ...[
+          // Önce TARLA ("nerede"), altında YAPILAN İŞ ("ne").
+          if (_showPlots) ...[
             const SizedBox(height: 4),
-            FieldChips(
-              fields: fields,
-              selectedFieldId: fieldId,
-              selectedFieldName: fieldName,
-              onChanged: onFieldChanged!,
+            TagChips<Plot>(
+              items: plots,
+              idOf: (p) => p.id,
+              nameOf: (p) => p.name,
+              selectedId: plotId,
+              selectedName: plotName,
+              icon: kPlotIcon,
+              ghostLabel: kPlotGhostLabel,
+              onChanged: onPlotChanged!,
+            ),
+          ],
+          if (_showJobs) ...[
+            const SizedBox(height: 4),
+            TagChips<Job>(
+              items: jobs,
+              idOf: (j) => j.id,
+              nameOf: (j) => j.name,
+              selectedId: jobId,
+              selectedName: jobName,
+              icon: kJobIcon,
+              ghostLabel: kJobGhostLabel,
+              onChanged: onJobChanged!,
             ),
           ],
           const Divider(height: 20),

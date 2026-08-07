@@ -9,11 +9,14 @@ class AppRoutes {
   static const String home = '/';
   static const String attendance = '/yoklama';
   static const String monthlyAttendance = '/yoklama/aylik';
-  static const String fields = '/yoklama/tarlalar';
+  static const String workerTotals = '/yoklama/ozet';
+  /// Tarla + Yapılan İş yönetimi (tek ekran, iki bölüm).
+  static const String plotsAndJobs = '/yoklama/tarlalar';
   static const String workers = '/isciler';
   static const String ledger = '/kasa';
   static const String settings = '/ayarlar';
   static const String advances = '/avanslar';
   static const String report = '/rapor';
-  static const String fieldCosts = '/rapor/tarla';
+  /// Tarla / İş maliyeti dökümü (sayfa içinde iki kırılım arasında geçilir).
+  static const String workCosts = '/rapor/tarla';
 }

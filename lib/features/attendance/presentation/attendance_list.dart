@@ -29,61 +29,137 @@ class _AttendanceBody extends ConsumerWidget {
   }
 }
 
-/// İşçileri sekmelere ayırır (Erkekler / Kadınlar / Elebaşılar). Artık yoklama
-/// akışını İZLEMEZ (StatelessWidget) → bir işçiye dokunmak bu ağacı yeniden
-/// kurmaz; yalnız `active`/`settings` değişince (nadir) yeniden çizilir.
-/// Her satırın güncel durumu, satırın kendi `Consumer`'ında `.select` ile alınır.
-class _List extends StatelessWidget {
+/// İşçileri sekmelere ayırır (Erkekler / Kadınlar / Elebaşılar). Yoklama
+/// akışını İZLEMEZ → bir işçiye dokunmak bu ağacı yeniden kurmaz; yalnız
+/// `active`/`settings` değişince (nadir) yeniden çizilir. Her satırın güncel
+/// durumu, satırın kendi `Consumer`'ında `.select` ile alınır.
+///
+/// Sekme denetleyicisi elde tutulur (DefaultTabController yerine): Ana Sayfa
+/// özet kartından gelen [attendanceTabRequestProvider] isteğiyle doğru sekme
+/// açılabilsin diye (ekran yeniyse `initialIndex`, zaten açıksa `animateTo`).
+class _List extends ConsumerStatefulWidget {
   const _List({required this.active, required this.settings});
 
   final List<Worker> active;
   final AppSettings settings;
 
   @override
-  Widget build(BuildContext context) {
-    // Bireysel işçiler cinsiyete göre ayrı sekmelere düşer (Erkekler / Kadınlar).
-    // Her grup kendi içinde ada göre sıralı kalır (compareWorkers).
-    final males = active
+  ConsumerState<_List> createState() => _ListState();
+}
+
+class _ListState extends ConsumerState<_List> with TickerProviderStateMixin {
+  // Bireysel işçiler cinsiyete göre ayrı sekmelere düşer (Erkekler / Kadınlar).
+  // Her grup kendi içinde ada göre sıralı kalır (compareWorkers).
+  late List<Worker> _males;
+  late List<Worker> _females;
+  late List<Worker> _crews;
+  late TabController _tabs;
+
+  @override
+  void initState() {
+    super.initState();
+    _split();
+    // Ana Sayfa kartından gelindiyse ekran DOĞRUDAN o sekmeyle açılır (Yoklama
+    // ilk kez açılıyorsa bu yol çalışır; zaten açıksa build'deki dinleyici).
+    _tabs = TabController(
+      length: _tabCount,
+      initialIndex: _indexOf(ref.read(attendanceTabRequestProvider)),
+      vsync: this,
+    );
+    // İsteği tüketmek provider yazmaktır → build sırasında değil, kare sonunda.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(attendanceTabRequestProvider.notifier).consume();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _List oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final previous = _tabCount;
+    _split();
+    // Elebaşı sekmesi belirip kaybolabilir → uzunluk değişince denetleyici
+    // yenilenir, seçili sekme sınır içinde korunur.
+    if (previous != _tabCount) {
+      final index = _tabs.index.clamp(0, _tabCount - 1);
+      _tabs.dispose();
+      _tabs = TabController(
+        length: _tabCount,
+        initialIndex: index,
+        vsync: this,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  void _split() {
+    final active = widget.active;
+    _males = active
         .where((w) => w.type.isIndividual && w.gender == Gender.male)
         .toList();
-    final females = active
+    _females = active
         .where((w) => w.type.isIndividual && w.gender == Gender.female)
         .toList();
-    final crews = active.where((w) => w.type.isCrew).toList();
+    _crews = active.where((w) => w.type.isCrew).toList();
+  }
 
-    // Erkekler + Kadınlar her zaman; Elebaşılar yalnız elebaşı işçi varsa.
+  /// Erkekler + Kadınlar her zaman; Elebaşılar yalnız elebaşı işçi varsa.
+  int get _tabCount => _crews.isEmpty ? 2 : 3;
+
+  /// İstenen grubun sekme sırası. İstek yoksa (ya da elebaşı sekmesi yokken
+  /// elebaşı istendiyse) varsayılan ilk sekmede kalınır.
+  int _indexOf(AttendanceTab? tab) => switch (tab) {
+        AttendanceTab.males || null => 0,
+        AttendanceTab.females => 1,
+        AttendanceTab.crews => _crews.isEmpty ? 0 : 2,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    // Yoklama ZATEN açıkken gelen istek (Ana Sayfa kartı → alt sekme değişimi)
+    // → o sekmeye kayar ve istek tüketilir.
+    ref.listen<AttendanceTab?>(attendanceTabRequestProvider, (_, next) {
+      if (next == null) return;
+      final index = _indexOf(next);
+      if (_tabs.index != index) _tabs.animateTo(index);
+      ref.read(attendanceTabRequestProvider.notifier).consume();
+    });
+
     final tabTitles = <String>[
-      'Erkekler (${males.length})',
-      'Kadınlar (${females.length})',
+      'Erkekler (${_males.length})',
+      'Kadınlar (${_females.length})',
+      if (_crews.isNotEmpty) 'Elebaşılar (${_crews.length})',
     ];
     final tabViews = <Widget>[
       _WorkerTabList(
-        workers: males,
-        tileBuilder: (w) => _IndividualTile(worker: w, settings: settings),
+        workers: _males,
+        tileBuilder: (w) =>
+            _IndividualTile(worker: w, settings: widget.settings),
       ),
       _WorkerTabList(
-        workers: females,
-        tileBuilder: (w) => _IndividualTile(worker: w, settings: settings),
+        workers: _females,
+        tileBuilder: (w) =>
+            _IndividualTile(worker: w, settings: widget.settings),
       ),
+      if (_crews.isNotEmpty)
+        _WorkerTabList(
+          workers: _crews,
+          tileBuilder: (w) => _CrewTile(worker: w, settings: widget.settings),
+        ),
     ];
-    if (crews.isNotEmpty) {
-      tabTitles.add('Elebaşılar (${crews.length})');
-      tabViews.add(_WorkerTabList(
-        workers: crews,
-        tileBuilder: (w) => _CrewTile(worker: w, settings: settings),
-      ));
-    }
 
-    return DefaultTabController(
-      length: tabTitles.length,
-      child: Column(
-        children: [
-          TabBar(
-            tabs: [for (final t in tabTitles) Tab(text: t)],
-          ),
-          Expanded(child: TabBarView(children: tabViews)),
-        ],
-      ),
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabs,
+          tabs: [for (final t in tabTitles) Tab(text: t)],
+        ),
+        Expanded(child: TabBarView(controller: _tabs, children: tabViews)),
+      ],
     );
   }
 }
@@ -160,17 +236,24 @@ class _IndividualTile extends ConsumerWidget {
       showWage: ref.watch(canSeeMoneyProvider),
       // Ödeme kilidi yok (hakediş kaldırıldı) — her gün düzenlenebilir.
       locked: false,
-      // Geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla değişiklik koruması).
+      // Kaydedilmiş ya da geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla
+      // değişiklik koruması).
       onChanged: (s) =>
-          _confirmPastEdit(context, ref, () => vm.setStatus(worker, s)),
+          _confirmProtectedEdit(context, ref, () => vm.setStatus(worker, s)),
       onCleared: () =>
-          _confirmPastEdit(context, ref, () => vm.clearStatus(worker)),
-      // Tarla seçimi (isteğe bağlı): Tam/Yarım seçilince çipler görünür.
-      fields: ref.watch(activeFieldsProvider),
-      fieldId: record?.fieldId,
-      fieldName: record?.fieldName,
-      onFieldChanged: (f) =>
-          _confirmPastEdit(context, ref, () => vm.setField(worker, f)),
+          _confirmProtectedEdit(context, ref, () => vm.clearStatus(worker)),
+      // Tarla + yapılan iş (ikisi de isteğe bağlı, birbirinden bağımsız):
+      // Tam/Yarım seçilince iki çip şeridi görünür.
+      plots: ref.watch(activePlotsProvider),
+      plotId: record?.plotId,
+      plotName: record?.plotName,
+      onPlotChanged: (p) =>
+          _confirmProtectedEdit(context, ref, () => vm.setPlot(worker, p)),
+      jobs: ref.watch(activeJobsProvider),
+      jobId: record?.jobId,
+      jobName: record?.jobName,
+      onJobChanged: (j) =>
+          _confirmProtectedEdit(context, ref, () => vm.setJob(worker, j)),
       // Mesai (isteğe bağlı): Tam/Yarım seçilince saat çipleri görünür.
       overtimeHours: record?.overtimeHours ?? 0,
       // Kayıtta mesai varsa DONDURULMUŞ saat ücreti okunur (kural §4 — yevmiye
@@ -184,7 +267,7 @@ class _IndividualTile extends ConsumerWidget {
               defaultHourlyKurus: settings.overtimeHourlyKurus,
             ),
       onOvertimeChanged: (h) =>
-          _confirmPastEdit(context, ref, () => vm.setOvertimeHours(worker, h)),
+          _confirmProtectedEdit(context, ref, () => vm.setOvertimeHours(worker, h)),
     );
   }
 }
@@ -221,15 +304,22 @@ class _CrewTile extends ConsumerWidget {
       showWage: ref.watch(canSeeMoneyProvider),
       // Ödeme kilidi yok (hakediş kaldırıldı) — her gün düzenlenebilir.
       locked: false,
-      // Geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla değişiklik koruması).
+      // Kaydedilmiş ya da geçmiş günde ilk dokunuş onaydan geçer (yanlışlıkla
+      // değişiklik koruması).
       onChanged: (c) =>
-          _confirmPastEdit(context, ref, () => vm.setHeadcount(worker, c)),
-      // Tarla seçimi (isteğe bağlı): kişi sayısı girilince çipler görünür.
-      fields: ref.watch(activeFieldsProvider),
-      fieldId: crew?.fieldId,
-      fieldName: crew?.fieldName,
-      onFieldChanged: (f) =>
-          _confirmPastEdit(context, ref, () => vm.setField(worker, f)),
+          _confirmProtectedEdit(context, ref, () => vm.setHeadcount(worker, c)),
+      // Tarla + yapılan iş (ikisi de isteğe bağlı): kişi sayısı girilince iki
+      // çip şeridi görünür.
+      plots: ref.watch(activePlotsProvider),
+      plotId: crew?.plotId,
+      plotName: crew?.plotName,
+      onPlotChanged: (p) =>
+          _confirmProtectedEdit(context, ref, () => vm.setPlot(worker, p)),
+      jobs: ref.watch(activeJobsProvider),
+      jobId: crew?.jobId,
+      jobName: crew?.jobName,
+      onJobChanged: (j) =>
+          _confirmProtectedEdit(context, ref, () => vm.setJob(worker, j)),
       // Karta (ad alanına) dokun → bu elebaşı ön-seçili "Avans Ver" ekranı.
       // Avans kısıtlı hesaba da açık (2026-07-23) → herkes kullanabilir.
       onTap: () => Navigator.of(context, rootNavigator: true).push(

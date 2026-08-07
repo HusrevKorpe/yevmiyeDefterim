@@ -48,6 +48,11 @@ CollectionReference<Map<String, dynamic>> attendanceDaysCol(
 CollectionReference<Map<String, dynamic>> fcmTokensCol(FirebaseFirestore db) =>
     workspaceRef(db).collection(FsCollections.fcmTokens);
 
-/// `workspaces/main/fields` — yoklamadaki tarla seçiminin kaynağı.
-CollectionReference<Map<String, dynamic>> fieldsCol(FirebaseFirestore db) =>
+/// `workspaces/main/fields` — yoklamadaki YAPILAN İŞ seçiminin kaynağı.
+/// Koleksiyon adı tarihseldir (bkz. [FsCollections.fields]): `fields` = işler.
+CollectionReference<Map<String, dynamic>> jobsCol(FirebaseFirestore db) =>
     workspaceRef(db).collection(FsCollections.fields);
+
+/// `workspaces/main/plots` — yoklamadaki TARLA seçiminin kaynağı.
+CollectionReference<Map<String, dynamic>> plotsCol(FirebaseFirestore db) =>
+    workspaceRef(db).collection(FsCollections.plots);

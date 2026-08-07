@@ -91,6 +91,9 @@ class AdvancesScreen extends ConsumerWidget {
       const _Header('Açık Avanslar'),
       for (final id in workerIds)
         _WorkerAdvancesCard(
+          // Kart açık/kapalı durumu işçiye bağlı kalsın (liste sırası değişince
+          // durum başka işçinin kartına geçmesin).
+          key: ValueKey('avans-karti-$id'),
           advances: byWorker[id]!,
           onTapAdvance: (a) => _openEdit(context, advance: a),
         ),
@@ -322,8 +325,12 @@ class _AddButton extends StatelessWidget {
   }
 }
 
-class _WorkerAdvancesCard extends StatelessWidget {
+/// Bir işçinin açık avansları. Birden fazla avans varsa kart KAPALI başlar —
+/// yalnız tek satır (ad + toplam + "N avans") görünür; başlığa dokununca
+/// avansların tamamı açılır. Tek avanslı kart zaten kısa olduğundan hep açıktır.
+class _WorkerAdvancesCard extends StatefulWidget {
   const _WorkerAdvancesCard({
+    super.key,
     required this.advances,
     required this.onTapAdvance,
   });
@@ -332,41 +339,87 @@ class _WorkerAdvancesCard extends StatelessWidget {
   final void Function(Advance) onTapAdvance;
 
   @override
+  State<_WorkerAdvancesCard> createState() => _WorkerAdvancesCardState();
+}
+
+class _WorkerAdvancesCardState extends State<_WorkerAdvancesCard> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    final sorted = [...advances]..sort((a, b) => b.date.compareTo(a.date));
+    final sorted = [...widget.advances]
+      ..sort((a, b) => b.date.compareTo(a.date));
     final total = sorted.fold<int>(0, (s, a) => s + a.amountKurus);
     final theme = Theme.of(context);
+    final collapsible = sorted.length > 1;
+    final showRows = !collapsible || _expanded;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           ListTile(
             leading: const CircleAvatar(child: Icon(Icons.person)),
             title: Text(sorted.first.workerName,
                 style: theme.textTheme.titleMedium),
-            trailing: Text(
-              formatKurus(total),
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
+            subtitle: collapsible
+                ? Text(
+                    _expanded
+                        ? '${sorted.length} avans'
+                        : '${sorted.length} avans • son '
+                            '${formatHumanDateNoWeekday(sorted.first.date)}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.hintColor),
+                  )
+                : null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  formatKurus(total),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                if (collapsible)
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(Icons.expand_more, color: theme.hintColor),
+                  ),
+              ],
             ),
+            onTap: collapsible
+                ? () => setState(() => _expanded = !_expanded)
+                : null,
           ),
-          const Divider(height: 1),
-          for (final a in sorted)
-            ListTile(
-              dense: true,
-              title: Text(formatHumanDate(a.date)),
-              subtitle: a.note == null || a.note!.isEmpty
-                  ? null
-                  : Align(
-                      alignment: Alignment.centerLeft,
-                      child: AdvanceNoteChip(a.note!),
-                    ),
-              trailing: Text(formatKurus(a.amountKurus)),
-              onTap: () => onTapAdvance(a),
-            ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: showRows
+                ? Column(
+                    children: [
+                      const Divider(height: 1),
+                      for (final a in sorted)
+                        ListTile(
+                          dense: true,
+                          title: Text(formatHumanDate(a.date)),
+                          subtitle: a.note == null || a.note!.isEmpty
+                              ? null
+                              : Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: AdvanceNoteChip(a.note!),
+                                ),
+                          trailing: Text(formatKurus(a.amountKurus)),
+                          onTap: () => widget.onTapAdvance(a),
+                        ),
+                    ],
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     );

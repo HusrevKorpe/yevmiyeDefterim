@@ -58,8 +58,10 @@ void main() {
     String date,
     AttendanceStatus s, {
     required int wage,
-    String? fieldId,
-    String? fieldName,
+    String? jobId,
+    String? jobName,
+    String? plotId,
+    String? plotName,
   }) =>
       AttendanceRecord.individual(
         id: '${date}_${w.id}',
@@ -69,8 +71,10 @@ void main() {
         workerType: w.type,
         status: s,
         wageSnapshotKurus: wage,
-        fieldId: fieldId,
-        fieldName: fieldName,
+        jobId: jobId,
+        jobName: jobName,
+        plotId: plotId,
+        plotName: plotName,
       );
 
   testWidgets('Rapor — tarla bazlı maliyet ve işçi dökümü', (tester) async {
@@ -86,16 +90,28 @@ void main() {
     Future<void> save(AttendanceRecord r) => attendance.save(r);
 
     await save(ind(ahmet, '2026-07-13', AttendanceStatus.full,
-        wage: 200000, fieldId: 'f1', fieldName: 'Dere Tarlası'));
+        wage: 200000,
+        plotId: 'f1',
+        plotName: 'Dere Tarlası',
+        jobId: 'i1',
+        jobName: 'Çapa'));
     await save(ind(ahmet, '2026-07-14', AttendanceStatus.half,
-        wage: 200000, fieldId: 'f1', fieldName: 'Dere Tarlası'));
+        wage: 200000,
+        plotId: 'f1',
+        plotName: 'Dere Tarlası',
+        jobId: 'i2',
+        jobName: 'Sulama'));
     await save(ind(ahmet, '2026-07-15', AttendanceStatus.full,
-        wage: 200000, fieldId: 'f2', fieldName: 'Kavaklık'));
+        wage: 200000, plotId: 'f2', plotName: 'Kavaklık', jobId: 'i1', jobName: 'Çapa'));
     await save(ind(zehra, '2026-07-13', AttendanceStatus.full,
-        wage: 180000, fieldId: 'f1', fieldName: 'Dere Tarlası'));
+        wage: 180000,
+        plotId: 'f1',
+        plotName: 'Dere Tarlası',
+        jobId: 'i1',
+        jobName: 'Çapa'));
     await save(ind(zehra, '2026-07-14', AttendanceStatus.full,
-        wage: 180000, fieldId: 'f3', fieldName: 'Bağ Üstü'));
-    // Tarlası seçilmemiş gün (kalıntı satır görünsün).
+        wage: 180000, plotId: 'f3', plotName: 'Bağ Üstü', jobId: 'i2', jobName: 'Sulama'));
+    // Hiçbiri seçilmemiş gün (kalıntı satır görünsün).
     await save(ind(zehra, '2026-07-16', AttendanceStatus.full, wage: 180000));
     // Elebaşı: kişi-gün olarak sayılır.
     await save(AttendanceRecord.crew(
@@ -105,8 +121,10 @@ void main() {
       workerName: usta.name,
       headcount: 6,
       crewRateSnapshotKurus: 150000,
-      fieldId: 'f2',
-      fieldName: 'Kavaklık',
+      plotId: 'f2',
+      plotName: 'Kavaklık',
+      jobId: 'i3',
+      jobName: 'Budama',
     ));
 
     final ledger = FakeLedgerRepository([
@@ -148,13 +166,13 @@ void main() {
     await binding.takeScreenshot('tarla-01-rapor-ust');
 
     // Rapor'daki özet kartına kaydır.
-    await tester.scrollUntilVisible(find.text('Tarla Maliyeti').last, 220,
+    await tester.scrollUntilVisible(find.text('Tarla / İş Maliyeti').last, 220,
         scrollable: find.byType(Scrollable).last);
     await tester.pumpAndSettle();
     await binding.takeScreenshot('tarla-02-ozet-karti');
 
-    // Karta dokun → tarla maliyeti sayfası açılır.
-    await tester.tap(find.text('Tarla Maliyeti'));
+    // Karta dokun → döküm sayfası açılır (tarla verisi dolu → tarla tarafı).
+    await tester.tap(find.text('Tarla / İş Maliyeti'));
     await tester.pumpAndSettle();
     expect(find.text('Dönem Tarla İşçiliği'), findsOneWidget);
     expect(find.text('Dere Tarlası'), findsOneWidget);
@@ -166,5 +184,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ahmet Yılmaz'), findsWidgets);
     await binding.takeScreenshot('tarla-04-isci-dokumu');
+
+    // Üstteki geçişle "Yapılan İş" kırılımına geç: aynı dönem, aynı para,
+    // farklı gruplama (2026-08-07 ayrımı).
+    await tester.tap(find.text('Yapılan İş'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dönem İş İşçiliği'), findsOneWidget);
+    expect(find.text('Çapa'), findsOneWidget);
+    expect(find.text('İş seçilmemiş'), findsOneWidget);
+    await binding.takeScreenshot('tarla-05-is-kirilimi');
   });
 }

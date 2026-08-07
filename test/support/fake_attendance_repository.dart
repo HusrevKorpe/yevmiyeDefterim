@@ -20,8 +20,7 @@ class FakeAttendanceRepository implements AttendanceRepository {
   /// dinleme anında SENKRON kurulur (yazım düşmez); ilk değer ise bilerek
   /// mikrotask'a ertelenir ki aynı olay turunda dinlemeden hemen sonra yapılan
   /// yazımlar da ilk emisyona girsin (anlık görüntü erken sabitlenmesin).
-  Stream<List<AttendanceRecord>> _watch(
-          List<AttendanceRecord> Function() snapshot) =>
+  Stream<T> _watch<T>(T Function() snapshot) =>
       Stream.multi((c) {
         final sub = _tick.stream.listen((_) => c.add(snapshot()));
         c.onCancel = sub.cancel;
@@ -54,6 +53,10 @@ class FakeAttendanceRepository implements AttendanceRepository {
       _watch(() => _forWorker(workerId));
 
   @override
+  Stream<List<AttendanceRecord>> watchAll() =>
+      _watch(() => _store.values.toList());
+
+  @override
   Future<List<AttendanceRecord>> getByWorker(String workerId) async =>
       _forWorker(workerId);
 
@@ -82,7 +85,14 @@ class FakeAttendanceRepository implements AttendanceRepository {
   @override
   Future<void> markDaySaved(String date) async {
     markedDays.add(date);
+    // İşaret akışı da canlı: "Kaydet" sonrası o gün korumaya girer
+    // (yoklama ekranı watchDaySaved'i dinler).
+    _tick.add(null);
   }
+
+  @override
+  Stream<bool> watchDaySaved(String date) =>
+      _watch(() => markedDays.contains(date));
 
   /// "Kaydet" ile işaretlenen günler (push bildirim tetiği testleri için).
   final List<String> markedDays = [];

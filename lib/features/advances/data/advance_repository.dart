@@ -17,6 +17,12 @@ abstract class AdvanceRepository {
   /// Tüm avanslar (kapanmış + açık). Filtre/sıralama sağlayıcıda yapılır.
   Stream<List<Advance>> watchAll();
 
+  /// Bir işçinin TÜM avanslarını (açık + kapanmış) TEK SEFERLİK okur (dinlemez).
+  /// İşçi düzenleme ekranı, yevmiye zammının geriye ne kadar işleyeceğini
+  /// (son "Hesap görüldü" tarihini) bulmak için kullanır — Avanslar sekmesi hiç
+  /// açılmamış olsa bile veri gelsin diye akış yerine tek atımlık okuma.
+  Future<List<Advance>> getByWorker(String workerId);
+
   /// Yeni avans ekler (createdAt damgalanır).
   Future<void> add(Advance advance);
 
@@ -63,6 +69,16 @@ class FirestoreAdvanceRepository implements AdvanceRepository {
   @override
   Stream<List<Advance>> watchAll() => advancesCol(_db).snapshots().map((snap) =>
       snap.docs.map((d) => Advance.fromDoc(d.id, d.data())).toList());
+
+  @override
+  Future<List<Advance>> getByWorker(String workerId) async {
+    // Varsayılan kaynak (sunucu + önbellek): çevrimdışıyken yerel önbellekten
+    // döner → uçakta da zam geçmişe uygulanabilir. Tek-alan eşitlik sorgusu →
+    // composite index gerekmez.
+    final snap =
+        await advancesCol(_db).where('workerId', isEqualTo: workerId).get();
+    return snap.docs.map((d) => Advance.fromDoc(d.id, d.data())).toList();
+  }
 
   @override
   Future<void> add(Advance advance) => advancesCol(_db).doc(advance.id).set({

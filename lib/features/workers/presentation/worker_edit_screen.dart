@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/date/app_date.dart';
 import '../../../core/diagnostics/app_log.dart';
 import '../../../core/ids/ids.dart';
 import '../../../core/money/money.dart';
@@ -12,6 +13,8 @@ import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/entry_form.dart';
 import '../../../core/widgets/gradient_header.dart';
 import '../../../core/widgets/money_field.dart';
+import '../../advances/application/advance_providers.dart';
+import '../../advances/application/settlement_cutoff.dart';
 import '../../attendance/application/attendance_providers.dart';
 import '../../attendance/application/wage_backfill.dart';
 import '../../attendance/data/attendance_record.dart';
@@ -112,15 +115,17 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
       defaultHeadcount: _type.isCrew ? _parseHeadcount() : null,
       active: widget.worker?.active ?? true,
     );
-    // Yevmiye İLK KEZ giriliyorsa (boş/₺0 → tutar), o işçinin ücretsiz
-    // kaydedilmiş geçmiş günlerini de fiyatlamayı teklif et. Kaydetmeden ÖNCE
-    // sorulur: kayıt başarılı olunca ekran kapanır (ref.listen → pop), sonrası
-    // için ekran hayatta olmaz. Yoklama kayıtlarının ücreti işçi dokümanından
-    // türetilmediği (dondurulduğu) için sıralamanın veri açısından önemi yok.
+    // Yevmiye DEĞİŞTİYSE (ilk kez girilmesi de dahil), görülmemiş hesabın
+    // geçmiş günlerini yeni yevmiyeye çekmeyi teklif et — sahada zam "bugünden
+    // sonrası" değil, hesabın tamamı için yapılır (bkz. `wage_backfill.dart`).
+    // Kaydetmeden ÖNCE sorulur: kayıt başarılı olunca ekran kapanır
+    // (ref.listen → pop), sonrası için ekran hayatta olmaz. Yoklama kayıtlarının
+    // ücreti işçi dokümanından türetilmediği (dondurulduğu) için sıralamanın
+    // veri açısından önemi yok.
     final oldWage = widget.worker?.dailyWageOverrideKurus ?? 0;
     final newWage = worker.dailyWageOverrideKurus ?? 0;
-    if (!_isNew && oldWage <= 0 && newWage > 0) {
-      await _offerBackfill(workerId: worker.id, rateKurus: newWage);
+    if (!_isNew && newWage > 0 && newWage != oldWage) {
+      await _offerReprice(workerId: worker.id, rateKurus: newWage);
       if (!mounted) return;
     }
     await ref
@@ -128,23 +133,32 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
         .submit(worker: worker, isNew: _isNew);
   }
 
-  /// Ücreti girilmeden (₺0) kaydedilmiş geçmiş yoklama günlerini yeni yevmiyeyle
-  /// güncellemeyi teklif eder (bkz. `wage_backfill.dart`). Sessiz değil ONAYLI:
-  /// geçmiş kazancı değiştirmek kullanıcının kararı. Okuma/yazma hatası akışı
-  /// kesmez — işçi yine kaydedilir, gün fiyatlaması yapılmaz.
-  Future<void> _offerBackfill({
+  /// Yevmiye değişince geçmiş yoklama günlerini yeni ücretle güncellemeyi teklif
+  /// eder (bkz. `wage_backfill.dart`). Sınır son "Hesap görüldü" tarihidir:
+  /// ondan sonraki günler zamlanır, kapanmış günler korunur. Sessiz değil
+  /// ONAYLI: geçmiş kazancı değiştirmek kullanıcının kararı. Okuma/yazma hatası
+  /// akışı kesmez — işçi yine kaydedilir, gün fiyatlaması yapılmaz.
+  Future<void> _offerReprice({
     required String workerId,
     required int rateKurus,
   }) async {
     final repo = ref.read(attendanceRepositoryProvider);
+    final advanceRepo = ref.read(advanceRepositoryProvider);
     final messenger = ScaffoldMessenger.of(context);
     final canSeeMoney = ref.read(canSeeMoneyProvider);
+    String? settledThrough;
     List<AttendanceRecord> pending;
     try {
-      pending = await findUnpricedDays(
+      // Hesabı en son ne zaman görüldü? O gün ve öncesi denkleşmiştir (para el
+      // değiştirdi) → zam oraya işlemez. Avans okunamazsa sınır bilinmeden
+      // geçmişin TAMAMI zamlanırdı; bu yüzden hata akışı bitirir (işçi yine
+      // kaydedilir, gün fiyatlaması atlanır).
+      settledThrough = lastSettlementDate(await advanceRepo.getByWorker(workerId));
+      pending = await findRepriceableDays(
         attendance: repo,
         workerId: workerId,
         rateKurus: rateKurus,
+        settledThrough: settledThrough,
       );
     } catch (e, s) {
       await logHandledError(e, s,
@@ -152,18 +166,15 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
       return;
     }
     if (pending.isEmpty || !mounted) return;
-    final isCrew = _type.isCrew;
-    final amount = canSeeMoney
-        ? (isCrew
-            ? 'kişi başı ${formatKurus(rateKurus)}'
-            : formatKurus(rateKurus))
-        : 'yeni yevmiye';
     final ok = await showConfirmDialog(
       context,
       title: 'Geçmiş günler',
-      message: '${_nameCtrl.text.trim()} için ücretsiz (₺0) kaydedilmiş '
-          '${pending.length} gün var. Bu günler $amount ile güncellensin mi? '
-          'Ücreti girilmiş günlere dokunulmaz.',
+      message: _repriceMessage(
+        pending: pending,
+        rateKurus: rateKurus,
+        settledThrough: settledThrough,
+        canSeeMoney: canSeeMoney,
+      ),
       confirmLabel: 'Güncelle',
       icon: Icons.event_repeat_outlined,
     );
@@ -181,6 +192,44 @@ class _WorkerEditScreenState extends ConsumerState<WorkerEditScreen> {
     messenger.showSnackBar(
       SnackBar(content: Text('${pending.length} gün güncellendi.')),
     );
+  }
+
+  /// Onay metni — kaç günün, neden değişeceğini SOMUT söyler. Üç hal:
+  /// hiç kapanış yok (tüm geçmiş), kapanış sonrası günler (+ varsa kapanış
+  /// öncesinde ücretsiz kalmış günler), yalnız kapanış öncesi ücretsiz günler.
+  /// Tutar, para göremeyen hesapta yazılmaz.
+  String _repriceMessage({
+    required List<AttendanceRecord> pending,
+    required int rateKurus,
+    required String? settledThrough,
+    required bool canSeeMoney,
+  }) {
+    final name = _nameCtrl.text.trim();
+    final amount = canSeeMoney
+        ? (_type.isCrew
+            ? 'kişi başı ${formatKurus(rateKurus)}'
+            : formatKurus(rateKurus))
+        : 'yeni yevmiye';
+    final cutoff = settledThrough;
+    if (cutoff == null) {
+      return '$name için kayıtlı ${pending.length} çalışma günü var. '
+          'Bu günler $amount ile güncellensin mi? '
+          'Hesap görülmediği için tüm geçmiş yeni yevmiyeye geçer.';
+    }
+    final day = formatHumanDateNoWeekday(cutoff);
+    final after = pending.where((r) => r.date.compareTo(cutoff) > 0).length;
+    final unpricedBefore = pending.length - after;
+    if (after == 0) {
+      return '$name için $day öncesinde ücretsiz (₺0) kalmış '
+          '$unpricedBefore gün var. Bu günler $amount ile fiyatlansın mı?';
+    }
+    final extra = unpricedBefore == 0
+        ? ''
+        : ' Ayrıca öncesinde ücretsiz (₺0) kalmış $unpricedBefore gün de '
+            'fiyatlanır.';
+    return '$name için hesabın görüldüğü $day tarihinden sonra '
+        '$after çalışma günü var. Bu günler $amount ile güncellensin mi? '
+        'Hesap görülen gün ve öncesine dokunulmaz.$extra';
   }
 
   Future<void> _toggleActive() async {

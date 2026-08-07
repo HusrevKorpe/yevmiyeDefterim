@@ -19,7 +19,8 @@ import '../../ledger/presentation/widgets/ledger_summary_card.dart';
 import '../application/period_report.dart';
 import '../application/report_providers.dart';
 import '../application/report_share.dart';
-import 'widgets/report_field_card.dart';
+import '../application/work_cost.dart';
+import 'widgets/report_cost_card.dart';
 import 'widgets/report_labor_card.dart';
 import 'widgets/worker_earning_tile.dart';
 
@@ -137,14 +138,16 @@ class _ReportBody extends StatelessWidget {
         LedgerSummaryCard(summary: kasa),
         const SizedBox(height: 8),
         ReportLaborCard(report: report),
-        // Tarla seçimi isteğe bağlı: hiç kullanılmadıysa bölüm hiç çıkmaz.
-        // Kart yalnız özettir; tarla listesi ve işçi dökümü kendi sayfasında
-        // (`/rapor/tarla`) açılır → rapor akışı kısa kalır.
-        if (report.hasFieldCosts) ...[
+        // Tarla/iş seçimi isteğe bağlı: hiç kullanılmadıysa bölüm hiç çıkmaz.
+        // Kart yalnız özettir; liste ve işçi dökümü kendi sayfasında
+        // (`/rapor/tarla`) açılır → rapor akışı kısa kalır. Kart dönemde dolu
+        // olan kırılımı gösterir (ikisi de doluysa tarla); sayfada geçilir.
+        if (report.hasWorkCosts) ...[
           const SizedBox(height: 8),
-          ReportFieldCard(
-            costs: report.fieldCosts,
-            onTap: () => context.push(AppRoutes.fieldCosts),
+          ReportCostCard(
+            costs: report.hasPlotCosts ? report.plotCosts : report.jobCosts,
+            kind: report.hasPlotCosts ? CostGroupKind.plot : CostGroupKind.job,
+            onTap: () => context.push(AppRoutes.workCosts),
           ),
         ],
         if (report.workerEarnings.isNotEmpty) ...[

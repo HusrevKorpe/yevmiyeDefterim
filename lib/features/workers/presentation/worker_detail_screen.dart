@@ -261,8 +261,17 @@ class _SummaryCard extends StatelessWidget {
                     color: theme.colorScheme.secondary,
                   ),
                 ],
+                // Elebaşında "açık avans" yerine bugüne kadar getirdiği toplam
+                // kişi (kişi-gün) gösterilir — sahada asıl merak edilen bu.
+                if (worker.type.isCrew)
+                  _Stat(
+                    icon: Icons.groups,
+                    label: 'Toplam kişi',
+                    value: '${summary.crewHeadcountTotal} kişi',
+                    color: theme.colorScheme.tertiary,
+                  )
                 // Açık avans herkese görünür (avans kısıtlı hesaba da açık).
-                if (summary.openAdvancesKurus > 0)
+                else if (summary.openAdvancesKurus > 0)
                   _Stat(
                     icon: Icons.account_balance_wallet,
                     label: 'Açık avans',

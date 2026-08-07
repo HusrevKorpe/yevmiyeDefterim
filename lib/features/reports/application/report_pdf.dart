@@ -14,8 +14,8 @@ import 'package:printing/printing.dart';
 
 import '../../../core/money/money.dart';
 import '../../workers/data/worker.dart';
-import 'field_cost.dart';
 import 'period_report.dart';
+import 'work_cost.dart';
 
 /// Yüklenen fontlar + Türkçe glif desteklenmiyorsa çeviri bayrağı.
 class _Fonts {
@@ -92,37 +92,17 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
         _kv(t('Verilen avans'), money(report.advancesGivenKurus)),
         pw.SizedBox(height: 14),
 
-        // Tarla kırılımı yalnız tarla seçimi kullanıldıysa basılır.
-        if (report.hasFieldCosts) ...[
+        // Tarla ve iş kırılımları yalnız o seçim kullanıldıysa basılır. İkisi
+        // de basılabilir: aynı parayı iki ayrı boyuttan gösterirler, toplamları
+        // eşittir (çifte sayım değil — bkz. [PeriodReport.jobCosts]).
+        if (report.hasPlotCosts) ...[
           _title(t('Tarla Maliyeti (İşçilik)')),
-          pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-            cellAlignments: {
-              0: pw.Alignment.centerLeft,
-              1: pw.Alignment.center,
-              2: pw.Alignment.center,
-              3: pw.Alignment.center,
-              4: pw.Alignment.centerRight,
-            },
-            headers: [
-              t('Tarla'),
-              t('Yevmiye'),
-              t('Gün'),
-              t('İşçi'),
-              t('Tutar (TL)'),
-            ],
-            data: [
-              for (final f in report.fieldCosts)
-                [
-                  t(f.fieldName),
-                  formatWorkdays(f.workdays),
-                  '${f.dayCount}',
-                  '${f.workerCount}',
-                  formatKurusPlain(f.grossKurus),
-                ],
-            ],
-          ),
+          _costTable(report.plotCosts, t, firstHeader: t('Tarla')),
+          pw.SizedBox(height: 14),
+        ],
+        if (report.hasJobCosts) ...[
+          _title(t('İş Maliyeti (İşçilik)')),
+          _costTable(report.jobCosts, t, firstHeader: t('Yapılan iş')),
           pw.SizedBox(height: 14),
         ],
 
@@ -172,6 +152,42 @@ Future<Uint8List> buildReportPdf(PeriodReport report) async {
 
   return doc.save();
 }
+
+/// Tarla/iş maliyeti tablosu — iki bölüm aynı sütun düzenini paylaşır; yalnız
+/// ilk sütun başlığı ("Tarla" / "Yapılan iş") değişir.
+pw.Widget _costTable(
+  List<WorkCost> costs,
+  String Function(String) t, {
+  required String firstHeader,
+}) =>
+    pw.TableHelper.fromTextArray(
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      cellAlignments: {
+        0: pw.Alignment.centerLeft,
+        1: pw.Alignment.center,
+        2: pw.Alignment.center,
+        3: pw.Alignment.center,
+        4: pw.Alignment.centerRight,
+      },
+      headers: [
+        firstHeader,
+        t('Yevmiye'),
+        t('Gün'),
+        t('İşçi'),
+        t('Tutar (TL)'),
+      ],
+      data: [
+        for (final c in costs)
+          [
+            t(c.groupName),
+            formatWorkdays(c.workdays),
+            '${c.dayCount}',
+            '${c.workerCount}',
+            formatKurusPlain(c.grossKurus),
+          ],
+      ],
+    );
 
 pw.Widget _title(String text) => pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 6),

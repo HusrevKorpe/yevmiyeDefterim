@@ -5,6 +5,7 @@
 /// metrik ayrı kaynaktan (kural §6).
 library;
 
+import '../../advances/application/settlement_cutoff.dart';
 import '../../advances/data/advance.dart';
 import '../../attendance/data/attendance_record.dart';
 
@@ -81,15 +82,9 @@ WorkerHistorySummary buildWorkerHistorySummary({
   // En son "hesap görüldü" kapanış tarihi (geçerli tarihli, elle kapatılmış
   // avanslardan). O gün ve öncesindeki kazanç+avans denkleştirilmiş sayılır →
   // net bakiyeye yalnız sonrası girer. Kapanış yoksa tüm kazanç denkleşmemiştir.
-  String? reconciledThrough;
-  for (final a in advances) {
-    if (!a.isManuallySettled) continue;
-    final d = a.settledDate;
-    if (d != null &&
-        (reconciledThrough == null || d.compareTo(reconciledThrough) > 0)) {
-      reconciledThrough = d;
-    }
-  }
+  // Aynı sınır yevmiye zammının geriye işlediği aralığı da belirler
+  // (bkz. `settlement_cutoff.dart`, `wage_backfill.dart`).
+  final reconciledThrough = lastSettlementDate(advances);
 
   var fullDays = 0;
   var halfDays = 0;

@@ -1,43 +1,61 @@
-/// Yoklama satırı altındaki kompakt tarla seçici (kural §8).
+/// Yoklama satırı altındaki kompakt etiket seçici (kural §8).
+///
+/// İKİ KEZ kullanılır — bir kez TARLA ([Plot]), bir kez YAPILAN İŞ ([Job]) için.
+/// İki liste bağımsızdır: aynı satırda alt alta iki çip şeridi çıkar.
 ///
 /// Tam/Yarım seçilince (elebaşında kişi girilince) satırın altında yatay
-/// kaydırmalı küçük çipler çıkar; seçim İSTEĞE BAĞLIDIR ("kim nerede çalıştı"
-/// bilgisi). Seçili çipe tekrar dokunmak seçimi kaldırır.
+/// kaydırmalı küçük çipler çıkar; seçim İSTEĞE BAĞLIDIR. Seçili çipe tekrar
+/// dokunmak seçimi kaldırır.
 library;
 
 import 'package:flutter/material.dart';
 
-import '../../data/field.dart';
-
-class FieldChips extends StatelessWidget {
-  const FieldChips({
+/// Tarla/iş çip şeridi. [T] = [Plot] ya da [Job]; ad ve kimlik [idOf]/[nameOf]
+/// ile okunur → iki tip tek widget'ı paylaşır ama birbirine karışamaz (seçim
+/// geri çağrısı da [T] döner).
+class TagChips<T> extends StatelessWidget {
+  const TagChips({
     super.key,
-    required this.fields,
-    required this.selectedFieldId,
+    required this.items,
+    required this.idOf,
+    required this.nameOf,
+    required this.selectedId,
     required this.onChanged,
-    this.selectedFieldName,
+    required this.icon,
+    required this.ghostLabel,
+    this.selectedName,
   });
 
-  /// Aktif tarlalar (ada göre sıralı). Boş liste + seçim yoksa çağıran gizler.
-  final List<Field> fields;
-  final String? selectedFieldId;
+  /// Aktif liste (ada göre sıralı). Boş liste + seçim yoksa çağıran gizler.
+  final List<T> items;
+  final String Function(T) idOf;
+  final String Function(T) nameOf;
 
-  /// Kayıtta denormalize saklanan ad: seçili tarla sonradan silindiyse aktif
+  final String? selectedId;
+
+  /// Kayıtta denormalize saklanan ad: seçili öğe sonradan silindiyse aktif
   /// listede olmasa da adıyla gösterilir (seçim kaldırılabilir kalır).
-  final String? selectedFieldName;
+  final String? selectedName;
+
+  /// Şerit başındaki ikon (tarla: çimen, iş: el aleti) — iki şerit bakışta ayırt
+  /// edilsin diye.
+  final IconData icon;
+
+  /// Adı da kaybolmuş silinmiş öğe için yedek etiket ("Silinmiş tarla" gibi).
+  final String ghostLabel;
 
   /// Yeni seçim (null = seçim kaldırıldı).
-  final ValueChanged<Field?> onChanged;
+  final ValueChanged<T?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Seçili tarla aktif listede yoksa (silinmiş/pasif) başa "hayalet" çip.
-    final ghost = selectedFieldId != null &&
-        !fields.any((f) => f.id == selectedFieldId);
+    // Seçili öğe aktif listede yoksa (silinmiş/pasif) başa "hayalet" çip.
+    final ghost =
+        selectedId != null && !items.any((i) => idOf(i) == selectedId);
     return Row(
       children: [
-        Icon(Icons.grass, size: 15, color: theme.colorScheme.onSurfaceVariant),
+        Icon(icon, size: 15, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: 6),
         Expanded(
           child: SizedBox(
@@ -47,17 +65,17 @@ class FieldChips extends StatelessWidget {
               children: [
                 if (ghost)
                   _Chip(
-                    label: selectedFieldName ?? 'Silinmiş tarla',
+                    label: selectedName ?? ghostLabel,
                     selected: true,
                     onTap: () => onChanged(null),
                   ),
-                for (final f in fields)
+                for (final item in items)
                   _Chip(
-                    label: f.name,
-                    selected: f.id == selectedFieldId,
+                    label: nameOf(item),
+                    selected: idOf(item) == selectedId,
                     // Seçiliye tekrar dokunmak seçimi kaldırır.
                     onTap: () =>
-                        onChanged(f.id == selectedFieldId ? null : f),
+                        onChanged(idOf(item) == selectedId ? null : item),
                   ),
               ],
             ),
@@ -110,3 +128,11 @@ class _Chip extends StatelessWidget {
     );
   }
 }
+
+/// Tarla şeridinin ikonu ve hayalet etiketi (iki tile aynı görünümü paylaşsın).
+const IconData kPlotIcon = Icons.grass;
+const String kPlotGhostLabel = 'Silinmiş tarla';
+
+/// Yapılan iş şeridinin ikonu ve hayalet etiketi.
+const IconData kJobIcon = Icons.handyman_outlined;
+const String kJobGhostLabel = 'Silinmiş iş';

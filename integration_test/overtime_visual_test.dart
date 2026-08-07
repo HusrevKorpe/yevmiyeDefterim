@@ -15,8 +15,10 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:yevmiye_defterim/app/theme.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
-import 'package:yevmiye_defterim/features/attendance/application/fields_providers.dart';
-import 'package:yevmiye_defterim/features/attendance/data/field.dart';
+import 'package:yevmiye_defterim/features/attendance/application/jobs_providers.dart';
+import 'package:yevmiye_defterim/features/attendance/application/plots_providers.dart';
+import 'package:yevmiye_defterim/features/attendance/data/job.dart';
+import 'package:yevmiye_defterim/features/attendance/data/plot.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/attendance_screen.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/widgets/overtime_chips.dart';
 import 'package:yevmiye_defterim/features/auth/application/user_access.dart';
@@ -29,7 +31,8 @@ import 'package:yevmiye_defterim/features/workers/application/workers_providers.
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
 import '../test/support/fake_attendance_repository.dart';
-import '../test/support/fake_field_repository.dart';
+import '../test/support/fake_job_repository.dart';
+import '../test/support/fake_plot_repository.dart';
 import '../test/support/fake_settings_repository.dart';
 import '../test/support/fake_worker_repository.dart';
 
@@ -67,8 +70,16 @@ void main() {
         workerRepositoryProvider.overrideWithValue(workerRepo),
         attendanceRepositoryProvider.overrideWithValue(FakeAttendanceRepository()),
         settingsRepositoryProvider.overrideWithValue(FakeSettingsRepository()),
-        fieldRepositoryProvider.overrideWithValue(FakeFieldRepository(
-          const [Field(id: 't1', name: 'Aşağı Tarla'), Field(id: 't2', name: 'Yukarı Bağ')],
+        // En sıkışık hâl: satırın altında TARLA + YAPILAN İŞ + mesai şeritleri
+        // alt alta gelir (2026-08-07 ayrımından sonra üç şerit birden).
+        plotRepositoryProvider.overrideWithValue(FakePlotRepository(
+          const [
+            Plot(id: 't1', name: 'Aşağı Tarla'),
+            Plot(id: 't2', name: 'Yukarı Bağ'),
+          ],
+        )),
+        jobRepositoryProvider.overrideWithValue(FakeJobRepository(
+          const [Job(id: 'i1', name: 'Çapa'), Job(id: 'i2', name: 'Sulama')],
         )),
         canSeeMoneyProvider.overrideWithValue(true),
       ],
@@ -100,10 +111,12 @@ void main() {
       await tester.pumpWidget(await app(scale: scale));
       await tester.pumpAndSettle();
 
-      // Mesaisi olan işçi: Tam → tarla seç → 2 saat mesai.
+      // Mesaisi olan işçi: Tam → tarla + iş seç → 2 saat mesai.
       await tester.tap(find.text('Tam').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Aşağı Tarla').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Çapa').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('2 s').first);
       await tester.pumpAndSettle();

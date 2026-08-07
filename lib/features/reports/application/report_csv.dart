@@ -6,7 +6,7 @@ library;
 
 import '../../../core/money/money.dart';
 import '../../workers/data/worker.dart';
-import 'field_cost.dart';
+import 'work_cost.dart';
 import 'period_report.dart';
 
 /// TR-Excel ayırıcısı (virgül ondalık olduğu için).
@@ -24,6 +24,17 @@ String _field(String value) {
 }
 
 String _row(List<String> cells) => cells.map(_field).join(_sep);
+
+/// Bir maliyet satırı (tarla ya da iş) — iki bölüm aynı sütun düzenini paylaşır.
+List<String> _costRows(WorkCost c) => [
+      _row([
+        c.groupName,
+        formatWorkdays(c.workdays),
+        '${c.dayCount}',
+        '${c.workerCount}',
+        formatKurusPlain(c.grossKurus),
+      ]),
+    ];
 
 /// Dönem raporunu CSV metnine dönüştürür (paylaşım/dışa aktarma için).
 String buildReportCsv(PeriodReport report) {
@@ -45,19 +56,20 @@ String buildReportCsv(PeriodReport report) {
       _row(['Mesai saati', '${report.overtimeHours}']),
     ],
     _row(['Verilen avans', formatKurusPlain(report.advancesGivenKurus)]),
-    // Tarla kırılımı yalnız tarla seçimi kullanıldıysa yazılır (boş bölüm yok).
-    if (report.hasFieldCosts) ...[
+    // Tarla ve iş kırılımları yalnız o seçim kullanıldıysa yazılır (boş bölüm
+    // yok). İkisi de yazılabilir: aynı parayı iki ayrı boyuttan gösterirler,
+    // toplamları eşittir (çifte sayım değil — bkz. [PeriodReport.jobCosts]).
+    if (report.hasPlotCosts) ...[
       '',
       _row(['TARLA MALİYETİ (İŞÇİLİK)']),
       _row(['Tarla', 'Yevmiye', 'Gün', 'İşçi', 'Tutar (TL)']),
-      for (final f in report.fieldCosts)
-        _row([
-          f.fieldName,
-          formatWorkdays(f.workdays),
-          '${f.dayCount}',
-          '${f.workerCount}',
-          formatKurusPlain(f.grossKurus),
-        ]),
+      for (final c in report.plotCosts) ..._costRows(c),
+    ],
+    if (report.hasJobCosts) ...[
+      '',
+      _row(['İŞ MALİYETİ (İŞÇİLİK)']),
+      _row(['Yapılan iş', 'Yevmiye', 'Gün', 'İşçi', 'Tutar (TL)']),
+      for (final c in report.jobCosts) ..._costRows(c),
     ],
     '',
     _row(['İŞÇİ KAZANÇLARI']),

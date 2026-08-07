@@ -37,9 +37,15 @@ sealed class AttendanceRecord with _$AttendanceRecord {
   /// [paidPayrollId]: bu gün bir hakedişte ödendiyse dolar (Faz 2). Yalnız "Öde"
   /// batch'i alan-bazlı yazar; normal yoklama kaydı bu alanı EZMEZ (kural §3).
   ///
-  /// [fieldId]/[fieldName]: o gün çalışılan tarla (İSTEĞE BAĞLI seçim — "kim
-  /// nerede çalıştı"). Ad denormalize saklanır (kural §5): tarla sonradan
-  /// silinse/adı değişse bile geçmiş kayıt okunur kalır.
+  /// [jobId]/[jobName]: o gün YAPILAN İŞ (çapa, sulama…) ve
+  /// [plotId]/[plotName]: o gün çalışılan TARLA. İkisi de İSTEĞE BAĞLI ve
+  /// birbirinden bağımsız seçilir. Adlar denormalize saklanır (kural §5): iş/tarla
+  /// sonradan silinse/adı değişse bile geçmiş kayıt okunur kalır.
+  ///
+  /// FIRESTORE ADI TARİHSELDİR: iş alanları diskte `fieldId`/`fieldName` olarak
+  /// durur (bkz. [Job]) — 2026-08-07 tarla/iş ayrımında liste yerinde bırakılıp
+  /// anlamı düzeltildi, böylece geçmiş kayıtlar göç etmeden doğru tarafa geçti.
+  /// Tarla alanları (`plotId`/`plotName`) o tarihte açıldı → eski kayıtlarda YOK.
   ///
   /// [overtimeHours]/[overtimeRateSnapshotKurus]: o gün kalınan mesai (fazla
   /// çalışma) saati + o günkü SAAT ücreti dondurulmuş (kural §4 — yevmiye
@@ -55,14 +61,16 @@ sealed class AttendanceRecord with _$AttendanceRecord {
     @Default(0) int overtimeHours,
     @Default(0) int overtimeRateSnapshotKurus,
     String? paidPayrollId,
-    String? fieldId,
-    String? fieldName,
+    String? jobId,
+    String? jobName,
+    String? plotId,
+    String? plotName,
   }) = IndividualAttendance;
 
   /// Elebaşı: kişi sayısı + o günkü kişi-başı ücret dondurulmuş.
   /// [agreedPayKurus] doluysa günlük toplam ona eşittir (kural §10).
   /// [paidPayrollId]: bkz. [AttendanceRecord.individual].
-  /// [fieldId]/[fieldName]: bkz. [AttendanceRecord.individual].
+  /// [jobId]/[jobName], [plotId]/[plotName]: bkz. [AttendanceRecord.individual].
   const factory AttendanceRecord.crew({
     required String id,
     required String date,
@@ -72,8 +80,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
     required int crewRateSnapshotKurus,
     int? agreedPayKurus,
     String? paidPayrollId,
-    String? fieldId,
-    String? fieldName,
+    String? jobId,
+    String? jobName,
+    String? plotId,
+    String? plotName,
   }) = CrewAttendance;
 
   /// Bu gün bir hakedişte ödendi mi? Ödenen günler hakediş brütüne tekrar
@@ -138,8 +148,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
           :final wageSnapshotKurus,
           :final overtimeHours,
           :final overtimeRateSnapshotKurus,
-          :final fieldId,
-          :final fieldName,
+          :final jobId,
+          :final jobName,
+          :final plotId,
+          :final plotName,
         ) =>
           {
             'date': date,
@@ -149,14 +161,17 @@ sealed class AttendanceRecord with _$AttendanceRecord {
             'status': status.name,
             'wageSnapshotKurus': wageSnapshotKurus,
             // 0 olsa da yazılır: merge:true altında mesaiyi kaldırmak (0 saat)
-            // Firestore'daki eski saati de temizlemeli (tarla alanlarıyla aynı
-            // gerekçe).
+            // Firestore'daki eski saati de temizlemeli (iş/tarla alanlarıyla
+            // aynı gerekçe).
             'overtimeHours': overtimeHours,
             'overtimeRateSnapshotKurus': overtimeRateSnapshotKurus,
-            // Bilerek null'ken de yazılır: merge:true altında tarla seçimini
+            // Bilerek null'ken de yazılır: merge:true altında iş/tarla seçimini
             // kaldırmak (null) Firestore'daki eski değeri de temizlemeli.
-            'fieldId': fieldId,
-            'fieldName': fieldName,
+            // `fieldId`/`fieldName` = YAPILAN İŞ (tarihsel ad, bkz. sınıf notu).
+            'fieldId': jobId,
+            'fieldName': jobName,
+            'plotId': plotId,
+            'plotName': plotName,
           },
         CrewAttendance(
           :final date,
@@ -165,8 +180,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
           :final headcount,
           :final crewRateSnapshotKurus,
           :final agreedPayKurus,
-          :final fieldId,
-          :final fieldName,
+          :final jobId,
+          :final jobName,
+          :final plotId,
+          :final plotName,
         ) =>
           {
             'date': date,
@@ -176,8 +193,11 @@ sealed class AttendanceRecord with _$AttendanceRecord {
             'headcount': headcount,
             'crewRateSnapshotKurus': crewRateSnapshotKurus,
             'agreedPayKurus': agreedPayKurus,
-            'fieldId': fieldId,
-            'fieldName': fieldName,
+            // `fieldId`/`fieldName` = YAPILAN İŞ (tarihsel ad, bkz. sınıf notu).
+            'fieldId': jobId,
+            'fieldName': jobName,
+            'plotId': plotId,
+            'plotName': plotName,
           },
       };
 
@@ -199,8 +219,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
         crewRateSnapshotKurus: _asInt(m['crewRateSnapshotKurus']),
         agreedPayKurus: _asIntOrNull(m['agreedPayKurus']),
         paidPayrollId: m['paidPayrollId'] as String?,
-        fieldId: m['fieldId'] as String?,
-        fieldName: m['fieldName'] as String?,
+        jobId: m['fieldId'] as String?,
+        jobName: m['fieldName'] as String?,
+        plotId: m['plotId'] as String?,
+        plotName: m['plotName'] as String?,
       );
     }
     return AttendanceRecord.individual(
@@ -215,8 +237,10 @@ sealed class AttendanceRecord with _$AttendanceRecord {
       overtimeHours: _asInt(m['overtimeHours']),
       overtimeRateSnapshotKurus: _asInt(m['overtimeRateSnapshotKurus']),
       paidPayrollId: m['paidPayrollId'] as String?,
-      fieldId: m['fieldId'] as String?,
-      fieldName: m['fieldName'] as String?,
+      jobId: m['fieldId'] as String?,
+      jobName: m['fieldName'] as String?,
+      plotId: m['plotId'] as String?,
+      plotName: m['plotName'] as String?,
     );
   }
 }

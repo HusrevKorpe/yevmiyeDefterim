@@ -9,15 +9,16 @@ import '../core/constants/routes.dart';
 import '../core/diagnostics/app_log.dart';
 import '../features/advances/presentation/advances_screen.dart';
 import '../features/attendance/presentation/attendance_screen.dart';
-import '../features/attendance/presentation/fields_screen.dart';
+import '../features/attendance/presentation/plots_jobs_screen.dart';
 import '../features/attendance/presentation/monthly_attendance_screen.dart';
+import '../features/attendance/presentation/worker_totals_screen.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/application/user_access.dart';
 import '../features/auth/data/app_user.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/ledger/presentation/ledger_screen.dart';
-import '../features/reports/presentation/field_cost_screen.dart';
+import '../features/reports/presentation/work_cost_screen.dart';
 import '../features/reports/presentation/report_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import '../features/workers/presentation/workers_screen.dart';
@@ -72,7 +73,7 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
       if (isMoneyRestricted(user.email)) {
         const blocked = <String>{
           AppRoutes.report,
-          AppRoutes.fieldCosts,
+          AppRoutes.workCosts,
           AppRoutes.settings,
         };
         if (blocked.contains(state.matchedLocation)) return AppRoutes.home;
@@ -94,24 +95,32 @@ final Provider<GoRouter> goRouterProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const ReportScreen(),
       ),
-      // Tarla maliyeti Rapor'un alt sayfası: rapordaki özet kartından açılır,
+      // Tarla/İş maliyeti Rapor'un alt sayfası: rapordaki özet kartından açılır,
       // para içerdiği için kısıtlı hesapta engellidir (bkz. `blocked`).
       GoRoute(
-        path: AppRoutes.fieldCosts,
+        path: AppRoutes.workCosts,
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const FieldCostScreen(),
+        builder: (context, state) => const WorkCostScreen(),
       ),
       GoRoute(
         path: AppRoutes.monthlyAttendance,
         parentNavigatorKey: _rootNavigatorKey,
         builder: (context, state) => const MonthlyAttendanceScreen(),
       ),
-      // Tarlalar BİLEREK kısıtlı-hesap engel listesinde yok: para içermez,
-      // yoklama gibi herkese açıktır (bkz. redirect'teki `blocked`).
+      // Çalışma özeti (takvimsiz toplam cetveli) aylık cetvelin alt sayfasıdır.
+      // Aylık tablo gibi BİLEREK kısıtlı-hesap engel listesinde yok: tablo
+      // görünür, yalnız Kazanç sütunu gizlenir (bkz. worker_totals_screen).
       GoRoute(
-        path: AppRoutes.fields,
+        path: AppRoutes.workerTotals,
         parentNavigatorKey: _rootNavigatorKey,
-        builder: (context, state) => const FieldsScreen(),
+        builder: (context, state) => const WorkerTotalsScreen(),
+      ),
+      // Tarla ve İşler BİLEREK kısıtlı-hesap engel listesinde yok: para
+      // içermez, yoklama gibi herkese açıktır (bkz. redirect'teki `blocked`).
+      GoRoute(
+        path: AppRoutes.plotsAndJobs,
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const PlotsJobsScreen(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>

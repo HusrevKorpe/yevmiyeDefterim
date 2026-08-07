@@ -15,12 +15,14 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:yevmiye_defterim/core/date/app_date.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
-import 'package:yevmiye_defterim/features/attendance/data/field.dart';
+import 'package:yevmiye_defterim/features/attendance/data/job.dart';
+import 'package:yevmiye_defterim/features/attendance/data/plot.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/attendance_screen.dart';
-import 'package:yevmiye_defterim/features/attendance/presentation/widgets/field_chips.dart';
+import 'package:yevmiye_defterim/features/attendance/presentation/widgets/tag_chips.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/widgets/overtime_chips.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
-import 'package:yevmiye_defterim/features/attendance/application/fields_providers.dart';
+import 'package:yevmiye_defterim/features/attendance/application/jobs_providers.dart';
+import 'package:yevmiye_defterim/features/attendance/application/plots_providers.dart';
 import 'package:yevmiye_defterim/features/auth/application/user_access.dart';
 import 'package:yevmiye_defterim/features/settings/application/settings_providers.dart';
 import 'package:yevmiye_defterim/features/settings/data/app_settings.dart';
@@ -28,7 +30,8 @@ import 'package:yevmiye_defterim/features/workers/application/workers_providers.
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
 import '../../support/fake_attendance_repository.dart';
-import '../../support/fake_field_repository.dart';
+import '../../support/fake_job_repository.dart';
+import '../../support/fake_plot_repository.dart';
 import '../../support/fake_settings_repository.dart';
 import '../../support/fake_worker_repository.dart';
 
@@ -48,7 +51,8 @@ void main() {
       );
 
   Future<(Widget, FakeAttendanceRepository)> buildApp({
-    List<Field> fields = const [],
+    List<Job> jobs = const [],
+    List<Plot> plots = const [],
     int? overtimeHourlyKurus,
   }) async {
     final workerRepo = FakeWorkerRepository();
@@ -68,8 +72,9 @@ void main() {
         workerRepositoryProvider.overrideWithValue(workerRepo),
         attendanceRepositoryProvider.overrideWithValue(attRepo),
         settingsRepositoryProvider.overrideWithValue(settingsRepo),
-        // Tarla çipleri bu depodan beslenir; Firebase'e uzanmasın diye fake.
-        fieldRepositoryProvider.overrideWithValue(FakeFieldRepository(fields)),
+        // İki çip şeridi bu depolardan beslenir; Firebase'e uzanmasın diye fake.
+        jobRepositoryProvider.overrideWithValue(FakeJobRepository(jobs)),
+        plotRepositoryProvider.overrideWithValue(FakePlotRepository(plots)),
         // Yevmiye tutarı gösterimi bu provider'a bağlı; testte auth/Firebase'e
         // uzanmasın diye doğrudan "para görebilir" olarak sabitlenir.
         canSeeMoneyProvider.overrideWithValue(true),
@@ -142,47 +147,105 @@ void main() {
     await tester.tap(find.text('Tam'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(FieldChips), findsNothing);
+    expect(find.byType(TagChips<Plot>), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('Tam seçilince çipler çıkar; çipe dokununca tarla kaydedilir',
       (tester) async {
-    const tarla = Field(id: 't1', name: 'Aşağı Tarla');
-    final (app, attRepo) = await buildApp(fields: const [tarla]);
+    const tarla = Plot(id: 't1', name: 'Aşağı Tarla');
+    final (app, attRepo) = await buildApp(plots: const [tarla]);
     await tester.pumpWidget(app);
     await tester.pumpAndSettle();
 
     // Yoklama alınmamışken çip yok (durum seçilmeden tarla sorulmaz).
-    expect(find.byType(FieldChips), findsNothing);
+    expect(find.byType(TagChips<Plot>), findsNothing);
 
     await tester.tap(find.text('Tam'));
     await tester.pumpAndSettle();
 
     // Çip satırı göründü; tarla seç → kayda yazılır (ad denormalize).
-    expect(find.byType(FieldChips), findsOneWidget);
+    expect(find.byType(TagChips<Plot>), findsOneWidget);
     await tester.tap(find.text('Aşağı Tarla'));
     await tester.pumpAndSettle();
 
     expect(attRepo.count, 1); // tarla seçimi çift kayıt açmaz
     final rec = attRepo.all.single as IndividualAttendance;
     expect(rec.status, AttendanceStatus.full);
-    expect(rec.fieldId, 't1');
-    expect(rec.fieldName, 'Aşağı Tarla');
+    expect(rec.plotId, 't1');
+    expect(rec.plotName, 'Aşağı Tarla');
 
     // Seçili çipe tekrar dokunmak seçimi kaldırır (durum bozulmaz).
     await tester.tap(find.text('Aşağı Tarla'));
     await tester.pumpAndSettle();
     final cleared = attRepo.all.single as IndividualAttendance;
-    expect(cleared.fieldId, isNull);
+    expect(cleared.plotId, isNull);
     expect(cleared.status, AttendanceStatus.full);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('iki şerit birlikte çıkar ve birbirinden bağımsız yazar',
+      (tester) async {
+    final (app, attRepo) = await buildApp(
+      plots: const [Plot(id: 't1', name: 'Aşağı Tarla')],
+      jobs: const [Job(id: 'i1', name: 'Çapa')],
+    );
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+
+    // Tarla ve iş ayrı şeritler (2026-08-07 ayrımı).
+    expect(find.byType(TagChips<Plot>), findsOneWidget);
+    expect(find.byType(TagChips<Job>), findsOneWidget);
+
+    await tester.tap(find.text('Aşağı Tarla'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Çapa'));
+    await tester.pumpAndSettle();
+
+    expect(attRepo.count, 1); // iki seçim de aynı kayda gider
+    final rec = attRepo.all.single as IndividualAttendance;
+    expect(rec.plotId, 't1');
+    expect(rec.plotName, 'Aşağı Tarla');
+    expect(rec.jobId, 'i1');
+    expect(rec.jobName, 'Çapa');
+
+    // Tarlayı kaldırmak işi silmez.
+    await tester.tap(find.text('Aşağı Tarla'));
+    await tester.pumpAndSettle();
+    final after = attRepo.all.single as IndividualAttendance;
+    expect(after.plotId, isNull);
+    expect(after.jobId, 'i1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('yalnız iş tanımlıysa tek şerit (iş) görünür', (tester) async {
+    // Tarla listesi boş → tarla şeridi hiç çizilmez, iş şeridi çalışır.
+    final (app, attRepo) =
+        await buildApp(jobs: const [Job(id: 'i1', name: 'Çapa')]);
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TagChips<Plot>), findsNothing);
+    expect(find.byType(TagChips<Job>), findsOneWidget);
+
+    await tester.tap(find.text('Çapa'));
+    await tester.pumpAndSettle();
+    final rec = attRepo.all.single as IndividualAttendance;
+    expect(rec.jobId, 'i1');
+    expect(rec.plotId, isNull);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('"Yok" seçilince çipler gizlenir ama tarla kayıtta korunur',
       (tester) async {
-    const tarla = Field(id: 't1', name: 'Aşağı Tarla');
-    final (app, attRepo) = await buildApp(fields: const [tarla]);
+    const tarla = Plot(id: 't1', name: 'Aşağı Tarla');
+    final (app, attRepo) = await buildApp(plots: const [tarla]);
     await tester.pumpWidget(app);
     await tester.pumpAndSettle();
 
@@ -196,10 +259,10 @@ void main() {
 
     // "Yok" gününde "nerede çalıştı" sorusu anlamsız → çipler gizli; ama
     // seçim silinmez (yanlış dokunuş geri alınınca tarla kaybolmasın).
-    expect(find.byType(FieldChips), findsNothing);
+    expect(find.byType(TagChips<Plot>), findsNothing);
     final rec = attRepo.all.single as IndividualAttendance;
     expect(rec.status, AttendanceStatus.absent);
-    expect(rec.fieldId, 't1');
+    expect(rec.plotId, 't1');
     expect(tester.takeException(), isNull);
   });
 
@@ -369,6 +432,107 @@ void main() {
 
     expect(find.byType(AlertDialog), findsNothing);
     expect(attRepo.count, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  // --- "Kaydet" sonrası koruma (gece yarısı beklenmez) ---
+
+  testWidgets('"Kaydet"ten sonra BUGÜNE dokunmak da onay ister', (tester) async {
+    final (app, attRepo) = await buildApp();
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    // Kaydetmeden önce: serbest giriş, diyalog yok.
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+
+    // "Kaydet" → gün işaretlenir (diyalogsuz, henüz koruma yoktu).
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(attRepo.markedDays, [todayIso()]);
+
+    // Artık bugün korumalı: sonraki değişiklik önce sorar, Vazgeç yazmaz.
+    await tester.tap(find.text('Yarım'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Yoklama kaydedilmiş'), findsOneWidget);
+    await tester.tap(find.text('Vazgeç'));
+    await tester.pumpAndSettle();
+    expect(
+      (attRepo.all.single as IndividualAttendance).status,
+      AttendanceStatus.full, // değişmedi
+    );
+
+    // Onaylanınca yazılır.
+    await tester.tap(find.text('Yarım'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Değiştir'));
+    await tester.pumpAndSettle();
+    expect(
+      (attRepo.all.single as IndividualAttendance).status,
+      AttendanceStatus.half,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('kaydedilmiş günde kilit bir düzeltme turu açık kalır, '
+      'yeniden "Kaydet" ile kapanır', (tester) async {
+    final (app, attRepo) = await buildApp();
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+
+    // İlk düzeltme onaydan geçer → kilit açılır.
+    await tester.tap(find.text('Yarım'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Değiştir'));
+    await tester.pumpAndSettle();
+
+    // Aynı turdaki ikinci düzeltme tekrar sormaz (diyalog yağmuru olmasın).
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      (attRepo.all.single as IndividualAttendance).status,
+      AttendanceStatus.full,
+    );
+
+    // Tekrar "Kaydet" (kilit açıkken diyalog sormaz) → kilit geri kapanır.
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+
+    // Sonraki düzeltme yeniden sorar.
+    await tester.tap(find.text('Yarım'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('kaydedilmiş güne yeniden "Kaydet" onay ister', (tester) async {
+    final (app, attRepo) = await buildApp();
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tam'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(attRepo.markedDays.length, 1);
+
+    // İkinci "Kaydet" korumalı güne düşer → onay diyaloğu (onay butonu "Kaydet").
+    await tester.tap(find.text('Kaydet').first);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.tap(find.text('Vazgeç'));
+    await tester.pumpAndSettle();
+    expect(attRepo.markedDays.length, 1); // yeniden işaretlenmedi
     expect(tester.takeException(), isNull);
   });
 }

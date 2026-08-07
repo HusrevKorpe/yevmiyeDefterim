@@ -20,7 +20,8 @@ import '../../settings/data/app_settings.dart';
 import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import '../data/attendance_record.dart';
-import '../data/field.dart';
+import '../data/job.dart';
+import '../data/plot.dart';
 import 'attendance_providers.dart';
 import 'wage.dart';
 
@@ -29,14 +30,14 @@ class AttendanceViewModel extends Notifier<String?> {
   String? build() => null;
 
   /// Seçili günde bu işçinin mevcut yoklama kaydı (yoksa null). Durum/sayı
-  /// değişiminde tarla/ücret snapshot'ını korumak ve [setField]'de kaydı bulmak
-  /// için okunur (ekran bu haritayı zaten canlı tutar).
+  /// değişiminde iş/tarla/ücret snapshot'ını korumak ve [setJob]/[setPlot]'ta
+  /// kaydı bulmak için okunur (ekran bu haritayı zaten canlı tutar).
   ///
   /// Gün değişimi penceresinde harita bir kare ÖNCEKİ günün kaydını tutabilir
   /// (attendanceByWorkerForDateProvider "önceki değeri koru" der). O stale kaydı
-  /// kullanmak (a) [setField]'de yanlış güne yazar (existing.id eski gün) ve
-  /// (b) durum/sayı değişiminde eski günün ücret/tarla snapshot'ını yeni güne
-  /// taşırdı. Tarih uyuşmuyorsa "kayıt yok" say → ilk kayıt gibi davran.
+  /// kullanmak (a) [setJob]/[setPlot]'ta yanlış güne yazar (existing.id eski gün)
+  /// ve (b) durum/sayı değişiminde eski günün ücret/iş/tarla snapshot'ını yeni
+  /// güne taşırdı. Tarih uyuşmuyorsa "kayıt yok" say → ilk kayıt gibi davran.
   AttendanceRecord? _existing(String workerId) {
     final r = ref.read(attendanceByWorkerForDateProvider)[workerId];
     if (r == null || r.date != ref.read(selectedDateProvider)) return null;
@@ -81,7 +82,7 @@ class AttendanceViewModel extends Notifier<String?> {
     // hayalet para.
     final keepOvertime =
         status != AttendanceStatus.absent && existing is IndividualAttendance;
-    // Durum değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
+    // Durum değişimi iş/tarla seçimini bozmaz — mevcut kayıttan taşınır.
     await _save(AttendanceRecord.individual(
       id: attendanceDocId(date, worker.id),
       date: date,
@@ -93,8 +94,10 @@ class AttendanceViewModel extends Notifier<String?> {
       overtimeHours: keepOvertime ? existing.overtimeHours : 0,
       overtimeRateSnapshotKurus:
           keepOvertime ? existing.overtimeRateSnapshotKurus : 0,
-      fieldId: existing?.fieldId,
-      fieldName: existing?.fieldName,
+      jobId: existing?.jobId,
+      jobName: existing?.jobName,
+      plotId: existing?.plotId,
+      plotName: existing?.plotName,
     ));
   }
 
@@ -172,7 +175,7 @@ class AttendanceViewModel extends Notifier<String?> {
     final rate = existing is CrewAttendance && existing.crewRateSnapshotKurus > 0
         ? existing.crewRateSnapshotKurus
         : _crewRate(worker);
-    // Sayı değişimi tarla seçimini bozmaz — mevcut kayıttan taşınır.
+    // Sayı değişimi iş/tarla seçimini bozmaz — mevcut kayıttan taşınır.
     await _save(AttendanceRecord.crew(
       id: attendanceDocId(date, worker.id),
       date: date,
@@ -180,19 +183,53 @@ class AttendanceViewModel extends Notifier<String?> {
       workerName: worker.name,
       headcount: count,
       crewRateSnapshotKurus: rate,
-      fieldId: existing?.fieldId,
-      fieldName: existing?.fieldName,
+      jobId: existing?.jobId,
+      jobName: existing?.jobName,
+      plotId: existing?.plotId,
+      plotName: existing?.plotName,
     ));
   }
 
-  /// O günün kaydına çalışılan tarlayı yazar; `field == null` seçimi kaldırır.
-  /// Seçim İSTEĞE BAĞLIDIR ("kim nerede çalıştı" bilgisi); ad denormalize
-  /// dondurulur (kural §5) — tarla sonradan silinse de geçmiş okunur kalır.
+  /// O günün kaydına YAPILAN İŞİ yazar; `job == null` seçimi kaldırır.
+  /// Tarla seçimine dokunmaz (ikisi bağımsızdır).
+  Future<void> setJob(Worker worker, Job? job) => _setTag(
+        worker,
+        (r) => switch (r) {
+          IndividualAttendance() =>
+            r.copyWith(jobId: job?.id, jobName: job?.name),
+          CrewAttendance() => r.copyWith(jobId: job?.id, jobName: job?.name),
+        },
+        jobId: job?.id,
+        jobName: job?.name,
+      );
+
+  /// O günün kaydına çalışılan TARLAYI yazar; `plot == null` seçimi kaldırır.
+  /// Yapılan iş seçimine dokunmaz (ikisi bağımsızdır).
+  Future<void> setPlot(Worker worker, Plot? plot) => _setTag(
+        worker,
+        (r) => switch (r) {
+          IndividualAttendance() =>
+            r.copyWith(plotId: plot?.id, plotName: plot?.name),
+          CrewAttendance() => r.copyWith(plotId: plot?.id, plotName: plot?.name),
+        },
+        plotId: plot?.id,
+        plotName: plot?.name,
+      );
+
+  /// [setJob]/[setPlot] ortak gövdesi. Seçim İSTEĞE BAĞLIDIR; ad denormalize
+  /// dondurulur (kural §5) — iş/tarla sonradan silinse de geçmiş okunur kalır.
   ///
   /// Bireysel işçide çipler ancak Tam/Yarım seçiliyken görünür → kayıt yoksa
   /// sessiz no-op. Elebaşında kayıt yoksa önden dolu görünen mevcut (crewSize)
-  /// tarlayla birlikte kesinleştirilir (+/- dokunuşuyla aynı davranış).
-  Future<void> setField(Worker worker, Field? field) async {
+  /// seçimle birlikte kesinleştirilir (+/- dokunuşuyla aynı davranış).
+  Future<void> _setTag(
+    Worker worker,
+    AttendanceRecord Function(AttendanceRecord) apply, {
+    String? jobId,
+    String? jobName,
+    String? plotId,
+    String? plotName,
+  }) async {
     final existing = _existing(worker.id);
     if (existing == null) {
       if (worker.type.isCrew && worker.crewSize > 0) {
@@ -204,18 +241,15 @@ class AttendanceViewModel extends Notifier<String?> {
           workerName: worker.name,
           headcount: worker.crewSize,
           crewRateSnapshotKurus: _crewRate(worker),
-          fieldId: field?.id,
-          fieldName: field?.name,
+          jobId: jobId,
+          jobName: jobName,
+          plotId: plotId,
+          plotName: plotName,
         ));
       }
       return;
     }
-    await _save(switch (existing) {
-      IndividualAttendance() =>
-        existing.copyWith(fieldId: field?.id, fieldName: field?.name),
-      CrewAttendance() =>
-        existing.copyWith(fieldId: field?.id, fieldName: field?.name),
-    });
+    await _save(apply(existing));
   }
 
   /// "Kaydet" dokunuşunda çağrılır. Yoklamada elebaşı sayacı, işçiye kayıtlı

@@ -4,7 +4,8 @@
 ///  1. Kasa: toplam gider + kategori kırılımı ([summarizeLedger]).
 ///  2. İşçilik: dönemde tahakkuk eden brüt (yoklama kazancı), verilen avans.
 ///  3. İşçi bazında kazanç dökümü.
-///  4. Tarla bazında işçilik maliyeti ([buildFieldCosts]).
+///  4. Tarla ve yapılan iş bazında işçilik maliyeti ([buildWorkCosts]) — iki
+///     bağımsız kırılım, ikisinin de toplamı işçilik brütüne eşittir.
 ///
 /// Çifte sayım yok (kural §6): kasa ve işçilik AYRI metriklerdir; kasa yalnız
 /// ledger'dan, işçilik yalnız yoklama/avanstan türetilir. Girişler
@@ -17,7 +18,7 @@ import '../../attendance/data/attendance_record.dart';
 import '../../ledger/application/ledger_summary.dart';
 import '../../ledger/data/ledger_entry.dart';
 import '../../workers/data/worker.dart';
-import 'field_cost.dart';
+import 'work_cost.dart';
 
 /// Bir işçinin dönem kazanç dökümü (rapor satırı).
 class WorkerEarning {
@@ -69,7 +70,8 @@ class PeriodReport {
     this.overtimeHours = 0,
     this.advancesGivenKurus = 0,
     this.workerEarnings = const [],
-    this.fieldCosts = const [],
+    this.plotCosts = const [],
+    this.jobCosts = const [],
   });
 
   final String startIso;
@@ -90,7 +92,7 @@ class PeriodReport {
   final int overtimeHours;
 
   /// Dönemde hiç mesai girildi mi? Girilmediyse rapor/PDF/CSV'de mesai satırı
-  /// hiç çıkmaz (gürültü olmaz — tarla kırılımıyla aynı desen).
+  /// hiç çıkmaz (gürültü olmaz — tarla/iş kırılımıyla aynı desen).
   bool get hasOvertime => overtimeHours > 0 || overtimeKurus > 0;
 
   /// Dönemde verilen avans toplamı (kuruş).
@@ -101,11 +103,25 @@ class PeriodReport {
 
   /// Tarla bazında işçilik maliyeti (brüte göre azalan; tarlası seçilmemiş
   /// satır en sonda). Toplamı [grossLaborKurus]'a eşittir.
-  final List<FieldCost> fieldCosts;
+  final List<WorkCost> plotCosts;
 
-  /// En az bir kayıtta tarla seçilmiş mi? Tarla özelliği hiç kullanılmadıysa
-  /// (tek satır "Tarla seçilmemiş") rapor bölümü gösterilmez — gürültü olmaz.
-  bool get hasFieldCosts => fieldCosts.any((f) => !f.isUnassigned);
+  /// Yapılan iş bazında işçilik maliyeti — [plotCosts] ile aynı yoklamanın
+  /// ikinci, bağımsız kırılımı (toplamları eşittir; çifte sayım değildir,
+  /// aynı parayı iki farklı boyuttan gösterirler).
+  ///
+  /// 2026-08-07 öncesi kayıtların TAMAMI burada görünür: o tarihe kadar tek
+  /// liste vardı ve "tarla" adıyla yapılan iş giriliyordu (bkz. `Job`).
+  final List<WorkCost> jobCosts;
+
+  /// En az bir kayıtta tarla seçilmiş mi? Özellik hiç kullanılmadıysa (tek
+  /// satır "Tarla seçilmemiş") rapor bölümü gösterilmez — gürültü olmaz.
+  bool get hasPlotCosts => hasAssignedCosts(plotCosts);
+
+  /// En az bir kayıtta yapılan iş seçilmiş mi? (bkz. [hasPlotCosts])
+  bool get hasJobCosts => hasAssignedCosts(jobCosts);
+
+  /// Dökümde gösterilecek herhangi bir kırılım var mı?
+  bool get hasWorkCosts => hasPlotCosts || hasJobCosts;
 
   /// Dönem mazot gideri (kuruş).
   int get mazotKurus => expenseByCategory[LedgerCategory.mazot] ?? 0;
@@ -192,11 +208,19 @@ PeriodReport buildPeriodReport({
     overtimeHours: overtimeHours,
     advancesGivenKurus: advancesGiven,
     workerEarnings: earnings,
-    // 4. Tarla bazında işçilik (aynı yoklama listesinden, ayrı kırılım).
-    fieldCosts: buildFieldCosts(
+    // 4. Tarla ve iş bazında işçilik (aynı yoklama listesinden, iki ayrı
+    // kırılım; her ikisinin toplamı da grossLabor'a eşittir).
+    plotCosts: buildWorkCosts(
       startIso: startIso,
       endIso: endIso,
       attendance: attendance,
+      kind: CostGroupKind.plot,
+    ),
+    jobCosts: buildWorkCosts(
+      startIso: startIso,
+      endIso: endIso,
+      attendance: attendance,
+      kind: CostGroupKind.job,
     ),
   );
 }

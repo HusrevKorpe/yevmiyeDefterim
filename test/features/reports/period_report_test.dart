@@ -19,8 +19,8 @@ void main() {
     int wage = 200000,
     Gender gender = Gender.male,
     String? paidPayrollId,
-    String? fieldId,
-    String? fieldName,
+    String? jobId,
+    String? jobName,
   }) =>
       AttendanceRecord.individual(
         id: '${date}_$worker',
@@ -31,8 +31,8 @@ void main() {
         status: status,
         wageSnapshotKurus: wage,
         paidPayrollId: paidPayrollId,
-        fieldId: fieldId,
-        fieldName: fieldName,
+        jobId: jobId,
+        jobName: jobName,
       );
 
   AttendanceRecord crew(String worker, String date, int headcount,
@@ -189,22 +189,22 @@ void main() {
   test('tarla kırılımı toplamı = dönem işçilik brütü (para kaybolmaz)', () {
     final r = build(attendance: [
       ind('a', '2026-07-02', AttendanceStatus.full,
-          fieldId: 'f1', fieldName: 'Dere'),
+          jobId: 'f1', jobName: 'Dere'),
       ind('b', '2026-07-02', AttendanceStatus.half), // tarlasız
       crew('e', '2026-07-03', 4),
     ]);
-    expect(r.hasFieldCosts, isTrue);
+    expect(r.hasWorkCosts, isTrue);
     final toplam =
-        r.fieldCosts.fold<int>(0, (sum, f) => sum + f.grossKurus);
+        r.jobCosts.fold<int>(0, (sum, f) => sum + f.grossKurus);
     expect(toplam, r.grossLaborKurus);
   });
 
-  test('hiç tarla seçilmemişse hasFieldCosts false (bölüm gizlenir)', () {
+  test('hiç tarla seçilmemişse hasWorkCosts false (bölüm gizlenir)', () {
     final r = build(attendance: [
       ind('a', '2026-07-02', AttendanceStatus.full),
     ]);
-    expect(r.fieldCosts.single.isUnassigned, isTrue);
-    expect(r.hasFieldCosts, isFalse);
+    expect(r.jobCosts.single.isUnassigned, isTrue);
+    expect(r.hasWorkCosts, isFalse);
   });
 
   test('ödenmiş gün de brüt işçiliğe dahildir (tahakkuk metriği)', () {
@@ -302,12 +302,12 @@ void main() {
           wageSnapshotKurus: 200000,
           overtimeHours: 2,
           overtimeRateSnapshotKurus: 10000,
-          fieldId: 't1',
-          fieldName: 'Aşağı Tarla',
+          jobId: 't1',
+          jobName: 'Aşağı Tarla',
         ),
       ]);
       final toplam =
-          r.fieldCosts.fold<int>(0, (sum, f) => sum + f.grossKurus);
+          r.jobCosts.fold<int>(0, (sum, f) => sum + f.grossKurus);
       expect(toplam, r.grossLaborKurus);
       expect(toplam, 220000);
     });

@@ -13,6 +13,7 @@ import '../../../core/notifications/push_notifications.dart';
 import '../../../core/widgets/async_retry.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/widgets/gradient_header.dart';
+import '../../attendance/application/attendance_providers.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../auth/application/user_access.dart';
 import '../application/dashboard_providers.dart';
@@ -50,7 +51,10 @@ class DashboardScreen extends ConsumerWidget {
         children: [
           _HeroHeader(
             // Rapor ve Yönetim para/gider içerir → kısıtlı hesapta gizli.
+            // Aylık tablo BİLEREK herkese açık (içindeki tutarlar zaten
+            // kısıtlı hesapta gizlenir — bkz. monthly_attendance_screen).
             canSeeMoney: canSeeMoney,
+            onMonthly: () => context.push(AppRoutes.monthlyAttendance),
             onReport: () => context.push(AppRoutes.report),
             onSettings: () => context.push(AppRoutes.settings),
             onLogout: () => _confirmLogout(context, ref),
@@ -89,6 +93,7 @@ class DashboardScreen extends ConsumerWidget {
 class _HeroHeader extends StatelessWidget {
   const _HeroHeader({
     required this.canSeeMoney,
+    required this.onMonthly,
     required this.onReport,
     required this.onSettings,
     required this.onLogout,
@@ -97,6 +102,9 @@ class _HeroHeader extends StatelessWidget {
 
   /// Para/gider görebilir mi? false → Rapor + Yönetim ikonları gizlenir.
   final bool canSeeMoney;
+
+  /// Aylık yoklama cetveli (Excel görünümü) — kısıtlı hesapta da görünür.
+  final VoidCallback onMonthly;
   final VoidCallback onReport;
   final VoidCallback onSettings;
   final VoidCallback onLogout;
@@ -166,6 +174,11 @@ class _HeroHeader extends StatelessWidget {
                           ],
                         ),
                       ),
+                      _HeaderIcon(
+                        icon: Icons.calendar_view_month,
+                        tooltip: 'Aylık tablo',
+                        onPressed: onMonthly,
+                      ),
                       if (canSeeMoney) ...[
                         _HeaderIcon(
                           icon: Icons.assessment_outlined,
@@ -220,12 +233,21 @@ class _HeaderIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: Icon(icon, color: Colors.white),
-      tooltip: tooltip,
-      onPressed: onPressed,
-      style: IconButton.styleFrom(
-        backgroundColor: Colors.white.withValues(alpha: 0.14),
+    // Başlıkta dört kısayol yan yana durabildiği için (Aylık tablo · Rapor ·
+    // Yönetim · Çıkış) ikonlar bilerek kompakt: 48'lik varsayılan dokunma
+    // hedefi selamlama yazısını iki satıra düşürüyordu.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.white, size: 20),
+        tooltip: tooltip,
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.white.withValues(alpha: 0.14),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
       ),
     );
   }

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:yevmiye_defterim/features/reports/application/field_cost.dart';
+import 'package:yevmiye_defterim/features/reports/application/work_cost.dart';
 import 'package:yevmiye_defterim/features/reports/application/period_report.dart';
 import 'package:yevmiye_defterim/features/reports/application/report_csv.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
@@ -9,7 +9,7 @@ import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 void main() {
   PeriodReport report({
     List<WorkerEarning> earnings = const [],
-    List<FieldCost> fieldCosts = const [],
+    List<WorkCost> jobCosts = const [],
   }) =>
       PeriodReport(
         startIso: '2026-07-01',
@@ -23,19 +23,19 @@ void main() {
         grossLaborKurus: 900000,
         advancesGivenKurus: 70000,
         workerEarnings: earnings,
-        fieldCosts: fieldCosts,
+        jobCosts: jobCosts,
       );
 
-  FieldCost field(
+  WorkCost field(
     String? id,
     String name, {
     int halves = 2,
     int days = 1,
     int gross = 200000,
   }) =>
-      FieldCost(
-        fieldId: id,
-        fieldName: name,
+      WorkCost(
+        groupId: id,
+        groupName: name,
         workdayHalves: halves,
         dayCount: days,
         grossKurus: gross,
@@ -120,22 +120,22 @@ void main() {
     expect(csv, contains('"Ali;Veli"'));
   });
 
-  test('tarla bölümü: yevmiye/gün/işçi/tutar satırları', () {
-    final csv = buildReportCsv(report(fieldCosts: [
+  test('iş bölümü: yevmiye/gün/işçi/tutar satırları', () {
+    final csv = buildReportCsv(report(jobCosts: [
       field('f1', 'Dere', halves: 5, days: 3, gross: 500000),
-      field(null, kUnassignedFieldLabel, halves: 2, gross: 200000),
+      field(null, kUnassignedJobLabel, halves: 2, gross: 200000),
     ]));
-    expect(csv, contains('TARLA MALİYETİ (İŞÇİLİK)'));
+    expect(csv, contains('İŞ MALİYETİ (İŞÇİLİK)'));
     expect(csv, contains('Dere;2,5;3;0;5.000,00'));
-    expect(csv, contains('$kUnassignedFieldLabel;1;1;0;2.000,00'));
+    expect(csv, contains('$kUnassignedJobLabel;1;1;0;2.000,00'));
   });
 
-  test('tarla seçimi hiç kullanılmadıysa tarla bölümü yazılmaz', () {
+  test('iş seçimi hiç kullanılmadıysa bölüm yazılmaz', () {
     // Yalnız "seçilmemiş" satırı olan rapor → bölüm gürültü olurdu.
-    final csv = buildReportCsv(report(fieldCosts: [
-      field(null, kUnassignedFieldLabel),
+    final csv = buildReportCsv(report(jobCosts: [
+      field(null, kUnassignedJobLabel),
     ]));
-    expect(csv.contains('TARLA MALİYETİ'), isFalse);
+    expect(csv.contains('İŞ MALİYETİ'), isFalse);
   });
 
   test('dosya adı dönem uçlarını içerir', () {

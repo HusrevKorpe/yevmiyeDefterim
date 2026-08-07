@@ -1,31 +1,41 @@
-/// Rapor'daki "Tarla Maliyeti" özet kartı — dokununca tarla sayfası açılır (§8).
+/// Rapor'daki "Tarla / İş Maliyeti" özet kartı — dokununca döküm sayfası
+/// açılır (§8).
 ///
-/// Detay (tarla listesi + işçi dökümü) artık raporun içinde değil, kendi
-/// SAYFASINDADIR (`/rapor/tarla`): rapor akışı kısa kalır, tarla dökümü rahat
-/// okunur. Bu kart bakışta özet verir — dönem işçiliğinin toplamı, kaç tarla /
-/// kaç yevmiye ve tarlaların payını gösteren tek şeritlik oran çubuğu.
+/// Detay (tarla/iş listesi + işçi dökümü) artık raporun içinde değil, kendi
+/// SAYFASINDADIR (`/rapor/tarla`, iki kırılım arasında geçilir): rapor akışı
+/// kısa kalır, döküm rahat okunur. Bu kart bakışta özet verir — dönem
+/// işçiliğinin toplamı, kaç tarla/iş, kaç yevmiye ve payları gösteren tek
+/// şeritlik oran çubuğu.
+///
+/// Kart TEK kırılım gösterir ([kind]); çağıran dönemde dolu olanı verir (ikisi
+/// de doluysa tarla). Sayfaya girince diğerine geçilir. İki kırılımın toplamı
+/// zaten aynıdır — kartın tutarı hangi tarafta olursa olsun değişmez.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../../../core/money/money.dart';
-import '../../application/field_cost.dart';
+import '../../application/work_cost.dart';
 
-class ReportFieldCard extends StatelessWidget {
-  const ReportFieldCard({
+class ReportCostCard extends StatelessWidget {
+  const ReportCostCard({
     super.key,
     required this.costs,
+    required this.kind,
     required this.onTap,
   });
 
-  /// Tarla satırları (brüte göre azalan; "seçilmemiş" en sonda).
-  final List<FieldCost> costs;
+  /// Döküm satırları (brüte göre azalan; "seçilmemiş" en sonda).
+  final List<WorkCost> costs;
 
-  /// Tarla maliyeti sayfasını açar.
+  /// Kartın gösterdiği kırılım (alt satır metnini de belirler).
+  final CostGroupKind kind;
+
+  /// Döküm sayfasını açar.
   final VoidCallback onTap;
 
-  /// Gerçek tarla sayısı (kalıntı "seçilmemiş" satırı bir tarla değildir).
-  int get _fieldCount => costs.where((f) => !f.isUnassigned).length;
+  /// Gerçek satır sayısı (kalıntı "seçilmemiş" satırı sayılmaz).
+  int get _groupCount => costs.where((f) => !f.isUnassigned).length;
 
   /// Dönemin toplam yevmiyesi (adam-gün).
   double get _workdays =>
@@ -34,7 +44,7 @@ class ReportFieldCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final total = totalFieldGross(costs);
+    final total = totalWorkGross(costs);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
@@ -56,13 +66,18 @@ class ReportFieldCard extends StatelessWidget {
                       color: theme.colorScheme.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.grass,
-                        size: 18, color: theme.colorScheme.primary),
+                    child: Icon(
+                      kind == CostGroupKind.plot
+                          ? Icons.grass
+                          : Icons.handyman_outlined,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child:
-                        Text('Tarla Maliyeti', style: theme.textTheme.titleMedium),
+                    child: Text('Tarla / İş Maliyeti',
+                        style: theme.textTheme.titleMedium),
                   ),
                   const SizedBox(width: 8),
                   Flexible(
@@ -86,7 +101,8 @@ class ReportFieldCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(left: 42, top: 2),
                 child: Text(
-                  '$_fieldCount tarla • ${formatWorkdays(_workdays)} yevmiye',
+                  '$_groupCount ${kind == CostGroupKind.plot ? 'tarla' : 'iş'}'
+                  ' • ${formatWorkdays(_workdays)} yevmiye',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -106,11 +122,11 @@ class ReportFieldCard extends StatelessWidget {
   }
 }
 
-/// Tarlaların payını tek şeritte gösteren yığılmış oran çubuğu.
+/// Tarla/iş paylarını tek şeritte gösteren yığılmış oran çubuğu.
 class _ShareBar extends StatelessWidget {
   const _ShareBar({required this.costs, required this.totalKurus});
 
-  final List<FieldCost> costs;
+  final List<WorkCost> costs;
   final int totalKurus;
 
   @override
@@ -146,7 +162,7 @@ class _ShareBar extends StatelessWidget {
 }
 
 /// Şerit/nokta rengi: sıraya göre soluklaşan yeşil; kalıntı satır nötr.
-Color segmentColor(BuildContext context, FieldCost cost, int index) {
+Color segmentColor(BuildContext context, WorkCost cost, int index) {
   final cs = Theme.of(context).colorScheme;
   if (cost.isUnassigned) return cs.outlineVariant;
   const alphas = [1.0, 0.72, 0.54, 0.40, 0.30];
@@ -154,11 +170,11 @@ Color segmentColor(BuildContext context, FieldCost cost, int index) {
       .withValues(alpha: index < alphas.length ? alphas[index] : 0.24);
 }
 
-/// Kartın altındaki mini açıklama: en pahalı üç tarla ve payları.
+/// Kartın altındaki mini açıklama: en pahalı üç satır ve payları.
 class _Legend extends StatelessWidget {
   const _Legend({required this.costs, required this.totalKurus});
 
-  final List<FieldCost> costs;
+  final List<WorkCost> costs;
   final int totalKurus;
 
   @override
@@ -189,7 +205,7 @@ class _Legend extends StatelessWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 130),
                 child: Text(
-                  shown[i].fieldName,
+                  shown[i].groupName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall,

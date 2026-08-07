@@ -23,7 +23,8 @@ import '../../workers/application/workers_providers.dart';
 import '../../workers/data/worker.dart';
 import '../application/attendance_providers.dart';
 import '../application/attendance_view_model.dart';
-import '../application/fields_providers.dart';
+import '../application/jobs_providers.dart';
+import '../application/plots_providers.dart';
 import '../application/wage.dart';
 import '../data/attendance_record.dart';
 import 'widgets/crew_attendance_tile.dart';
@@ -45,11 +46,7 @@ class AttendanceScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: const GradientAppBar(
-        leadingWidth: 96,
-        leading: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [_FieldsButton(), _MonthlyButton()],
-        ),
+        leading: _FieldsButton(),
         actions: [_SaveButton()],
       ),
       body: const Column(
@@ -62,31 +59,48 @@ class AttendanceScreen extends ConsumerWidget {
   }
 }
 
-/// Geçmiş güne (bugün dışındaki tarihe) ait yoklamadaki İLK değişiklikten önce
-/// onay diyaloğu gösterir — yanlışlıkla dokunup geçmiş kaydı bozmayı önler
-/// (bugüne dokunuş hiç sormaz). Onaylanınca o günün kilidi açılır
-/// ([pastEditUnlockedDateProvider]) → aynı günde tekrar sorulmaz; vazgeçilirse
-/// [action] hiç çalışmaz (satırlar stream'den çizildiği için görünüm bozulmaz).
-Future<void> _confirmPastEdit(
+/// KORUMALI günlerde, yoklamadaki İLK değişiklikten önce onay diyaloğu
+/// gösterir — yanlışlıkla dokunup alınmış yoklamayı bozmayı önler.
+///
+/// Korumalı gün iki durumda oluşur:
+/// 1. "Kaydet"e basılmış gün ([selectedDaySavedProvider]) — BUGÜN dahil. Gece
+///    yarısını beklemez: yoklamayı kaydettiğiniz andan itibaren her değişiklik
+///    "alınmış yoklamayı değiştiriyorsunuz" diye sorar. İşaret cihazlar arası
+///    ortaktır → başka telefondan kaydedilen gün burada da korumaya girer.
+/// 2. Bugün dışındaki (geçmiş/ileri) günler — hiç kaydedilmemiş olsalar da.
+///
+/// Onaylanınca o günün kilidi açılır ([attendanceEditUnlockedDateProvider]) →
+/// düzeltme turu boyunca her dokunuşta tekrar sorulmaz; "Kaydet" kilidi geri
+/// kapatır. Vazgeçilirse [action] hiç çalışmaz (satırlar stream'den çizildiği
+/// için görünüm bozulmaz).
+Future<void> _confirmProtectedEdit(
   BuildContext context,
   WidgetRef ref,
-  Future<void> Function() action,
-) async {
+  Future<void> Function() action, {
+  /// "Kaydet" düğmesinden geliyorsa onay butonu "Değiştir" değil "Kaydet" der.
+  bool saving = false,
+}) async {
   final date = ref.read(selectedDateProvider);
-  if (date == todayIso() || ref.read(pastEditUnlockedDateProvider) == date) {
+  final saved = ref.read(selectedDaySavedProvider);
+  final isToday = date == todayIso();
+  if ((isToday && !saved) ||
+      ref.read(attendanceEditUnlockedDateProvider) == date) {
     await action();
     return;
   }
   // Diyalog beklenirken widget ağacı değişebilir → notifier'ı önden al
   // (await sonrası `ref` kullanmamak için).
-  final unlock = ref.read(pastEditUnlockedDateProvider.notifier);
+  final unlock = ref.read(attendanceEditUnlockedDateProvider.notifier);
   final ok = await showConfirmDialog(
     context,
-    title: 'Geçmiş günü değiştir',
-    message: '${formatHumanDate(date)} gününe ait yoklamayı değiştirmek '
-        'üzeresiniz. Devam edilsin mi?',
-    confirmLabel: 'Değiştir',
-    icon: Icons.edit_calendar_outlined,
+    title: saved ? 'Yoklama kaydedilmiş' : 'Geçmiş günü değiştir',
+    message: saved
+        ? '${formatHumanDate(date)} yoklaması kaydedilmiş. '
+            'Değişiklik yapmak istiyor musunuz?'
+        : '${formatHumanDate(date)} gününe ait yoklamayı değiştirmek '
+            'üzeresiniz. Devam edilsin mi?',
+    confirmLabel: saving ? 'Kaydet' : 'Değiştir',
+    icon: saved ? Icons.edit_note : Icons.edit_calendar_outlined,
     accent: StatusColors.half,
   );
   if (ok) {
@@ -95,9 +109,10 @@ Future<void> _confirmPastEdit(
   }
 }
 
-/// Sol üstteki "Tarlalar" düğmesi → tarla yönetim ekranı. Orada tanımlanan
-/// tarlalar, yoklamada Tam/Yarım (elebaşında kişi sayısı) girilince satırın
-/// altında çip olarak çıkar → "kim nerede çalıştı" kayıt altına alınır.
+/// Sol üstteki "Tarla ve İşler" düğmesi → tek yönetim ekranı (üstte tarlalar,
+/// altında yapılan işler). Orada tanımlananlar, yoklamada Tam/Yarım (elebaşında
+/// kişi sayısı) girilince satırın altında iki ayrı çip şeridi olarak çıkar →
+/// "kim nerede çalıştı" ve "ne işi yapıldı" kayıt altına alınır.
 class _FieldsButton extends StatelessWidget {
   const _FieldsButton();
 
@@ -105,25 +120,15 @@ class _FieldsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: const Icon(Icons.grass),
-      tooltip: 'Tarlalar',
-      onPressed: () => context.push(AppRoutes.fields),
+      tooltip: 'Tarla ve İşler',
+      onPressed: () => context.push(AppRoutes.plotsAndJobs),
     );
   }
 }
 
-/// Üst çubuktaki "Aylık tablo" düğmesi → aylık yoklama cetveli ekranı.
-class _MonthlyButton extends StatelessWidget {
-  const _MonthlyButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.calendar_view_month),
-      tooltip: 'Aylık tablo',
-      onPressed: () => context.push(AppRoutes.monthlyAttendance),
-    );
-  }
-}
+// NOT: "Aylık tablo" (Excel cetveli) düğmesi 2026-08-07'de buradan Ana
+// Sayfa'daki degrade başlığa, Rapor'un yanına taşındı — yoklama üst çubuğu
+// yalnız Tarlalar + Kaydet ile sade kalsın diye.
 
 /// Sağ üstteki "Kaydet" düğmesi.
 ///
@@ -146,19 +151,27 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
 
   Future<void> _confirm() async {
     HapticFeedback.mediumImpact();
-    // Geçmiş günde "Kaydet" de onaydan geçer — yanlış dokunuşla geçmiş güne
-    // elebaşı öntanımlıları yazılmasın / diğer cihazlara bildirim gitmesin.
-    await _confirmPastEdit(context, ref, _doSave);
+    // Korumalı günde (kaydedilmiş ya da geçmiş gün) "Kaydet" de onaydan geçer —
+    // yanlış dokunuşla elebaşı öntanımlıları yazılmasın / diğer cihazlara
+    // gereksiz bildirim gitmesin.
+    await _confirmProtectedEdit(context, ref, _doSave, saving: true);
   }
 
   Future<void> _doSave() async {
     final vm = ref.read(attendanceViewModelProvider.notifier);
     // Günün "yoklama alındı" işaretini yaz → diğer cihazlara push bildirimi
-    // gider (Cloud Function). Bilerek await'siz: offline'da UI'ı bekletmesin.
+    // gider (Cloud Function) VE bu gün korumaya girer: bundan sonraki her
+    // değişiklik "yoklama kaydedilmiş, değiştirilsin mi?" onayından geçer
+    // (bkz. _confirmProtectedEdit). Bilerek await'siz: offline'da UI'ı
+    // bekletmesin — yerel yazım anında görünür, işaret sonra senkronlanır.
     unawaited(vm.markDaySaved());
     // Önden dolu (henüz kaydı olmayan) elebaşı mevcutlarını şimdi kalıcı yaz —
     // bu ekranda yoklama verisine gerçekten yazan tek nokta budur.
     await vm.commitCrewDefaults();
+    // Kaydetmeden önce açılmış onay kilidini geri kapat → kaydedilen günde
+    // yapılacak SONRAKİ düzeltme yeniden sorar (art arda düzeltmelerde diyalog
+    // yağmuru olmaması için kilit yalnız bir tur açık kalır).
+    ref.read(attendanceEditUnlockedDateProvider.notifier).relock();
     if (!mounted) return;
     final date = ref.read(selectedDateProvider);
     ScaffoldMessenger.of(context)
@@ -187,6 +200,11 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
 
   @override
   Widget build(BuildContext context) {
+    // Bu gün daha önce kaydedildi mi? İki işi birden görür:
+    // (1) düğmede küçük ✓ → "bu günün yoklaması alınmış" görsel işareti,
+    // (2) işaret akışını ekran açıkken CANLI tutar → satıra dokunulduğu anda
+    //     _confirmProtectedEdit değeri hazır okur (ilk dokunuş korumasız kalmaz).
+    final saved = ref.watch(selectedDaySavedProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 10),
       child: AnimatedScale(
@@ -208,16 +226,26 @@ class _SaveButtonState extends ConsumerState<_SaveButton> {
               setState(() => _pressed = false);
               _confirm();
             },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 15, vertical: 7),
-              child: Text(
-                'Kaydet',
-                style: TextStyle(
-                  color: StatusColors.full,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  letterSpacing: 0.2,
-                ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (saved) ...[
+                    const Icon(Icons.check_circle,
+                        size: 14, color: StatusColors.full),
+                    const SizedBox(width: 5),
+                  ],
+                  const Text(
+                    'Kaydet',
+                    style: TextStyle(
+                      color: StatusColors.full,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

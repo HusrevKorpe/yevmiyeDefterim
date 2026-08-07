@@ -57,8 +57,8 @@ void main() {
       workerType: WorkerType.gundelik,
       status: AttendanceStatus.full,
       wageSnapshotKurus: 200000,
-      fieldId: 'f1',
-      fieldName: 'Dere Tarlası',
+      plotId: 'f1',
+      plotName: 'Dere Tarlası',
     ));
 
     return ProviderScope(
@@ -102,12 +102,12 @@ void main() {
     container.read(goRouterProvider).push(AppRoutes.report);
     await tester.pumpAndSettle();
 
-    expect(find.text('Tarla Maliyeti'), findsNothing);
+    expect(find.text('Tarla / İş Maliyeti'), findsNothing);
     expect(find.text('Dere Tarlası'), findsNothing);
     expect(find.text('Bugün Özeti'), findsWidgets, reason: 'ana sayfada kalır');
 
     // Tarla maliyeti kendi sayfası olduğundan ayrıca engellenmeli.
-    container.read(goRouterProvider).push(AppRoutes.fieldCosts);
+    container.read(goRouterProvider).push(AppRoutes.workCosts);
     await tester.pumpAndSettle();
 
     expect(find.text('Dere Tarlası'), findsNothing);
@@ -123,10 +123,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // Rapor'da yalnız özet kartı; döküm kendi sayfasında.
-    expect(find.text('Tarla Maliyeti'), findsOneWidget);
+    expect(find.text('Tarla / İş Maliyeti'), findsOneWidget);
     expect(find.text('1 tarla • 1 yevmiye'), findsOneWidget);
 
-    await tester.tap(find.text('Tarla Maliyeti'));
+    await tester.tap(find.text('Tarla / İş Maliyeti'));
     await tester.pumpAndSettle();
 
     // Sayfa açıldı: başlık + tarla satırı + dönem özeti.

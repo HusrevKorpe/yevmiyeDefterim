@@ -3,12 +3,19 @@ part of 'dashboard_screen.dart';
 // Bugün özeti kartları (çalışan sayısı, cinsiyet, elebaşı, boş durum).
 // Ana kütüphane: dashboard_screen.dart
 
-class _SummaryContent extends StatelessWidget {
+class _SummaryContent extends ConsumerWidget {
   const _SummaryContent({required this.summary});
   final DaySummary summary;
 
+  /// Özet kartından yoklamaya geç: istenen grubun sekmesi işaretlenir ve
+  /// Yoklama açılır → liste doğrudan o grupla gelir (2026-08-07).
+  void _open(BuildContext context, WidgetRef ref, AttendanceTab tab) {
+    ref.read(attendanceTabRequestProvider.notifier).request(tab);
+    context.go(AppRoutes.attendance);
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -19,7 +26,7 @@ class _SummaryContent extends StatelessWidget {
           male: summary.maleCount,
         ),
         const SizedBox(height: 10),
-        // Cinsiyet dağılımı.
+        // Cinsiyet dağılımı — dokununca yoklamanın o sekmesi açılır.
         Row(
           children: [
             Expanded(
@@ -28,6 +35,7 @@ class _SummaryContent extends StatelessWidget {
                 value: '${summary.femaleCount}',
                 color: femaleColor(context),
                 icon: Icons.woman,
+                onTap: () => _open(context, ref, AttendanceTab.females),
               ),
             ),
             const SizedBox(width: 10),
@@ -37,6 +45,7 @@ class _SummaryContent extends StatelessWidget {
                 value: '${summary.maleCount}',
                 color: maleColor(context),
                 icon: Icons.man,
+                onTap: () => _open(context, ref, AttendanceTab.males),
               ),
             ),
           ],
@@ -46,6 +55,7 @@ class _SummaryContent extends StatelessWidget {
           _CrewCard(
             crewCount: summary.crewCount,
             headcount: summary.crewHeadcount,
+            onTap: () => _open(context, ref, AttendanceTab.crews),
           ),
         ],
       ],
@@ -59,54 +69,69 @@ class _StatTile extends StatelessWidget {
     required this.value,
     required this.color,
     required this.icon,
+    required this.onTap,
   });
 
   final String label;
   final String value;
   final Color color;
   final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    // Dolgu/kenarlık dıştaki Container'da kalır; dokunma dalgası görünsün diye
+    // içeride saydam bir Material bulunur (aksi halde dalga zeminin ALTINDA
+    // kalır ve hiç görünmez).
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 5),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
-      child: Column(
-        children: [
-          Container(
-            width: 27,
-            height: 27,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 5),
+            child: Column(
+              children: [
+                Container(
+                  width: 27,
+                  height: 27,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.16),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 15),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
-            child: Icon(icon, color: color, size: 15),
           ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -224,9 +249,14 @@ class _MiniPill extends StatelessWidget {
 
 /// Elebaşı özeti — kaç elebaşı ve toplam kaç kişi getirdikleri (para yok).
 class _CrewCard extends StatelessWidget {
-  const _CrewCard({required this.crewCount, required this.headcount});
+  const _CrewCard({
+    required this.crewCount,
+    required this.headcount,
+    required this.onTap,
+  });
   final int crewCount;
   final int headcount;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +269,6 @@ class _CrewCard extends StatelessWidget {
         ? theme.colorScheme.surfaceContainerHigh
         : Colors.white;
     return Container(
-      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(14),
@@ -252,42 +281,59 @@ class _CrewCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.engineering, color: color, size: 20),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      // Dokunma dalgası kart zemininin ÜSTÜNDE çizilsin diye saydam Material.
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(11),
+            child: Row(
               children: [
-                Text(
-                  '$crewCount elebaşı',
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.engineering, color: color, size: 20),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$crewCount elebaşı',
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        'Toplam $headcount kişi getirdi',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  'Toplam $headcount kişi getirdi',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: color.withValues(alpha: 0.6),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

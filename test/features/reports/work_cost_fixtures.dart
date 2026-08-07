@@ -1,23 +1,23 @@
 /// Tarla maliyeti widget testlerinin ortak örnek verisi (özet kartı + liste).
 library;
 
-import 'package:yevmiye_defterim/features/reports/application/field_cost.dart';
+import 'package:yevmiye_defterim/features/reports/application/work_cost.dart';
 
-const FieldCost dere = FieldCost(
-  fieldId: 'f1',
-  fieldName: 'Dere Tarlası',
+const WorkCost dere = WorkCost(
+  groupId: 'f1',
+  groupName: 'Dere Tarlası',
   workdayHalves: 5, // 2,5 yevmiye
   dayCount: 3,
   grossKurus: 500000,
   workers: [
-    FieldWorkerCost(
+    WorkerCostShare(
       workerId: 'a',
       workerName: 'Ahmet',
       isCrew: false,
       workdayHalves: 4,
       grossKurus: 400000,
     ),
-    FieldWorkerCost(
+    WorkerCostShare(
       workerId: 'b',
       workerName: 'Veli',
       isCrew: false,
@@ -28,9 +28,9 @@ const FieldCost dere = FieldCost(
 );
 
 /// Tarlası seçilmemiş kalıntı satır (bir tarla değil).
-const FieldCost bos = FieldCost(
-  fieldId: null,
-  fieldName: kUnassignedFieldLabel,
+const WorkCost bos = WorkCost(
+  groupId: null,
+  groupName: kUnassignedPlotLabel,
   workdayHalves: 2,
   dayCount: 1,
   grossKurus: 200000,

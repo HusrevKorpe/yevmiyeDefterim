@@ -116,14 +116,14 @@ void main() {
     });
   });
 
-  group('fieldId/fieldName — çalışılan tarla (denormalize, kural §5)', () {
-    test('varsayılan boş (tarla seçilmemiş)', () {
+  group('jobId/jobName — yapılan iş (denormalize, kural §5)', () {
+    test('varsayılan boş (iş seçilmemiş)', () {
       final r = ind(AttendanceStatus.full, 200000);
-      expect(r.fieldId, isNull);
-      expect(r.fieldName, isNull);
+      expect(r.jobId, isNull);
+      expect(r.jobName, isNull);
     });
 
-    test('bireysel round-trip (tarla dolu)', () {
+    test('bireysel round-trip (iş dolu)', () {
       final r = AttendanceRecord.individual(
         id: '2026-07-18_w1',
         date: '2026-07-18',
@@ -132,13 +132,13 @@ void main() {
         workerType: WorkerType.gundelik,
         status: AttendanceStatus.full,
         wageSnapshotKurus: 200000,
-        fieldId: 't1',
-        fieldName: 'Aşağı Tarla',
+        jobId: 't1',
+        jobName: 'Aşağı Tarla',
       );
       expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
     });
 
-    test('elebaşı round-trip (tarla dolu)', () {
+    test('elebaşı round-trip (iş dolu)', () {
       final r = AttendanceRecord.crew(
         id: '2026-07-18_e1',
         date: '2026-07-18',
@@ -146,14 +146,13 @@ void main() {
         workerName: 'Usta',
         headcount: 4,
         crewRateSnapshotKurus: 160000,
-        fieldId: 't2',
-        fieldName: 'Yukarı Bağ',
+        jobId: 't2',
+        jobName: 'Yukarı Bağ',
       );
       expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
     });
 
-    test('toMap tarla null iken de alanı YAZAR (merge:true altında temizler)',
-        () {
+    test('toMap iş null iken de alanı YAZAR (merge:true altında temizler)', () {
       final m = ind(AttendanceStatus.full, 200000).toMap();
       expect(m.containsKey('fieldId'), isTrue);
       expect(m['fieldId'], isNull);
@@ -161,14 +160,105 @@ void main() {
       expect(m['fieldName'], isNull);
     });
 
-    test('tarla alanı olmayan eski doküman sorunsuz okunur (null)', () {
+    test('iş alanı olmayan eski doküman sorunsuz okunur (null)', () {
       final r = AttendanceRecord.fromDoc('x', {
         'workerType': 'gundelik',
         'status': 'full',
         'wageSnapshotKurus': 200000,
       });
-      expect(r.fieldId, isNull);
-      expect(r.fieldName, isNull);
+      expect(r.jobId, isNull);
+      expect(r.jobName, isNull);
+    });
+
+    // GÖÇ SÖZLEŞMESİ (2026-08-07 tarla/iş ayrımı). Diskteki `fieldId`/
+    // `fieldName` alanları TARİHSEL adlardır ve YAPILAN İŞ anlamına gelir:
+    // ayrımdan önce tek liste vardı, adı "Tarla"ydı, içine hep iş yazılıyordu.
+    // Liste yerinde bırakılıp anlamı düzeltildiği için tek bir doküman bile göç
+    // etmedi. Bu eşleme bozulursa yıllarca girilmiş "çapa/sulama" kayıtları
+    // sessizce tarla kırılımına düşer → aşağıdaki testler onu yakalar.
+    test('eski doküman: fieldId/fieldName → YAPILAN İŞ olarak okunur', () {
+      final r = AttendanceRecord.fromDoc('x', {
+        'workerType': 'gundelik',
+        'status': 'full',
+        'wageSnapshotKurus': 200000,
+        'fieldId': 'f1',
+        'fieldName': 'Çapa',
+      });
+      expect(r.jobId, 'f1');
+      expect(r.jobName, 'Çapa');
+      // Ayrımdan önceki kayıtlarda tarla YOKTUR (beklenen).
+      expect(r.plotId, isNull);
+      expect(r.plotName, isNull);
+    });
+
+    test('toMap: iş diske `fieldId`, tarla `plotId` olarak yazılır', () {
+      final m = AttendanceRecord.individual(
+        id: '2026-08-07_w1',
+        date: '2026-08-07',
+        workerId: 'w1',
+        workerName: 'Ahmet',
+        workerType: WorkerType.gundelik,
+        status: AttendanceStatus.full,
+        wageSnapshotKurus: 200000,
+        jobId: 'i1',
+        jobName: 'Çapa',
+        plotId: 't1',
+        plotName: 'Aşağı Tarla',
+      ).toMap();
+      expect(m['fieldId'], 'i1');
+      expect(m['fieldName'], 'Çapa');
+      expect(m['plotId'], 't1');
+      expect(m['plotName'], 'Aşağı Tarla');
+    });
+  });
+
+  group('plotId/plotName — çalışılan tarla (denormalize, kural §5)', () {
+    test('varsayılan boş (tarla seçilmemiş)', () {
+      final r = ind(AttendanceStatus.full, 200000);
+      expect(r.plotId, isNull);
+      expect(r.plotName, isNull);
+    });
+
+    test('bireysel round-trip: tarla ve iş birlikte, birbirini bozmadan', () {
+      final r = AttendanceRecord.individual(
+        id: '2026-08-07_w1',
+        date: '2026-08-07',
+        workerId: 'w1',
+        workerName: 'Ahmet',
+        workerType: WorkerType.gundelik,
+        status: AttendanceStatus.full,
+        wageSnapshotKurus: 200000,
+        jobId: 'i1',
+        jobName: 'Çapa',
+        plotId: 't1',
+        plotName: 'Aşağı Tarla',
+      );
+      expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
+    });
+
+    test('elebaşı round-trip: tarla ve iş birlikte', () {
+      final r = AttendanceRecord.crew(
+        id: '2026-08-07_e1',
+        date: '2026-08-07',
+        workerId: 'e1',
+        workerName: 'Usta',
+        headcount: 4,
+        crewRateSnapshotKurus: 160000,
+        jobId: 'i2',
+        jobName: 'Sulama',
+        plotId: 't2',
+        plotName: 'Yukarı Bağ',
+      );
+      expect(AttendanceRecord.fromDoc(r.id, r.toMap()), r);
+    });
+
+    test('toMap tarla null iken de alanı YAZAR (merge:true altında temizler)',
+        () {
+      final m = ind(AttendanceStatus.full, 200000).toMap();
+      expect(m.containsKey('plotId'), isTrue);
+      expect(m['plotId'], isNull);
+      expect(m.containsKey('plotName'), isTrue);
+      expect(m['plotName'], isNull);
     });
   });
 

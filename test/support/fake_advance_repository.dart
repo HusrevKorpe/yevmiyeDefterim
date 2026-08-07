@@ -29,6 +29,10 @@ class FakeAdvanceRepository implements AdvanceRepository {
   }
 
   @override
+  Future<List<Advance>> getByWorker(String workerId) async =>
+      [for (final a in _store.values) if (a.workerId == workerId) a];
+
+  @override
   Future<void> add(Advance advance) async {
     _store[advance.id] = advance;
     bumpRev(advance.id);
