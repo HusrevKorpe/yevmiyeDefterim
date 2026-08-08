@@ -4,6 +4,7 @@ library;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/date/app_date.dart';
+import '../../advances/application/advance_providers.dart';
 import '../../workers/application/workers_providers.dart';
 import '../data/attendance_record.dart';
 import 'attendance_providers.dart';
@@ -46,6 +47,8 @@ final Provider<AsyncValue<MonthlyAttendanceGrid>> monthlyGridProvider =
   final month = ref.watch(selectedMonthProvider);
   final recordsAsync = ref.watch(monthlyAttendanceProvider);
   final workersAsync = ref.watch(workersStreamProvider);
+  // "Hesabı görüldü" sınırı — avans yükü cetveli BEKLETMEZ (boş harita = renksiz).
+  final settledThrough = ref.watch(settledThroughByWorkerProvider);
 
   if (recordsAsync.hasError) {
     return AsyncError(
@@ -61,6 +64,11 @@ final Provider<AsyncValue<MonthlyAttendanceGrid>> monthlyGridProvider =
     return const AsyncLoading();
   }
   return AsyncData(
-    buildMonthlyGrid(monthIso: month, workers: workers, records: records),
+    buildMonthlyGrid(
+      monthIso: month,
+      workers: workers,
+      records: records,
+      settledThroughByWorker: settledThrough,
+    ),
   );
 });

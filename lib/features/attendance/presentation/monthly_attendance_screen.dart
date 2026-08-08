@@ -140,13 +140,17 @@ class _MonthBar extends ConsumerWidget {
   }
 }
 
-/// Kompakt açıklama şeridi: ✓ Tam · ½ Yarım · sayı = kişi (elebaşı).
-class _Legend extends StatelessWidget {
+/// Kompakt açıklama şeridi: ✓ Tam · ½ Yarım · sayı = kişi (elebaşı). Hesabı
+/// görülmüş işçi VARSA yeşil bant açıklaması da eklenir (yoksa gürültü olmasın).
+class _Legend extends ConsumerWidget {
   const _Legend();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final anySettled =
+        ref.watch(monthlyGridProvider).value?.rows.any((r) => r.isSettled) ??
+            false;
     final muted = theme.textTheme.bodySmall
         ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     Widget item(String mark, Color color, String label) => Row(
@@ -171,6 +175,24 @@ class _Legend extends StatelessWidget {
           item('3', _crewColor(context), 'kişi (elebaşı)'),
           // Mesai: işaretin yanındaki küçük sayı (örn. ✓2 = tam gün + 2 saat).
           item('²', theme.colorScheme.tertiary, 'mesai saati'),
+          // Yeşil bant = "hesap görüldü" sınırının içinde kalan günler.
+          if (anySettled)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 13,
+                  height: 13,
+                  decoration: BoxDecoration(
+                    color: settledColor(context).withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(3),
+                    border: Border.all(color: settledColor(context), width: 1),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text('hesabı görüldü', style: muted),
+              ],
+            ),
         ],
       ),
     );

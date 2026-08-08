@@ -25,6 +25,11 @@ const Color _kFemaleDark = Color(0xFFF06292); // pink.300
 const Color _kMaleDark = Color(0xFF64B5F6); // blue.300
 const Color _incomeLight = Color(0xFF2E7D32); // green.700 tonu (gelir/pozitif)
 const Color _incomeDark = Color(0xFF66BB6A); // green.400 (koyu zeminde okunur)
+// "Hesabı görüldü" (kapanmış hesap) tonu — çam yeşili/teal. Yoklamanın "tam gün"
+// yeşilinden (StatusColors.full) BİLEREK farklı: cetvelde ikisi yan yana durur,
+// karışmasın.
+const Color _settledLight = Color(0xFF00796B); // teal.700
+const Color _settledDark = Color(0xFF4DB6AC); // teal.300 (koyu zeminde okunur)
 
 /// Tema-duyarlı "kadın" vurgusu (koyu zeminde daha parlak pembe).
 Color femaleColor(BuildContext context) =>
@@ -40,6 +45,13 @@ Color incomeColor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
     ? _incomeDark
     : _incomeLight;
+
+/// "Hesap görüldü" (kapanmış/denkleşmiş) vurgusu — cetvellerde hesabı görülmüş
+/// günlerin/satırların zemini ve onay işareti bu renktir.
+Color settledColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? _settledDark
+    : _settledLight;
 
 const Color _seed = Color(0xFF2E7D32);
 

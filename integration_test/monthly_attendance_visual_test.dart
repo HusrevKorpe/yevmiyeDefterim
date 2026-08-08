@@ -16,6 +16,8 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:yevmiye_defterim/app/theme.dart';
 import 'package:yevmiye_defterim/core/date/app_date.dart';
+import 'package:yevmiye_defterim/features/advances/application/advance_providers.dart';
+import 'package:yevmiye_defterim/features/advances/data/advance.dart';
 import 'package:yevmiye_defterim/features/attendance/application/attendance_providers.dart';
 import 'package:yevmiye_defterim/features/attendance/data/attendance_record.dart';
 import 'package:yevmiye_defterim/features/attendance/presentation/monthly_attendance_screen.dart';
@@ -23,6 +25,7 @@ import 'package:yevmiye_defterim/features/auth/application/user_access.dart';
 import 'package:yevmiye_defterim/features/workers/application/workers_providers.dart';
 import 'package:yevmiye_defterim/features/workers/data/worker.dart';
 
+import '../test/support/fake_advance_repository.dart';
 import '../test/support/fake_attendance_repository.dart';
 import '../test/support/fake_worker_repository.dart';
 
@@ -78,7 +81,10 @@ void main() {
     w('e2', 'Mustafa Usta', WorkerType.elebasi, Gender.male, headcount: 4),
   ];
 
-  Future<ProviderScope> app({required double scale}) async {
+  Future<ProviderScope> app({
+    required double scale,
+    bool dark = false,
+  }) async {
     final workerRepo = FakeWorkerRepository();
     for (final worker in workers) {
       await workerRepo.add(worker);
@@ -103,10 +109,41 @@ void main() {
       await attRepo.save(crew(workers[7], d, 3 + (d % 2))); // Mustafa Usta
     }
 
+    // "Hesap görüldü": iki işçinin hesabı ayın içinde farklı günlerde kapandı →
+    // cetvelde kapanış gününe kadarki günler yeşil banda döner, kapanış günü
+    // sınır çizgisini taşır. Üçüncüsü (açık avans) BİLEREK işaretsiz kalır.
+    final advRepo = FakeAdvanceRepository([
+      Advance(
+        id: 'adv-m2',
+        workerId: 'm2',
+        workerName: 'Mehmet Demir',
+        amountKurus: 50000,
+        date: day(3),
+        // Kapanış ayın başında → sınır çizgisi ilk ekranda görünür.
+        settledPayrollId: Advance.manualSettlementId(day(5)),
+      ),
+      Advance(
+        id: 'adv-e1',
+        workerId: 'e1',
+        workerName: 'Hasan Usta',
+        amountKurus: 80000,
+        date: day(2),
+        settledPayrollId: Advance.manualSettlementId(day(9)),
+      ),
+      Advance(
+        id: 'adv-f2',
+        workerId: 'f2',
+        workerName: 'Ayşe Çelik',
+        amountKurus: 30000,
+        date: day(4),
+      ),
+    ]);
+
     return ProviderScope(
       overrides: [
         workerRepositoryProvider.overrideWithValue(workerRepo),
         attendanceRepositoryProvider.overrideWithValue(attRepo),
+        advanceRepositoryProvider.overrideWithValue(advRepo),
         // Tablo tutarları bu sağlayıcıya bağlı; override'sız kalınca auth →
         // Firebase'e uzanıp ekran hata durumuna düşüyor (bu test o yüzden
         // kırıktı). Testte "para görebilir" olarak sabitlenir.
@@ -114,7 +151,7 @@ void main() {
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(),
+        theme: dark ? buildDarkTheme() : buildAppTheme(),
         locale: const Locale('tr', 'TR'),
         supportedLocales: const [Locale('tr', 'TR')],
         localizationsDelegates: const [
@@ -142,11 +179,29 @@ void main() {
       await binding.takeScreenshot('monthly-attendance-x$scale');
     }
 
+    // Elebaşının kapanışı (ayın 9'u) ilk ekranın dışında → gövdeyi yatay
+    // kaydırıp o sınırı da görüntüle (donuk ad sütunu yerinde kalmalı).
+    // Gövdenin yatay kaydırıcısı (başlıktakinden sonraki ikinci tanesi).
+    await tester.drag(
+        find.byType(SingleChildScrollView).last, const Offset(-150, 0));
+    await tester.pumpAndSettle();
+    await binding.takeScreenshot('monthly-attendance-hesap-kesim');
+
+    // Koyu temada da yeşil bant durum renklerini boğmamalı.
+    await tester.pumpWidget(await app(scale: 1.0, dark: true));
+    await tester.pumpAndSettle();
+    await binding.takeScreenshot('monthly-attendance-koyu');
+
     // Tablo iskeleti + özet görünür.
     expect(find.text('İşçi'), findsOneWidget);
     expect(find.text('Toplam'), findsOneWidget);
     expect(find.textContaining('Toplam işçilik'), findsOneWidget);
     expect(find.text('8 işçi'), findsOneWidget);
+
+    // Hesabı görülen iki işçi: adlarının yanında onay + açıklama şeridinde
+    // yeşil bant anlatımı.
+    expect(find.byIcon(Icons.check_circle), findsNWidgets(2));
+    expect(find.text('hesabı görüldü'), findsOneWidget);
 
     // Hard RenderFlex taşması olmamalı (herhangi bir ölçekte).
     expect(tester.takeException(), isNull);

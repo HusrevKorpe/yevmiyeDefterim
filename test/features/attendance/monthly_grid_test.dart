@@ -318,6 +318,83 @@ void main() {
     });
   });
 
+  group('hesabı görüldü sınırı (renklendirme)', () {
+    MonthlyAttendanceGrid gridWith(Map<String, String> settled) =>
+        buildMonthlyGrid(
+          monthIso: '2026-07',
+          workers: [
+            worker('w1', 'Ahmet', WorkerType.gundelik),
+            worker('w2', 'Mehmet', WorkerType.gundelik),
+          ],
+          records: [
+            ind('w1', 'Ahmet', '2026-07-05', AttendanceStatus.full, 200000),
+            ind('w1', 'Ahmet', '2026-07-20', AttendanceStatus.full, 200000),
+            ind('w2', 'Mehmet', '2026-07-05', AttendanceStatus.full, 200000),
+          ],
+          settledThroughByWorker: settled,
+        );
+
+    test('sınır verilmezse hiçbir satır işaretlenmez', () {
+      final g = buildMonthlyGrid(
+        monthIso: '2026-07',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [
+          ind('w1', 'Ahmet', '2026-07-05', AttendanceStatus.full, 200000),
+        ],
+      );
+      final row = g.rows.single;
+      expect(row.settledThrough, isNull);
+      expect(row.isSettled, isFalse);
+      expect(row.isSettledDay('2026-07-05'), isFalse);
+    });
+
+    test('kapanış günü DAHİL, sonrası hariç', () {
+      final row = gridWith({'w1': '2026-07-10'}).rows
+          .firstWhere((r) => r.workerId == 'w1');
+
+      expect(row.isSettled, isTrue);
+      expect(row.isSettledDay('2026-07-05'), isTrue); // öncesi
+      expect(row.isSettledDay('2026-07-10'), isTrue); // kapanış günü
+      expect(row.isSettledDay('2026-07-11'), isFalse); // sonrası
+      expect(row.isSettledDay('2026-07-20'), isFalse);
+    });
+
+    test('sınır işçiye özeldir — başkasının satırı etkilenmez', () {
+      final g = gridWith({'w1': '2026-07-10'});
+      final byId = {for (final r in g.rows) r.workerId: r};
+
+      expect(byId['w1']!.settledThrough, '2026-07-10');
+      expect(byId['w2']!.settledThrough, isNull);
+      expect(byId['w2']!.isSettledDay('2026-07-05'), isFalse);
+    });
+
+    test('kapanış başka ayda: geçmiş ay tamamen kapalı, sonraki ay tamamen açık',
+        () {
+      // Kapanış 2026-07-10; Haziran'ın her günü sınırın gerisinde kalır.
+      final june = buildMonthlyGrid(
+        monthIso: '2026-06',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [
+          ind('w1', 'Ahmet', '2026-06-15', AttendanceStatus.full, 200000),
+        ],
+        settledThroughByWorker: const {'w1': '2026-07-10'},
+      );
+      expect(june.rows.single.isSettledDay('2026-06-30'), isTrue);
+
+      final august = buildMonthlyGrid(
+        monthIso: '2026-08',
+        workers: [worker('w1', 'Ahmet', WorkerType.gundelik)],
+        records: [
+          ind('w1', 'Ahmet', '2026-08-01', AttendanceStatus.full, 200000),
+        ],
+        settledThroughByWorker: const {'w1': '2026-07-10'},
+      );
+      expect(august.rows.single.isSettledDay('2026-08-01'), isFalse);
+      // Satır yine "hesabı görülmüş işçi" sayılır (adın yanındaki onay).
+      expect(august.rows.single.isSettled, isTrue);
+    });
+  });
+
   test('güncel işçi adı yoklama kaydındaki addan önceliklidir', () {
     final g = buildMonthlyGrid(
       monthIso: '2026-07',

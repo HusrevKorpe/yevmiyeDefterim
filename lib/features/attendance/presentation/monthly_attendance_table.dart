@@ -330,7 +330,8 @@ class _NameCell extends ConsumerWidget {
       width: _kNameW,
       height: _kRowH,
       alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      // Sağ boşluk dar: ada yer kalsın (yanına onay/kaldırıldı işareti gelebilir).
+      padding: const EdgeInsets.only(left: 10, right: 5),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -352,6 +353,12 @@ class _NameCell extends ConsumerWidget {
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
+          // Hesabı görülmüş işçi: satırdaki yeşil günlerin nedeni adın yanında
+          // da yazsın (uzun satırda renk sağa kayınca kaybolmasın).
+          if (row.isSettled) ...[
+            const SizedBox(width: 3),
+            Icon(Icons.check_circle, size: 12, color: settledColor(context)),
+          ],
           // Listeden kaldırılmış işçi işareti — bu satır temizlenebilir.
           if (row.removed) ...[
             const SizedBox(width: 4),
@@ -387,7 +394,15 @@ class _BodyRow extends StatelessWidget {
     return Row(
       children: [
         for (final m in days)
-          _DayCell(cell: row.cells[m.iso], meta: m, line: line),
+          _DayCell(
+            cell: row.cells[m.iso],
+            meta: m,
+            line: line,
+            // Hesabı görülmüş günler yeşil bant; kapanış GÜNÜ sınır çizgisini
+            // taşır → "buraya kadar görüldü" bir bakışta okunur.
+            settled: row.isSettledDay(m.iso),
+            cutoff: row.settledThrough == m.iso,
+          ),
         _TotalCell(row: row, line: line, canSeeMoney: canSeeMoney),
       ],
     );
@@ -395,10 +410,22 @@ class _BodyRow extends StatelessWidget {
 }
 
 class _DayCell extends StatelessWidget {
-  const _DayCell({required this.cell, required this.meta, required this.line});
+  const _DayCell({
+    required this.cell,
+    required this.meta,
+    required this.line,
+    this.settled = false,
+    this.cutoff = false,
+  });
   final MonthlyGridCell? cell;
   final _DayMeta meta;
   final Color line;
+
+  /// Bu gün "hesap görüldü" sınırının içinde (kapanış günü DAHİL) → yeşil zemin.
+  final bool settled;
+
+  /// Bu gün kapanış GÜNÜnün kendisi → sağ kenarda kalın yeşil sınır çizgisi.
+  final bool cutoff;
 
   @override
   Widget build(BuildContext context) {
@@ -455,17 +482,31 @@ class _DayCell extends StatelessWidget {
       }
     }
 
+    var background = bg ??
+        (weekend
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
+            : null);
+    if (settled) {
+      // Kapanmış günler tek bir donuk yeşil bant gibi okunsun: durum zemini
+      // (✓ yeşili / ½ sarısı / elebaşı mavisi) altta kalır, üstüne yeşil tül
+      // çekilir. İŞARET renkleri değişmez → hangi gün ne, yine ayırt edilir.
+      background = Color.alphaBlend(
+        settledColor(context).withValues(alpha: _isDark(context) ? 0.34 : 0.26),
+        background ?? Colors.transparent,
+      );
+    }
+
     return Container(
       width: _kDayW,
       height: _kRowH,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: bg ??
-            (weekend
-                ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25)
-                : null),
+        color: background,
         border: Border(
-          right: BorderSide(color: line),
+          // Kapanış gününün sağ kenarı = hesabın kesildiği çizgi.
+          right: cutoff
+              ? BorderSide(color: settledColor(context), width: 2)
+              : BorderSide(color: line),
           bottom: BorderSide(color: line),
         ),
       ),

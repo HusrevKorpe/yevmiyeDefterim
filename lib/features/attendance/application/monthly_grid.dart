@@ -55,11 +55,17 @@ class MonthlyWorkerRow {
     required this.crewHeadcountTotal,
     required this.grossKurus,
     this.removed = false,
+    this.settledThrough,
   });
 
   final String workerId;
   final String workerName;
   final WorkerType type;
+
+  /// Bu işçinin son "Hesap görüldü" tarihi (`'yyyy-MM-dd'`); hiç kapanış yoksa
+  /// null. Kapanış GÜNÜ ve öncesi denkleşmiştir (bkz. `settlement_cutoff.dart`)
+  /// → cetvelde o günler "hesabı görüldü" olarak renklenir.
+  final String? settledThrough;
 
   /// İşçi artık kullanımda değil: İşçiler listesinden kalıcı silinmiş ya da
   /// pasife alınmış. Satır yine de çizilir (geçmiş kaybolmaz) ama kalıntı /
@@ -79,6 +85,16 @@ class MonthlyWorkerRow {
   final int grossKurus;
 
   bool get isCrew => type.isCrew;
+
+  /// Hesabı görülmüş bir işçi mi (en az bir kapanış var).
+  bool get isSettled => settledThrough != null;
+
+  /// [dayIso] günü hesabı görülmüş dönemde mi kalıyor (kapanış günü DAHİL)?
+  /// ISO tarih → sözlüksel karşılaştırma = kronolojik.
+  bool isSettledDay(String dayIso) {
+    final through = settledThrough;
+    return through != null && dayIso.compareTo(through) <= 0;
+  }
 
   /// Bireysel adam-gün karşılığı (tam=1, yarım=0,5). Elebaşıda 0.
   double get individualDayEquivalent => fullDays + halfDays * 0.5;
@@ -115,10 +131,14 @@ class MonthlyAttendanceGrid {
 ///   türetilir — geçmiş veri kaybolmaz. Silinmiş/pasif işçinin satırı
 ///   [MonthlyWorkerRow.removed] ile işaretlenir (temizleme yalnız orada açık).
 /// - Sıralama [compareWorkers] ile aynı: önce tür, sonra ad.
+/// - [settledThroughByWorker] (işçi → son "Hesap görüldü" tarihi) verilirse
+///   satır kendi kapanış sınırını taşır; boş geçilirse renklendirme olmaz
+///   (avanslar henüz yüklenmediyse cetvel yine çizilir).
 MonthlyAttendanceGrid buildMonthlyGrid({
   required String monthIso,
   required List<Worker> workers,
   required List<AttendanceRecord> records,
+  Map<String, String> settledThroughByWorker = const {},
 }) {
   final days = daysOfMonthIso(monthIso);
   final daySet = days.toSet();
@@ -184,6 +204,7 @@ MonthlyAttendanceGrid buildMonthlyGrid({
       grossKurus: gross,
       // İşçi listede yok (kalıcı silinmiş) ya da pasif → satır "kalıntı"dır.
       removed: w == null || !w.active,
+      settledThrough: settledThroughByWorker[workerId],
     ));
   });
 
