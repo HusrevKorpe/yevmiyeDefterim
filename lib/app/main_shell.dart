@@ -47,28 +47,34 @@ class _MainShellState extends ConsumerState<MainShell>
     super.initState();
     _lastKnownDay = todayIso();
     WidgetsBinding.instance.addObserver(this);
-    // Push bildirimine dokunuldu → o günün yoklamasını aç. Uygulama kapalıyken
+    // Push bildirimine dokunuldu → ilgili ekranı aç. Uygulama kapalıyken
     // gelen dokunuş bu kabuk kurulmadan ÖNCE okunmuş olabilir (getInitialMessage)
     // → dinleyiciye ek olarak mevcut değeri de bir kez yokla.
-    pushTappedDate.addListener(_onPushTapped);
+    pushTapped.addListener(_onPushTapped);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPushTapped());
   }
 
   @override
   void dispose() {
-    pushTappedDate.removeListener(_onPushTapped);
+    pushTapped.removeListener(_onPushTapped);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  /// Bildirimden gelen günü seçip Yoklama'yı açar; gün BİR KEZ tüketilir.
+  /// Bildirimin hedef ekranını açar; hedef BİR KEZ tüketilir. Yoklama
+  /// bildiriminde o gün seçilir, avans bildiriminde Avanslar sekmesi açılır.
   /// `go` (goBranch değil) bilinçli: kullanıcı Rapor gibi üste itilmiş bir
-  /// sayfadayken bildirime dokunduğunda o sayfa da kapanıp yoklama görünsün.
+  /// sayfadayken bildirime dokunduğunda o sayfa da kapanıp hedef görünsün.
   void _onPushTapped() {
-    final date = pushTappedDate.value;
-    if (date == null || !mounted) return;
-    pushTappedDate.value = null;
-    ref.read(selectedDateProvider.notifier).set(date);
+    final target = pushTapped.value;
+    if (target == null || !mounted) return;
+    pushTapped.value = null;
+    if (target.tip == PushTip.avans) {
+      context.go(AppRoutes.advances);
+      return;
+    }
+    final date = target.tarih;
+    if (date != null) ref.read(selectedDateProvider.notifier).set(date);
     context.go(AppRoutes.attendance);
   }
 

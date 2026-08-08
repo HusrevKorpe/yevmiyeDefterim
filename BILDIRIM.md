@@ -1,8 +1,19 @@
-# Yoklama Push Bildirimi — Kurulum ve Kalan Adımlar
+# Push Bildirimleri — Kurulum ve Kalan Adımlar
 
-Yoklamada **"Kaydet"** düğmesine basılınca **diğer cihazlara** (kaydeden hariç)
-"Yoklama alındı ✓ — 22 Temmuz Salı yoklaması kaydedildi (kullanıcı)" push
-bildirimi gider. Uygulama kapalıyken bile telefonun bildirim çubuğuna düşer.
+**Diğer cihazlara** (işlemi yapan hariç) iki olayda push bildirimi gider;
+uygulama kapalıyken bile telefonun bildirim çubuğuna düşer:
+
+| Olay | Bildirim |
+| --- | --- |
+| Yoklama → **Kaydet** | "Yoklama alındı ✓ — 22 Temmuz Salı yoklaması kaydedildi (kullanıcı)" |
+| Yeni **avans** girilmesi | "Avans verildi 💵 — Mehmet Yılmaz'a ₺1.500 avans verildi (kullanıcı)" |
+
+Avans bildirimi **yalnız yeni avans girilince** çıkar. Bilerek bildirim
+üretmeyenler: avans **düzenleme/silme**, "Hesap görüldü" kapanışı ve o
+kapanıştan kalan **devir** kaydı (yeni para verilmiş değil), ₺0'lık kalıntı
+kayıtlar. Avans başka güne tarihlenmişse metnin sonuna o gün de eklenir
+("— 5 Ağustos Çarşamba"). Avans ekranı ve tutarları kısıtlı ("para göremez")
+hesapta da açık olduğundan bildirim tüm cihazlara gider.
 
 ## Nasıl çalışır (özet)
 
@@ -15,16 +26,21 @@ bildirimi gider. Uygulama kapalıyken bile telefonun bildirim çubuğuna düşer
    basışları tek bildirim sayılır (ölçü sunucu damgası `updatedAt`; cihaz saati
    kullanılsaydı offline kuyrukta bekleyen kayıt "geçmişten geliyor" görünüp
    bildirimi sessizce yutardı).
-3. Cloud Function (`functions/index.js` → `yoklamaBildirimi`) bu yazımı dinler,
-   `fcmTokens` listesinden **kaydedenin uid'sine ait cihazları eleyip** kalanına
-   bildirim gönderir. Token kaydını yalnız token'a özgü hatalarda siler
+3. Avansta ayrı işaret dokümanı YOK: avans kaydının kendisi tetikler
+   (`advances/{id}` oluşması). Devir kayıtları id öneki (`devir-`), kalıntı
+   kayıtlar da tutar/isim kontrolüyle elenir.
+4. Cloud Function'lar (`functions/index.js` → `yoklamaBildirimi`,
+   `avansBildirimi`) bu yazımları dinler, `fcmTokens` listesinden **işlemi
+   yapanın uid'sine ait cihazları eleyip** kalanına bildirim gönderir (ortak
+   `cihazlaraGonder`). Token kaydını yalnız token'a özgü hatalarda siler
    (`registration-token-not-registered` / `invalid-registration-token`);
    diğer hatalar günlüğe düşer — tek bir payload hatası bütün kayıtları
    süpürmesin.
-4. Uygulama AÇIKKEN gelen bildirim: iOS sistem bandında, Android'de SnackBar
+5. Uygulama AÇIKKEN gelen bildirim: iOS sistem bandında, Android'de SnackBar
    olarak görünür. Kapalıyken: normal push bildirimi. **Bildirime dokununca**
-   uygulama o günün yoklamasını açar (push'taki `data.tarih` → `pushTappedDate`
-   → `MainShell`).
+   uygulama hedef ekranı açar (push'taki `data.tip`/`data.tarih` →
+   `pushTapped` → `MainShell`): yoklamada o günün yoklaması, avansta Avanslar
+   sekmesi.
 
 Firestore kuralı DEĞİŞMEDİ — mevcut `match /{document=**}` kuralı yeni
 koleksiyonları zaten kapsıyor; Console'dan kural yayınlamak GEREKMEZ.
@@ -68,10 +84,13 @@ Yeni sürümü derleyip dağıt (TestFlight / APK). İlk açılışta bildirim i
 ### 5) Test
 - A cihazında Yoklama → **Kaydet** → B ve C cihazlarına birkaç saniye içinde
   "Yoklama alındı ✓" bildirimi düşmeli (A'ya düşmez — kaydeden o).
+- A cihazında **Avans Ver** → B ve C'ye "Avans verildi 💵 — ...'a ₺... avans
+  verildi" düşmeli; dokununca Avanslar sekmesi açılmalı.
 - Uygulama kapalıyken de dene. **Gerçek cihazda test et** (simülatörde push
   güvenilir çalışmaz).
-- Gelmezse: Console → Functions → `yoklamaBildirimi` → Günlükler'e bak;
-  Firestore'da `fcmTokens` altında cihaz kayıtları oluşmuş mu kontrol et.
+- Gelmezse: Console → Functions → `yoklamaBildirimi` / `avansBildirimi` →
+  Günlükler'e bak; Firestore'da `fcmTokens` altında cihaz kayıtları oluşmuş mu
+  kontrol et.
 
 ## Kod tarafında yapılanlar (bilgi)
 
@@ -80,8 +99,8 @@ Yeni sürümü derleyip dağıt (TestFlight / APK). İlk açılışta bildirim i
   gösterimi + dokunma yönlendirmesi + çıkışta kayıt bırakma.
 - `lib/main.dart`: `initPushNotifications()` (await'siz, açılışı geciktirmez).
 - `lib/app/app.dart`: kök `scaffoldMessengerKey` (Android ön plan SnackBar'ı).
-- `lib/app/main_shell.dart`: `pushTappedDate` dinleyicisi → bildirimin günü
-  seçilip Yoklama açılır.
+- `lib/app/main_shell.dart`: `pushTapped` dinleyicisi → yoklama bildiriminde
+  gün seçilip Yoklama, avans bildiriminde Avanslar açılır.
 - `lib/features/dashboard/...`: çıkıştan ÖNCE `releasePushToken()`.
 - `lib/features/settings/...`: Yönetim'de "Bildirimler açık/kapalı" satırı.
 - `attendance_repository.markDaySaved` + VM + Kaydet düğmesi bağlantısı.
@@ -91,8 +110,9 @@ Yeni sürümü derleyip dağıt (TestFlight / APK). İlk açılışta bildirim i
   çubuğunda beyaz kare çıkıyordu. iOS: `Runner.entitlements` (aps-environment)
   + `UIBackgroundModes: remote-notification` + Xcode `CODE_SIGN_ENTITLEMENTS`
   (3 config).
-- `functions/`: `yoklamaBildirimi` Cloud Function; `firebase.json`'a
-  `functions` bölümü eklendi.
+- `functions/`: `yoklamaBildirimi` + `avansBildirimi` Cloud Function'ları
+  (ortak gönderim/token temizliği yardımcısı); `firebase.json`'a `functions`
+  bölümü eklendi.
 
 ## Bildirim gelmiyorsa (kontrol sırası)
 

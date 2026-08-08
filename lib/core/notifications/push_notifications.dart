@@ -1,4 +1,5 @@
-/// Push bildirimi kurulumu (FCM) — "yoklama alındı" bildirimi altyapısı.
+/// Push bildirimi kurulumu (FCM) — "yoklama alındı" / "avans verildi"
+/// bildirimlerinin uygulama tarafı.
 ///
 /// Görevleri:
 /// - Girişten sonra cihazın FCM token'ını `fcmTokens/{token}` altına yazmak
@@ -8,8 +9,9 @@
 ///   / oturumu kapatılan cihaza bildirim gitmesin).
 /// - Ön planda (uygulama açıkken) gelen bildirimi göstermek: iOS sistem
 ///   bandını kendisi gösterir (presentation options), Android'de SnackBar.
-/// - Bildirime DOKUNULUNCA o günün yoklamasını açmak ([pushTappedDate] →
-///   dinleyicisi `MainShell`).
+/// - Bildirime DOKUNULUNCA ilgili ekranı açmak ([pushTapped] → dinleyicisi
+///   `MainShell`): yoklama bildirimi o günün yoklamasını, avans bildirimi
+///   Avanslar sekmesini açar.
 ///
 /// Neden serbest fonksiyon + doğrudan Firebase erişimi (writeStamp deseniyle
 /// aynı gerekçe): testlerde bu dosya hiç çağrılmaz (main.dart'tan başlatılır,
@@ -34,13 +36,35 @@ import '../firestore/write_stamp.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-/// Kullanıcının dokunduğu bildirimin yoklama günü (`'yyyy-MM-dd'`); yoksa null.
+/// Bildirim türleri — Cloud Function'ın `data.tip` alanıyla birebir aynı
+/// (bkz. functions/index.js).
+class PushTip {
+  PushTip._();
+
+  static const String yoklama = 'yoklama';
+  static const String avans = 'avans';
+}
+
+/// Dokunulan bildirimin hedefi: hangi tür bildirimdi, hangi güne aitti.
+@immutable
+class PushTarget {
+  const PushTarget({required this.tip, this.tarih});
+
+  /// [PushTip] değerlerinden biri.
+  final String tip;
+
+  /// İlgili iş günü (`'yyyy-MM-dd'`) — yoklamada açılacak gün; yoksa null.
+  final String? tarih;
+}
+
+/// Kullanıcının dokunduğu bildirimin hedefi; dokunulmadıysa null.
 ///
 /// Bildirim uygulamayı açtığında (kapalıyken ya da arka plandayken) burada
-/// buluşulur: `MainShell` dinler, Yoklama sekmesine geçip o günü seçer ve
-/// değeri null'a çeker (bir kez tüketilir). Testlerde bu dosya hiç
-/// çalışmadığından değer daima null kalır → davranış değişmez.
-final ValueNotifier<String?> pushTappedDate = ValueNotifier<String?>(null);
+/// buluşulur: `MainShell` dinler, hedefe göre Yoklama (o gün seçili) ya da
+/// Avanslar sekmesine geçer ve değeri null'a çeker (bir kez tüketilir).
+/// Testlerde bu dosya hiç çalışmadığından değer daima null kalır → davranış
+/// değişmez.
+final ValueNotifier<PushTarget?> pushTapped = ValueNotifier<PushTarget?>(null);
 
 /// Bildirim izni verildi mi? Kurulum çalışana dek `null` ("bilinmiyor").
 /// Yönetim ekranı bunu okuyup izin kapalıysa kullanıcıyı uyarır.
@@ -112,12 +136,22 @@ Future<void> initPushNotifications() async {
   }
 }
 
-/// Dokunulan bildirimin taşıdığı yoklama gününü [pushTappedDate]'e koyar.
-/// Gün bilgisi yoksa (eski sürüm bildirimi) sessizce yok sayılır → uygulama
-/// normal açılır.
+/// Dokunulan bildirimin hedefini [pushTapped]'e koyar. Tanınmayan/eksik
+/// bildirim sessizce yok sayılır → uygulama normal açılır.
+///
+/// `tip` alanı olmayan ESKİ yoklama bildirimleri (yalnız `tarih` taşırdı) hâlâ
+/// çalışsın diye tip yoksa tarihe bakılır: cihazın bildirim merkezinde bekleyen
+/// eski bir bildirime dokunulduğunda uygulama yine o günün yoklamasını açar.
 void _handleTap(RemoteMessage message) {
+  final tip = message.data['tip'];
   final date = message.data['tarih'];
-  if (date is String && date.isNotEmpty) pushTappedDate.value = date;
+  final tarih = date is String && date.isNotEmpty ? date : null;
+
+  if (tip == PushTip.avans) {
+    pushTapped.value = PushTarget(tip: PushTip.avans, tarih: tarih);
+  } else if (tip == PushTip.yoklama || tarih != null) {
+    pushTapped.value = PushTarget(tip: PushTip.yoklama, tarih: tarih);
+  }
 }
 
 /// Cihaz token'ını `fcmTokens/{token}` altına yazar (merge). Deterministik
